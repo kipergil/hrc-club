@@ -121,6 +121,9 @@ async function collectRoutes(): Promise<RouteSpec[]> {
     route("/contact"),
 
     // Tier B — league data and club news.
+    route("/clubs", async (client) => {
+      await client.prefetchQuery({ queryKey: keys.clubs, queryFn: () => storage.getClubs() });
+    }),
     route("/teams", async (client) => {
       await client.prefetchQuery({ queryKey: keys.teams(), queryFn: () => storage.getTeams() });
     }),
@@ -174,7 +177,8 @@ async function collectRoutes(): Promise<RouteSpec[]> {
   // Detail pages are enumerated from the data rather than listed by hand,
   // so a new article or a new team is prerendered by the next build without
   // anyone remembering to add it here.
-  const [teams, players, news, events, albums, venues] = await Promise.all([
+  const [clubs, teams, players, news, events, albums, venues] = await Promise.all([
+    storage.getClubs(),
     storage.getTeams(),
     storage.getMembers(),
     storage.getNews(),
@@ -182,6 +186,17 @@ async function collectRoutes(): Promise<RouteSpec[]> {
     storage.getGalleryAlbums(),
     storage.getVenues(),
   ]);
+
+  for (const club of clubs) {
+    routes.push(
+      route(`/clubs/${club.slug}`, async (client) => {
+        await client.prefetchQuery({
+          queryKey: keys.club(club.slug),
+          queryFn: () => storage.getClub(club.slug),
+        });
+      }),
+    );
+  }
 
   for (const team of teams) {
     routes.push(

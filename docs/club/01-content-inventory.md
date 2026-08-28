@@ -44,7 +44,7 @@ The league PRD caps the top navigation at five entries and forbids renaming page
 |---|---|
 | **Home** | `/` |
 | **Play** | When and where we play · Join us · Coaching · Juniors · Where to find us |
-| **Teams** | Our teams · Fixtures · Results · League tables · Averages · Players |
+| **Teams** | Our teams · Clubs · Fixtures · Results · League tables · Averages · Players |
 | **News** | News · Events · Photos |
 | **About** | About the club · Our history · Who's who · Honours · Documents · Links · Sponsors · Contact |
 
@@ -59,7 +59,9 @@ Each destination keeps its plain name and gains a one-line subtitle beneath it �
 | `/news/:slug` | Article | `hrc_news` | On publish | 15 min |
 | `/events` | What's on | `hrc_events` | On publish | 15 min |
 | `/events/:slug` | Event detail | `hrc_events` | On publish | 15 min |
-| `/teams` | Our teams | `hrc_teams`, `hrc_squads` | Squad or team change | 60 min |
+| `/clubs` | Clubs — all ten in the league | `hrc_clubs` + `hrc_venues` | League import | 60 min |
+| `/clubs/:slug` | One club: venue, teams, squads | `hrc_clubs` + `hrc_teams` + `hrc_squads` | League import | 60 min |
+| `/teams` | Our teams | `hrc_teams`, `hrc_squads` (home club only) | Squad or team change | 60 min |
 | `/teams/:slug` | Team page — squad, fixtures, results, position | `hrc_teams` + `hrc_squads` + `hrc_fixtures` + `hrc_standings` | Result confirmed | 10 min |
 | `/fixtures` | Fixture calendar | `hrc_fixtures` (status `scheduled`) | Fixture synced or rescheduled | 10 min |
 | `/results` | Results | `hrc_fixtures` (status `played`) | Result synced | 10 min |

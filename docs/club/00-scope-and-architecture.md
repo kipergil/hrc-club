@@ -10,6 +10,8 @@
 
 A website for **HRC**, one of the ten clubs in the Hertford & District Table Tennis League. HRC fields four teams — HRC A and HRC B in the Premier Division, HRC C in Division One and HRC D in Division Two — and plays at Bushby Hall, Wormley.
 
+**It carries the whole league, not only HRC.** All ten clubs are held as data, with their venues, teams and squads: 10 clubs, 26 teams, 165 squad places. `is_home_club` marks HRC, and that flag is what "our teams" and "our players" filter on. The reason is practical rather than ambitious — an opponent that is only a name in a fixture list cannot answer "where are we playing on Thursday, and is there parking", which is the question a player actually has on a match night.
+
 This is a *club* site, not the league site. The distinction sets the whole scope:
 
 | | League site (`hertsttl.org.uk`) | Club site (this project) |

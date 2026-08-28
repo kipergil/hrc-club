@@ -119,12 +119,30 @@ export function registerRoutes(app: Express): void {
     }),
   );
 
+  // -- Clubs ---------------------------------------------------------------
+
+  app.get(
+    "/api/clubs",
+    handler(async (_req, res) => {
+      ok(res, await storage.getClubs(), CACHE.slow);
+    }),
+  );
+
+  app.get(
+    "/api/clubs/:slug",
+    handler(async (req, res) => {
+      const club = await storage.getClub(req.params.slug);
+      if (!club) return notFound(res, "club");
+      ok(res, club, CACHE.slow);
+    }),
+  );
+
   // -- Teams, fixtures, results, tables ------------------------------------
 
   app.get(
     "/api/teams",
     handler(async (req, res) => {
-      ok(res, await storage.getTeams(param(req.query.season)), CACHE.slow);
+      ok(res, await storage.getTeams(param(req.query.season), param(req.query.club)), CACHE.slow);
     }),
   );
 

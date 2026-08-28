@@ -172,12 +172,59 @@ export const membersCollection: CollectionDefinition = {
     dateCreatedField(),
     dateUpdatedField(),
   ],
-  relationFields: [fileField("hrc_members", "photo", { note: "Head-and-shoulders photo. Only published when show_on_site is ticked." })],
+  relationFields: [
+    m2o("hrc_members", "club", "hrc_clubs", {
+      template: "{{name}}",
+      oneField: "members",
+      onDelete: "CASCADE",
+      note: "Which club the player is registered with. The site holds every league player, so this is what separates our own members from the rest.",
+    }),
+    fileField("hrc_members", "photo", { note: "Head-and-shoulders photo. Only published when show_on_site is ticked." }),
+  ],
 };
 
 // ---------------------------------------------------------------------------
 // Teams and squads
 // ---------------------------------------------------------------------------
+
+export const clubsCollection: CollectionDefinition = {
+  collection: "hrc_clubs",
+  icon: "diversity_3",
+  note:
+    "Every club in the league, HRC included. The site covers the whole league, so an opponent is a real page with a venue and squads rather than a name in a fixture list — which is also what makes 'where are we playing on Thursday' answerable.",
+  displayTemplate: "{{name}}",
+  sortField: "sort",
+  fields: [
+    idField(),
+    textField("name", { required: true, note: 'As the league names it, e.g. "Water Lane", "St. Andrews".' }),
+    slugField("slug", { note: "URL segment for /clubs/:slug." }),
+    textField("short_name", { nullable: true, maxLength: 32 }),
+    textField("league_ref", {
+      nullable: true,
+      note: "The club's identifier in the league's own URLs (Clubz.asp?Club=...), which is what the importer matches on.",
+    }),
+    booleanField(
+      "is_home_club",
+      false,
+      "Marks the club whose site this is. Exactly one should have it — it is what the home page, the timetable and 'our teams' read.",
+    ),
+    richTextField("description", { note: "Anything worth saying about the club beyond its address." }),
+    textField("website", { nullable: true }),
+    integerField("sort", { defaultValue: 0 }),
+    timestampField("last_synced_at", { note: "When the league import last wrote to this club." }),
+    dateCreatedField(),
+    dateUpdatedField(),
+  ],
+  relationFields: [
+    m2o("hrc_clubs", "venue", "hrc_venues", {
+      template: "{{name}}",
+      oneField: "clubs",
+      onDelete: "SET NULL",
+      note: "Where the club plays. Two clubs can share a hall, which is why the venue is referenced rather than owned.",
+    }),
+    fileField("hrc_clubs", "logo"),
+  ],
+};
 
 export const teamsCollection: CollectionDefinition = {
   collection: "hrc_teams",
@@ -203,6 +250,14 @@ export const teamsCollection: CollectionDefinition = {
     dateUpdatedField(),
   ],
   relationFields: [
+    m2o("hrc_teams", "club", "hrc_clubs", {
+      required: true,
+      nullable: true,
+      template: "{{name}}",
+      oneField: "teams",
+      onDelete: "CASCADE",
+      note: "Nullable in the database only because the column was added to a table that already had rows; every team the importer writes has one.",
+    }),
     m2o("hrc_teams", "season", "hrc_seasons", {
       required: true,
       nullable: false,
@@ -921,6 +976,7 @@ export const siteSettingsCollection: CollectionDefinition = {
 export const allCollections: CollectionDefinition[] = [
   seasonsCollection,
   venuesCollection,
+  clubsCollection,
   membersCollection,
   teamsCollection,
   squadsCollection,

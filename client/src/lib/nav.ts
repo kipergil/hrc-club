@@ -45,6 +45,7 @@ export const NAV: readonly [NavGroup, NavGroup, NavGroup, NavGroup, NavGroup] = 
     href: "/teams",
     links: [
       { href: "/teams", title: "Our teams", subtitle: "Every HRC team, and who plays for them" },
+      { href: "/clubs", title: "Clubs", subtitle: "Every club in the league, and where they play" },
       { href: "/fixtures", title: "Fixture calendar", subtitle: "Every match still to play" },
       { href: "/results", title: "Match history", subtitle: "Every match our teams have played" },
       { href: "/tables", title: "League tables", subtitle: "Where our teams stand in their divisions" },

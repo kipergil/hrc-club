@@ -2,6 +2,8 @@
 
 Website for **HRC**, one of the ten clubs in the Hertford & District Table Tennis League, fielding four teams — HRC A and B in the Premier Division, HRC C in Division One and HRC D in Division Two. The club plays at Bushby Hall, Wormley.
 
+The site carries the **whole league**: all ten clubs with their venues, teams and squads — 26 teams and 165 squad places, imported from the league's own pages. `is_home_club` marks HRC, and that is what "our teams" and "our players" filter on.
+
 This repository holds the site, the Directus data model as code, and the planning documents behind both.
 
 ## Running it
@@ -24,7 +26,7 @@ npm run build               # client, then prerender, then server bundle
 | Area | Pages |
 |---|---|
 | **Play** | When we play (the timetable — the most important page on the site), venue detail with directions, parking and access, join us with fees, coaching, juniors |
-| **Teams** | Our teams, team detail with squad and match history, fixture calendar grouped by league week, results, match detail with the rubber-by-rubber card, league tables, averages, handicaps, cup matches, players and player profiles |
+| **Teams** | All ten clubs with their venues and squads, our teams, team detail with squad and match history, fixture calendar grouped by league week, results, match detail with the rubber-by-rubber card, league tables, averages, handicaps, cup matches, players and player profiles |
 | **News** | News and notices, articles, newsletters, events, photo albums |
 | **About** | About, history, who's who, roll of honour, documents, links, sponsors, how do I…?, contact form |
 | **Policies** | Privacy, accessibility statement, safeguarding |
@@ -67,7 +69,8 @@ cp .env.example .env      # fill in ADMIN_EMAIL / ADMIN_PASSWORD
 npm install
 npm run schema:apply      # idempotent; creates what is missing, changes nothing else
 npm run permissions:apply # creates the service role and prints its token once
-npm run seed              # placeholder content, so the site renders as a site
+npm run seed              # placeholder editorial content (pages, FAQs, links)
+npm run import:league     # all ten clubs, their venues, teams and squads, from the league site
 ```
 
 **The seeded content is placeholder.** It exists so the layout and the empty states can be judged against something realistic. Replace it in the Directus admin panel before the site goes anywhere near the public — the club's real name, address, fees, committee and history are things only the club can supply.

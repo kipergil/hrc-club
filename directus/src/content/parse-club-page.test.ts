@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseClubPage, parseVenue } from "./parse-club-page.js";
+import { discoverClubRefs, parseClubPage, parseVenue } from "./parse-club-page.js";
 
 /**
  * The fixture is a real capture of `Clubz.asp?Club=HRC` — Microsoft
@@ -9,10 +9,11 @@ import { parseClubPage, parseVenue } from "./parse-club-page.js";
  * stable, and which is due to be rebuilt entirely. These tests are what
  * turn "the import quietly produced an empty club" into a failing build.
  */
-const fixture = readFileSync(
-  path.join(import.meta.dirname, "__fixtures__/clubz-hrc.html"),
-  "latin1",
-);
+function load(name: string): string {
+  return readFileSync(path.join(import.meta.dirname, `__fixtures__/${name}`), "latin1");
+}
+
+const fixture = load("clubz-hrc.html");
 
 describe("parseClubPage", () => {
   const club = parseClubPage(fixture);
@@ -87,5 +88,67 @@ describe("parseVenue", () => {
 
   it("copes with an address that has no postcode", () => {
     expect(parseVenue("Some Hall, High Street, Hertford").postcode).toBeNull();
+  });
+});
+
+/**
+ * The ten club pages are not uniform, and each fixture here is a shape that
+ * broke the parser or would have. Water Lane is the largest club; Kidston is
+ * one of the three that field a single team, where the league writes "Our
+ * Team:" and names the team after the club with no letter — a case that
+ * yielded a club with zero teams until it was handled.
+ */
+describe("the other club shapes", () => {
+  it("reads the largest club's five teams and their squads", () => {
+    const club = parseClubPage(load("clubz-water-lane.html"));
+    expect(club.clubName).toBe("Water Lane");
+    expect(club.teams.map((t) => t.name)).toEqual([
+      "Water Lane A",
+      "Water Lane B",
+      "Water Lane C",
+      "Water Lane D",
+      "Water Lane E",
+    ]);
+    // Squads must land on the right team, which is what the spacer cells
+    // between columns make easy to get wrong.
+    for (const team of club.teams) {
+      expect(team.players.length).toBeGreaterThan(0);
+      expect(team.players).toContain(team.captain);
+    }
+  });
+
+  it("handles a one-team club, where the heading is singular and the team has no letter", () => {
+    const club = parseClubPage(load("clubz-kidston.html"));
+    expect(club.teams).toHaveLength(1);
+    expect(club.teams[0]!.name).toBe("Kidston");
+    expect(club.teams[0]!.division).toBe("premier");
+    // The squad has no header row naming the team; the column is just names.
+    expect(club.teams[0]!.players.length).toBeGreaterThan(1);
+    expect(club.teams[0]!.players).not.toContain("Kidston");
+    expect(club.teams[0]!.players).toContain(club.teams[0]!.captain);
+  });
+
+  it("does not treat a club with no team names as parsed", () => {
+    expect(() => parseClubPage("<html>Our Team: Our Players:</html>")).toThrow(/no teams/i);
+  });
+});
+
+describe("discoverClubRefs", () => {
+  /**
+   * Only href attributes are read. The same identifiers appear as bare text
+   * elsewhere in the page, where a name containing a space is cut short —
+   * and "Water Lane" would be imported as a club called "Water".
+   */
+  it("finds every club, keeping names that contain spaces intact", () => {
+    const refs = discoverClubRefs(load("clubz-hrc.html"));
+    expect(refs).toContain("Water Lane");
+    expect(refs).toContain("St. Andrews");
+    expect(refs).toContain("HRC");
+    expect(refs).not.toContain("Water");
+    expect(refs.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it("returns nothing for a page with no club links", () => {
+    expect(discoverClubRefs("<html><body>nothing here</body></html>")).toEqual([]);
   });
 });
