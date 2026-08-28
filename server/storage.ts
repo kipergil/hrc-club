@@ -26,9 +26,18 @@ import type {
   Team,
   TeamDetail,
   Venue,
-} from "@shared/types.js";
-import type { EnquiryInput } from "@shared/schema.js";
+} from "../shared/types.js";
+import type { EnquiryInput } from "../shared/schema.js";
 import { directus } from "./lib/directus.js";
+
+/*
+ * Server code imports `../shared/*` by relative path, never through the
+ * `@shared` alias the client uses. Vite rewrites that alias when it bundles
+ * the browser build; nothing rewrites it for the serverless function, which
+ * Vercel compiles file by file and runs as plain ESM. An alias here reaches
+ * Node as a bare package specifier and takes down every route in the
+ * function with ERR_MODULE_NOT_FOUND.
+ */
 
 /**
  * Directus rows arrive loosely typed — the generic client has no generated

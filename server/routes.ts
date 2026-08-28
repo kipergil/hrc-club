@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { enquiryInputSchema } from "@shared/schema.js";
+import { enquiryInputSchema } from "../shared/schema.js";
 import { env } from "./lib/env.js";
 import { CACHE, cache, handler, notFound, ok, param } from "./lib/http.js";
 import { enquiryRateLimiter, requireWebhookSecret } from "./lib/security.js";
