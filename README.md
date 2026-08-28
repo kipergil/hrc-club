@@ -1,6 +1,6 @@
 # hrc-club
 
-Website for **HRC**, one of the ten clubs in the Hertford & District Table Tennis League, fielding three teams — HRC A, HRC B and HRC C.
+Website for **HRC**, one of the ten clubs in the Hertford & District Table Tennis League, fielding four teams — HRC A and B in the Premier Division, HRC C in Division One and HRC D in Division Two. The club plays at Bushby Hall, Wormley.
 
 This repository holds the site, the Directus data model as code, and the planning documents behind both.
 

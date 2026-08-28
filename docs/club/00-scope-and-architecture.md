@@ -8,7 +8,7 @@
 
 ## 1. What this is
 
-A website for **HRC**, one of the ten clubs in the Hertford & District Table Tennis League. HRC fields three teams — HRC A, HRC B and HRC C — across the league's three divisions.
+A website for **HRC**, one of the ten clubs in the Hertford & District Table Tennis League. HRC fields four teams — HRC A and HRC B in the Premier Division, HRC C in Division One and HRC D in Division Two — and plays at Bushby Hall, Wormley.
 
 This is a *club* site, not the league site. The distinction sets the whole scope:
 
@@ -26,7 +26,7 @@ The club site **reads** competitive data and **owns** everything else. It never 
 In rough order of how often the pages will be used:
 
 1. **When and where can I play?** The weekly timetable, the venue, what it costs, who to ask. This is the single most-used piece of information on any club website and most club websites bury it.
-2. **How did we get on?** Fixtures, results and tables for the three teams, plus match reports.
+2. **How did we get on?** Fixtures, results and tables for all four teams, plus match reports.
 3. **How do I join?** Membership options, fees, and a form that reaches a human.
 4. **Club life.** News, events, the AGM, presentation night, photos.
 5. **The record.** Honours, past squads, who has played for the club.
@@ -123,7 +123,7 @@ So the sync is written behind an interface with two implementations:
 
 ```
 LeagueAdapter
-  ├─ ScrapeAdapter   — parses the existing ASP pages for HRC's three teams
+  ├─ ScrapeAdapter   — parses the existing ASP pages for HRC's teams
   └─ ApiAdapter      — reads the league's Directus API, once it exists
 ```
 

@@ -13,7 +13,7 @@ export function TeamsPage() {
 
   return (
     <div>
-      <PageHeader title="Our teams" subtitle="HRC A, B and C, and who plays for them" />
+      <PageHeader title="Our teams" subtitle="Every HRC team, and who plays for them" />
 
       {!teams || teams.length === 0 ? (
         <Empty>
@@ -21,7 +21,7 @@ export function TeamsPage() {
           confirms the divisions in September.
         </Empty>
       ) : (
-        <ul className="grid gap-4 md:grid-cols-3">
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {teams.map((team) => (
             <li key={team.id}>
               <Card className="h-full">

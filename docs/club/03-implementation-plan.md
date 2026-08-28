@@ -71,7 +71,7 @@ The one phase with real technical risk, which is why it sits after the site is a
 | # | Task |
 |---|---|
 | 3.1 | `LeagueAdapter` interface; normalised fixture, standing and player-stat shapes in `shared/` |
-| 3.2 | `ScrapeAdapter` — parses `Calendarz.asp`, `Tables.asp`, `Averages.asp` and `MatchHistory.asp?Team=HRC+*` for the three teams. Windows-1252 decoding, defensive parsing, snapshot tests against saved fixtures of the real HTML |
+| 3.2 | `ScrapeAdapter` — parses `Calendarz.asp`, `Tables.asp`, `Averages.asp` and `MatchHistory.asp?Team=HRC+*` for each team. Windows-1252 decoding, defensive parsing, snapshot tests against saved fixtures of the real HTML |
 | 3.3 | Upsert on `league_fixture_ref`; the sync writes only columns it owns, never `report` |
 | 3.4 | `POST /api/sync/league` behind a shared secret; scheduled via Vercel Cron |
 | 3.5 | Sync report: rows created/updated/skipped, and a loud failure when the parse yields zero fixtures — silence is the failure mode that matters |

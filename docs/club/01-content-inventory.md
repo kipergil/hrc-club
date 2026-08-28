@@ -48,7 +48,7 @@ The league PRD caps the top navigation at five entries and forbids renaming page
 | **News** | News · Events · Photos |
 | **About** | About the club · Our history · Who's who · Honours · Documents · Links · Sponsors · Contact |
 
-Each destination keeps its plain name and gains a one-line subtitle beneath it — "League tables / Where our three teams stand" — as an addition, never a replacement. On mobile this is a large labelled **Menu** button, not a bare hamburger.
+Each destination keeps its plain name and gains a one-line subtitle beneath it — "League tables / Where our teams stand in their divisions" — as an addition, never a replacement. On mobile this is a large labelled **Menu** button, not a bare hamburger.
 
 ## 2. Dynamic content (Tier B)
 

@@ -55,7 +55,7 @@ export default function HomePage() {
           <CardLink
             href="/fixtures"
             title="This week's matches"
-            description="Every match our three teams still have to play."
+            description="Every match our teams still have to play."
             meta={
               nextFixtures[0]
                 ? `${formatDateShort(nextFixtures[0].playedOn)} · ${nextFixtures[0].teamName} v ${nextFixtures[0].opponentName}`
@@ -75,7 +75,7 @@ export default function HomePage() {
           <CardLink
             href="/tables"
             title="League tables"
-            description="Where our three teams stand in their divisions."
+            description="Where our teams stand in their divisions."
           />
           <CardLink
             href="/news"

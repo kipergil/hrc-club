@@ -16,7 +16,7 @@ export default defineConfig({
     // with a `@vitest-environment jsdom` docblock, so the whole suite does
     // not pay for a DOM it mostly does not use.
     environment: "node",
-    include: ["{client,server,shared,scripts}/**/*.test.{ts,tsx}"],
+    include: ["{client,server,shared,scripts,directus}/**/*.test.{ts,tsx}"],
     globals: true,
   },
 });
