@@ -10,7 +10,7 @@ const envSchema = z.object({
   /** Public origin the site is served from — used for revalidation and email links. */
   APP_BASE_URL: z.string().url().default("https://hrc-club.vercel.app"),
   /** Email of the non-human directus_users row carrying the Express server's static token. */
-  SERVICE_ACCOUNT_EMAIL: z.string().email().default("service@hrc-club.local"),
+  SERVICE_ACCOUNT_EMAIL: z.string().email().default("service@hrc-club.dev"),
 });
 
 export const env = envSchema.parse({

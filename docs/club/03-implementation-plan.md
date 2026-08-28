@@ -2,6 +2,8 @@
 
 Seven phases, about eleven weeks of part-time work, with a public site up at the end of week five.
 
+**Phases 0 to 2 are built.** The site runs: 36 routes, of which 53 pages (every route plus every team, player, article, event and venue) are prerendered at build time from live Directus data. What remains is the league sync (Phase 3), the members' area (Phase 4), the accessibility test gate (Phase 5), and real content in place of the placeholder seed (Phase 6).
+
 Sequencing rule: **the site is deployable and useful at the end of every phase**. There is no phase whose absence leaves a broken site, because a volunteer project that stalls halfway should stall on something that works.
 
 ---
@@ -14,22 +16,24 @@ Sequencing rule: **the site is deployable and useful at the end of every phase**
 | 0.2 | Schema-as-code in `directus/`, idempotent and re-runnable | **Done** |
 | 0.3 | Shared enums in `shared/enums.ts` | **Done** |
 | 0.4 | Permission policy and role written | **Done** — needs running |
-| 0.5 | Run `permissions:apply`, capture `DIRECTUS_SERVICE_TOKEN` | To do |
-| 0.6 | Repo scaffold: `client/`, `server/`, `api/`, `shared/`, Vite + Tailwind + shadcn, mirroring pintogather's layout | To do |
+| 0.5 | Run `permissions:apply`; `HRC Club Service` role, policy and service account provisioned | **Done** |
+| 0.6 | Repo scaffold: `client/`, `server/`, `api/`, `shared/`, Vite + Tailwind, mirroring pintogather's layout | **Done** |
 | 0.7 | Vercel project, environment variables, preview deploys from PRs | To do |
-| 0.8 | GitHub Actions CI: typecheck, Vitest, build | To do |
-| 0.9 | Clerk application (development instance only for now) | To do |
+| 0.8 | GitHub Actions CI: typecheck, Vitest, build | **Done** |
+| 0.9 | Clerk application (development instance only for now) | To do — Phase 4 |
 
 **Done when** an empty-but-deployed site builds from `main` and CI is green on a pull request.
 
-## Phase 1 — Design system and the static site (2 weeks)
+Verified: the service token can read the club's collections, cannot read a member's `email` or `phone` even when it asks Directus directly, cannot read an enquiry back, and cannot see another project's collections at all.
+
+## Phase 1 — Design system and the static site (2 weeks) — **built**
 
 The accessibility requirements are cheap now and expensive later, so they come first.
 
 | # | Task |
 |---|---|
 | 1.1 | Tailwind token layer: 20px base in `rem`, the type scale, the AAA-contrast palette in light and dark, 48px touch-target spacing. Tokens, not utilities sprinkled at call sites |
-| 1.2 | Atkinson Hyperlegible self-hosted, with a real fallback stack |
+| 1.2 | Atkinson Hyperlegible self-hosted, with a real fallback stack — *outstanding: the fallback stack is in place, the woff2 files are not* |
 | 1.3 | App shell: header, five-entry menu, mobile **Menu** button (labelled, never a bare hamburger), breadcrumbs, footer, "Back to home" on every page |
 | 1.4 | Text-size control (A / A+ / A++) persisted to `localStorage` |
 | 1.5 | Prerender pipeline: build step that walks the Tier A route list, fetches from Directus, `renderToString`, writes `dist/public/<route>/index.html` |
@@ -41,7 +45,9 @@ The accessibility requirements are cheap now and expensive later, so they come f
 
 **This is the first genuinely useful milestone.** A club site that answers "when and where do you play, what does it cost, how do I join" is already better than most, and it is live at the end of week three.
 
-## Phase 2 — Club-owned dynamic content (2 weeks)
+## Phase 2 — Club-owned dynamic content (2 weeks) — **built, less the Flows**
+
+Flows (2.9, 2.10) are specified but not provisioned: they need the deployed origin and the Vercel deploy hook, which is Phase 0.7.
 
 | # | Task |
 |---|---|
@@ -98,7 +104,7 @@ The one phase with real technical risk, which is why it sits after the site is a
 | 5.2 | Error pages that say what happened and what to do next; a real 404 with useful links |
 | 5.3 | PWA: cache fixtures, tables and the timetable — sports halls have poor signal |
 | 5.4 | Print stylesheets for fixtures, the timetable and the squad list. Captains print these |
-| 5.5 | axe-core tests over every prerendered route, in CI, failing the build |
+| 5.5 | axe-core tests over every prerendered route, in CI, failing the build — *the only part of Phase 5 not yet started that changes CI* |
 | 5.6 | Lighthouse CI budgets: performance and accessibility |
 | 5.7 | Keyboard-only walkthrough of every interactive route; no hover-dependent behaviour anywhere |
 | 5.8 | Manual check at 200% zoom and with a screen reader on the six highest-traffic pages |

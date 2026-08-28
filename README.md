@@ -2,7 +2,36 @@
 
 Website for **HRC**, one of the ten clubs in the Hertford & District Table Tennis League, fielding three teams — HRC A, HRC B and HRC C.
 
-This repository holds the planning documents, the Directus data model as code, and (from Phase 0 onwards) the site itself.
+This repository holds the site, the Directus data model as code, and the planning documents behind both.
+
+## Running it
+
+```bash
+npm install
+cp .env.example .env        # DIRECTUS_URL + DIRECTUS_SERVICE_TOKEN
+npm run dev                 # API on :5000
+npx vite                    # client with hot reload, proxying /api
+npm test                    # 32 tests
+npm run build               # client, then prerender, then server bundle
+```
+
+`npm run build` renders every route to real HTML at build time, so the site is readable with JavaScript off. If Directus is unreachable it warns and skips that step rather than failing — the built site still works, client-rendered.
+
+## What is built
+
+36 routes across the three tiers, following the feature set of the league site this club belongs to:
+
+| Area | Pages |
+|---|---|
+| **Play** | When we play (the timetable — the most important page on the site), venue detail with directions, parking and access, join us with fees, coaching, juniors |
+| **Teams** | Our teams, team detail with squad and match history, fixture calendar grouped by league week, results, match detail with the rubber-by-rubber card, league tables, averages, handicaps, cup matches, players and player profiles |
+| **News** | News and notices, articles, newsletters, events, photo albums |
+| **About** | About, history, who's who, roll of honour, documents, links, sponsors, how do I…?, contact form |
+| **Policies** | Privacy, accessibility statement, safeguarding |
+
+Accessibility is built in rather than retrofitted: 20px base type in `rem` with an A / A+ / A++ control, AAA contrast in light and dark, 48px targets, no hover-dependent behaviour, a labelled **Menu** button on mobile, wide tables reflowing to cards below 640px, colour never the only signal, and print stylesheets. See [`client/src/index.css`](client/src/index.css) and [`tailwind.config.ts`](tailwind.config.ts), where those rules live as tokens.
+
+Not yet built: the league data sync (fixtures and results are entered by hand until then), the members' area, and the axe-core CI gate. See the implementation plan.
 
 ## Documents
 
@@ -38,15 +67,27 @@ cp .env.example .env      # fill in ADMIN_EMAIL / ADMIN_PASSWORD
 npm install
 npm run schema:apply      # idempotent; creates what is missing, changes nothing else
 npm run permissions:apply # creates the service role and prints its token once
+npm run seed              # placeholder content, so the site renders as a site
 ```
+
+**The seeded content is placeholder.** It exists so the layout and the empty states can be judged against something realistic. Replace it in the Directus admin panel before the site goes anywhere near the public — the club's real name, address, fees, committee and history are things only the club can supply.
 
 | Path | What it is |
 |---|---|
 | [`directus/src/schema/definitions.ts`](directus/src/schema/definitions.ts) | The 24 collections — the source of truth for the data model |
 | [`directus/src/schema/apply.ts`](directus/src/schema/apply.ts) | Applies them, idempotently, with the prefix guard |
 | [`directus/src/permissions/definitions.ts`](directus/src/permissions/definitions.ts) | The `HRC Club Service` policy — what the server's token may read and write |
-| [`shared/enums.ts`](shared/enums.ts) | Every closed value set, shared by the schema tooling and (later) the app |
+| [`directus/src/content/seed.ts`](directus/src/content/seed.ts) | Placeholder starter content, idempotent |
+| [`shared/enums.ts`](shared/enums.ts) | Every closed value set, shared by the schema tooling, the server and the client |
 
 ## Stack
 
-React 18 · Vite · wouter · TanStack Query · Tailwind + shadcn/ui · Express · Directus 11 · Clerk · Vercel — following [`kipergil/pintogather`](https://github.com/kipergil/pintogather). This diverges from the league PRD, which specifies Nuxt; the reasoning is in [docs/club/00-scope-and-architecture.md](docs/club/00-scope-and-architecture.md) §3.
+React 18 · Vite · wouter · TanStack Query · Tailwind · Radix · Express · Directus 11 · Vercel — following [`kipergil/pintogather`](https://github.com/kipergil/pintogather). This diverges from the league PRD, which specifies Nuxt; the reasoning is in [docs/club/00-scope-and-architecture.md](docs/club/00-scope-and-architecture.md) §3.
+
+| Path | What it is |
+|---|---|
+| `client/` | The React app — pages, the eleven-component vocabulary, the design tokens |
+| `server/` | Express BFF: `storage.ts` maps Directus rows to read models, `routes.ts` serves them with the cache policy for their tier |
+| `api/index.ts` | The same app as a Vercel function |
+| `scripts/prerender.tsx` | Renders every route to HTML at build time, with its data embedded |
+| `shared/` | Enums, read-model types, the enquiry schema, the API client — used by client, server and prerenderer alike |
