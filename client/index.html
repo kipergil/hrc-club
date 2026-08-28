@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!--
+      The single most consequential line on the page. Not one of the 90
+      pages on the site this replaces carries a viewport tag, which is why
+      none of them work on a phone.
+    -->
+    <title>HRC Table Tennis Club</title>
+    <meta
+      name="description"
+      content="Table tennis in Hertford — when and where we play, how to join, and how our teams are getting on in the Hertford &amp; District League."
+    />
+    <meta name="theme-color" content="#0f5132" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1512" media="(prefers-color-scheme: dark)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="HRC Table Tennis Club" />
+    <meta
+      property="og:description"
+      content="Table tennis in Hertford — when and where we play, how to join, and how our teams are getting on."
+    />
+    <!--
+      Applies the saved theme and text size before first paint. External,
+      not inline, so the Content-Security-Policy can stay at
+      `script-src 'self'` — see client/public/theme-init.js.
+    -->
+    <script src="/theme-init.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "hrc-club-directus",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "schema:apply": "tsx src/schema/apply.ts",
+    "permissions:apply": "tsx src/permissions/apply.ts",
+    "typecheck": "tsc --noEmit",
+    "seed": "tsx src/content/seed.ts"
+  },
+  "dependencies": {
+    "@directus/sdk": "^18.0.3",
+    "dotenv": "^16.4.7",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

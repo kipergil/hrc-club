@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Atkinson Hyperlegible, self-hosted. The league PRD forbids a runtime
+ * dependency on a third-party CDN, and a font that fails to load is a page
+ * that reflows under the reader.
+ *
+ * The @font-face blocks are added in Phase 1.2 alongside the woff2 files;
+ * until then the fallback stack in tailwind.config.ts carries the site,
+ * which is why that stack is a real one rather than a bare `sans-serif`.
+ */
+
+@layer base {
+  :root {
+    /*
+     * Every pair below is checked against the requirement it exists for:
+     * body text >= 7:1 (WCAG AAA), large text >= 4.5:1, UI components and
+     * focus indicators >= 3:1.
+     */
+    --c-canvas: #fbfbf9;
+    --c-surface: #ffffff;
+    --c-surface-sunken: #f1f3ef;
+    --c-ink: #16211c; /* 15.8:1 on canvas */
+    --c-ink-muted: #47544d; /* 7.4:1 on canvas */
+    --c-line: #d3d9d3;
+    --c-brand: #0f5132; /* 8.6:1 on surface */
+    --c-brand-strong: #0b3b25;
+    --c-brand-soft: #e6f0ea;
+    --c-brand-ink: #ffffff; /* on brand */
+    --c-accent: #8a4b08; /* 7.1:1 on canvas */
+    --c-accent-soft: #fdf1e0;
+    --c-positive: #0f5132;
+    --c-negative: #8a1c1c; /* 8.2:1 on canvas */
+    --c-focus: #8a4b08;
+
+    /*
+     * Multiplied by the in-page text-size control (A / A+ / A++). The
+     * control exists because older users frequently do not know browser
+     * zoom exists, and the site should not assume they do.
+     */
+    --text-scale: 1;
+    font-size: calc(125% * var(--text-scale));
+  }
+
+  :root[data-theme="dark"] {
+    --c-canvas: #0f1512;
+    --c-surface: #18201c;
+    --c-surface-sunken: #131a16;
+    --c-ink: #edf2ee; /* 16:1 on canvas */
+    --c-ink-muted: #b3c0b8; /* 9.7:1 on canvas */
+    --c-line: #33413a;
+    --c-brand: #7fd1a4; /* 10.2:1 on canvas */
+    --c-brand-strong: #a6e3c2;
+    --c-brand-soft: #17281f;
+    --c-brand-ink: #08150e;
+    --c-accent: #f0b166; /* 10.5:1 on canvas */
+    --c-accent-soft: #2a1f12;
+    --c-positive: #7fd1a4;
+    --c-negative: #f0908b;
+    --c-focus: #f0b166;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --c-canvas: #0f1512;
+      --c-surface: #18201c;
+      --c-surface-sunken: #131a16;
+      --c-ink: #edf2ee;
+      --c-ink-muted: #b3c0b8;
+      --c-line: #33413a;
+      --c-brand: #7fd1a4;
+      --c-brand-strong: #a6e3c2;
+      --c-brand-soft: #17281f;
+      --c-brand-ink: #08150e;
+      --c-accent: #f0b166;
+      --c-accent-soft: #2a1f12;
+      --c-positive: #7fd1a4;
+      --c-negative: #f0908b;
+      --c-focus: #f0b166;
+    }
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans;
+    line-height: 1.6;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-bold text-ink;
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+
+  /* Thick, high-contrast, and never removed. */
+  :focus-visible {
+    outline: 3px solid var(--c-focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Tabular figures everywhere numbers line up in a column. */
+  table,
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* No decorative motion for anyone who has asked not to have it. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Skip link — visible the moment it is focused, invisible otherwise. */
+  .skip-link {
+    @apply absolute left-4 -top-20 z-50 rounded-card bg-brand px-4 py-3 text-brand-ink focus:top-4;
+  }
+}
+
+@media print {
+  /*
+   * Captains print the fixture list and pin it up. Real print support was
+   * a finding in the league audit, not an afterthought here.
+   */
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 11pt;
+  }
+
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+}

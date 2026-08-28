@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm --prefix directus ci
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Typecheck the Directus tooling
+        run: npm --prefix directus run typecheck
+
+      - name: Test
+        run: npm test
+
+      # The prerender step needs a reachable Directus instance. It is not
+      # given credentials here, so it warns and skips; the build still has to
+      # succeed, which is what this checks.
+      - name: Build
+        run: npm run build
