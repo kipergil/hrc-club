@@ -3,6 +3,13 @@ import helmet from "helmet";
 import type { RequestHandler } from "express";
 import { env } from "./env.js";
 
+/**
+ * Applies only to what Express serves. On Vercel that is `/api/*` and
+ * nothing else — every HTML page is a prerendered static file the CDN
+ * hands over directly, so these headers never touch it. The matching
+ * policy for pages lives in `vercel.json`'s `headers` block, and the two
+ * are meant to stay in step: change one, change the other.
+ */
 export function securityHeaders(): RequestHandler {
   return helmet({
     // Images and documents are proxied from Directus through this same
