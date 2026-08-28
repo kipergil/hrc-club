@@ -522,6 +522,11 @@ export const honoursCollection: CollectionDefinition = {
     textField("title", { required: true, note: 'e.g. "Division 1 champions", "Creasey Cup winners".' }),
     selectField("honour_type", HONOUR_TYPE, { defaultValue: "team", nullable: false }),
     selectField("competition", COMPETITION, { labels: COMPETITION_LABELS }),
+    textField("competition_name", {
+      nullable: true,
+      note:
+        "The competition as the league writes it. Free text rather than the enum beside it because the Hall of Fame spans 55 years and 21 competitions, several of which have been renamed — \"Open Singles (Men's Singles to 2004)\" is one entry, not two.",
+    }),
     textField("season_label", {
       required: true,
       maxLength: 16,
@@ -778,6 +783,11 @@ export const documentsCollection: CollectionDefinition = {
     }),
     richTextField("description", { note: "One line saying what the document is, so nobody downloads a PDF to find out." }),
     dateOnlyField("document_date", { note: "Date on the document itself — the meeting date for minutes." }),
+    textField("external_url", {
+      nullable: true,
+      note:
+        "Where the document lives if it is not held in the file library — a form still hosted on the old league site, say. `file` is preferred: a link to somebody else's server is a link that eventually breaks.",
+    }),
     booleanField("is_public", true, "Untick for documents only members should see."),
     integerField("sort", { defaultValue: 0 }),
     dateCreatedField(),

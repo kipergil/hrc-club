@@ -287,6 +287,8 @@ export interface Honour {
   title: string;
   honourType: string;
   competition: Competition | null;
+  /** The competition as the league writes it — see the field's note in the schema. */
+  competitionName: string | null;
   seasonLabel: string;
   recipientName: string | null;
   notes: string | null;

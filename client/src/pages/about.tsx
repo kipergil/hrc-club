@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { COMPETITION_LABELS, DOCUMENT_CATEGORY_LABELS } from "@shared/enums.js";
-import { PageHeader } from "@/components/layout";
+import { PageHeader, PrintButton } from "@/components/layout";
 import {
   Badge,
   Card,
@@ -84,73 +84,112 @@ export function HonoursPage() {
   if (isLoading) return <Loading what="the roll of honour" />;
   if (isError) return <ErrorNote what="roll of honour" />;
 
-  const seasons = [...new Set((honours ?? []).map((honour) => honour.seasonLabel))];
+  const all = honours ?? [];
+
+  /*
+   * Two different records, and they want showing differently.
+   *
+   * The recent Rolls of Honour carry a runner-up and a season written the
+   * way a season is written ("2025-26"), so they read best as a season at a
+   * time. The Hall of Fame is 686 results over seventy-five years, labelled
+   * by a single year, and reading it a year at a time would mean seventy-five
+   * headings — so it goes by competition, which is how anyone actually asks
+   * ("who has won the Creasey Cup?").
+   */
+  const seasons = all.filter((honour) => honour.seasonLabel.includes("-"));
+  const historic = all.filter((honour) => !honour.seasonLabel.includes("-"));
+
+  const seasonLabels = [...new Set(seasons.map((h) => h.seasonLabel))].sort().reverse();
+  const competitions = [...new Set(historic.map((h) => h.competitionName ?? h.title))];
+
+  if (all.length === 0) {
+    return (
+      <>
+        <PageHeader title="Roll of honour" subtitle="Champions and cup winners, back to 1950" />
+        <Empty>The roll of honour has not been imported yet.</Empty>
+      </>
+    );
+  }
 
   return (
-    <div>
-      <PageHeader title="Roll of honour" subtitle="Every title and trophy we've won" />
+    <div className="space-y-12">
+      <PageHeader title="Roll of honour" subtitle="Champions and cup winners, back to 1950">
+        <PrintButton label="Print the roll of honour" />
+      </PageHeader>
 
-      {seasons.length === 0 ? (
-        <Empty>
-          The roll of honour has not been filled in yet. If you have club records — programmes,
-          photographs, a trophy with names on it — we would very much like to hear from you.
-        </Empty>
-      ) : (
-        <>
-          <TableNote>
-            Listed newest first. Team honours are the club’s; individual honours belong to the
-            player named.
-          </TableNote>
+      <TableNote>
+        {all.length} results in all — {seasonLabels.length} recent seasons in full, and the Hall of
+        Fame going back to {Math.min(...historic.map((h) => Number(h.seasonLabel)).filter(Number.isFinite))}.
+      </TableNote>
 
+      {seasonLabels.length > 0 ? (
+        <section aria-labelledby="recent-heading">
+          <h2 id="recent-heading" className="mb-3 text-2xl">
+            Recent seasons
+          </h2>
           <div className="space-y-8">
-            {seasons.map((season) => (
-              <section key={season}>
-                <h2 className="mb-3 text-2xl">{season}</h2>
+            {seasonLabels.map((season) => (
+              <div key={season}>
+                <h3 className="mb-2 text-xl">{season}</h3>
                 <TableScroller>
                   <thead>
                     <tr>
-                      <Th>Honour</Th>
                       <Th>Competition</Th>
-                      <Th>Who</Th>
+                      <Th>Winner</Th>
+                      <Th>Runner-up</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(honours ?? [])
+                    {seasons
                       .filter((honour) => honour.seasonLabel === season)
                       .map((honour) => (
                         <tr key={honour.id}>
-                          <Td className="font-semibold">
-                            {honour.title}
-                            {honour.notes ? (
-                              <span className="block font-normal text-ink-muted">{honour.notes}</span>
-                            ) : null}
-                          </Td>
-                          <Td>
-                            {honour.competition
-                              ? (COMPETITION_LABELS[honour.competition] ?? honour.competition)
-                              : "—"}
-                          </Td>
-                          <Td>
-                            {honour.memberSlug ? (
-                              <Link
-                                href={`/players/${honour.memberSlug}`}
-                                className="text-brand underline"
-                              >
-                                {honour.recipientName}
-                              </Link>
-                            ) : (
-                              (honour.recipientName ?? honour.teamName ?? "The club")
-                            )}
+                          <Td>{honour.competitionName ?? honour.title}</Td>
+                          <Td className="font-semibold">{honour.recipientName ?? "—"}</Td>
+                          <Td className="text-ink-muted">
+                            {honour.notes?.replace(/^Runner-up:\s*/i, "") ?? "—"}
                           </Td>
                         </tr>
                       ))}
                   </tbody>
                 </TableScroller>
-              </section>
+              </div>
             ))}
           </div>
-        </>
-      )}
+        </section>
+      ) : null}
+
+      {competitions.length > 0 ? (
+        <section aria-labelledby="hall-heading">
+          <h2 id="hall-heading" className="mb-3 text-2xl">
+            Hall of fame
+          </h2>
+          <TableNote>
+            Every winner the league has a record of, by competition. Years the competition was not
+            played are left out rather than listed as blank.
+          </TableNote>
+          <ul className="max-w-prose space-y-3">
+            {competitions.map((competition) => {
+              const winners = historic
+                .filter((honour) => (honour.competitionName ?? honour.title) === competition)
+                .sort((a, b) => Number(b.seasonLabel) - Number(a.seasonLabel));
+              return (
+                <li key={competition}>
+                  <Disclosure summary={`${competition} — ${winners.length} ${winners.length === 1 ? "winner" : "winners"}`}>
+                    <ul className="space-y-1">
+                      {winners.map((honour) => (
+                        <li key={honour.id} className="tabular">
+                          <strong>{honour.seasonLabel}</strong> · {honour.recipientName}
+                        </li>
+                      ))}
+                    </ul>
+                  </Disclosure>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }

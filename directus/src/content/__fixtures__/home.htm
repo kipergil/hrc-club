@@ -1,0 +1,308 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns:dt="uuid:C2F41010-65B3-11d1-A29F-00AA00C14882"
+      xmlns="http://www.w3.org/TR/REC-html40">
+ <HEAD>
+  <meta http-equiv=Content-Type content="text/html; charset=WINDOWS-1252">
+  <meta name=ProgId content=FrontPage.Editor.Document>
+  <meta name=Generator content="Microsoft FrontPage 6.0">
+  <meta name="description" content="A Table Tennis League based around Hertford England.">
+  <meta name="keywords" content="Hertford District Table Tennis League, table tennis, Hertford, League Table Tennis, Ware, Broxbourne, PramaStars, HertsTTL, Table Tennis in Hertford, Table Tennis in Waltham">
+  <meta name=Originator content="Microsoft Word 9">
+  <link rel="stylesheet" type="text/css" href="TTLStyles.css">
+  <title>Hertford District Table Tennis League HomePage</title>
+  <Script Language="javascript" src="ShadowHead.js">  </script>
+  <Script Language="javascript" src="Tooltip.js"> </script>
+  <Script type="text/javascript" src="TTmenu.js"> </script>
+  
+  <Script Language="javascript"> 
+    function checkDate() { 
+     var rightNow, today, xmasF, xmasT, closedF, closedT, hcapF, hcapT, agmF, agmT, from, to, drange, text; 
+     var xmasTxt, closedTxt, hcapTxt, agmTxt; 
+     today = new Date(); 
+     rightNow = Date.parse(today); 
+     
+     xmasF    = Date.parse('13 December 2025'); 
+     xmasT    = Date.parse('26 December 2025'); 
+     from     = new Date(xmasF); 
+     to       = new Date(xmasT); 
+     drange   = "Xmas: " + from.toDateString() + " - " + to.toDateString() ;
+     if (rightNow > xmasF && rightNow < xmasT)  { 
+        xmasTxt = drange + " (inside) \n"; 
+        document.getElementById("xm1").style.display = "block";  
+        document.getElementById("xm2").style.display = "block";  
+        document.getElementById("xm3").style.display = "block";  
+        document.getElementById("pmb").style.display = "none";  
+      } else { 
+        xmasTxt = drange + " (outside) \n"; 
+        document.getElementById("xm1").style.display = "none";  
+        document.getElementById("xm2").style.display = "none";  
+        document.getElementById("xm3").style.display = "none";  
+        document.getElementById("pmb").style.display = "block";  
+     }  
+     
+     agmF     = Date.parse('17 May 2026'); 
+     agmT     = Date.parse('9 JUNE 2026'); 
+     from     = new Date(agmF); 
+     to       = new Date(agmT); 
+     drange   = "AGM : " + from.toDateString() + " - " + to.toDateString(); 
+     if (rightNow < agmT && rightNow > agmF)  { 
+        agmTxt = drange + " (inside) \n"; 
+        document.getElementById("agM").style.display = "block";  
+      } else { 
+        agmTxt = drange + " (outside) \n"; 
+        document.getElementById("agM").style.display = "none"; 
+     }   
+  
+     closedF  = Date.parse('23 March 2026'); 
+     closedT  = Date.parse('30 April 2026'); 
+     from     = new Date(closedF); 
+     to       = new Date(closedT); 
+     drange   = "Closed: " + from.toDateString() + " - " + to.toDateString(); 
+     if (rightNow < closedT && rightNow > closedF)  { 
+        closedTxt = drange + " (inside) \n"; 
+        document.getElementById("clA").style.display = "list-item"; 
+        document.getElementById("clW").style.display = "compact"; 
+        document.getElementById("clH").style.display = "block"; 
+      } else { 
+        closedTxt = drange + " (outside) \n"; 
+        document.getElementById("clA").style.display = "none"; 
+        document.getElementById("clW").style.display = "none"; 
+        document.getElementById("clH").style.display = "none"; 
+     }   
+  
+     hcapF    = Date.parse('1 December 2025'); 
+     hcapT    = Date.parse('10 Jan 2026'); 
+     from     = new Date(hcapF); 
+     to       = new Date(hcapT); 
+     drange   = "HCap : " + from.toDateString() + " - " + to.toDateString(); 
+     if (rightNow < hcapT && rightNow > hcapF)  { 
+        hcapTxt = drange + " (inside) \n"; 
+        document.getElementById("hcW").style.display = "block";  
+        document.getElementById("hcH").style.display = "inline";  
+      } else { 
+        hcapTxt = drange + " (outside) \n"; 
+        document.getElementById("hcW").style.display = "none"; 
+        document.getElementById("hcH").style.display = "none"; 
+     }   
+  
+     text = "Date checks: \n" + xmasTxt + hcapTxt + closedTxt + agmTxt ;
+     document.getElementById("dbug").title = text;
+      } 
+  
+     </script> 
+
+  <style>
+   .boxH {font-size:9.0pt; font-family: Comic sans ms, Arial; mso-font-charset:0; border:.5pt none windowtext}
+   .boxT {border-collapse:collapse;border:none;mso-border-alt:solid windowtext .5pt;mso-padding-alt:0cm .5pt 0cm .5pt}
+   .boxC {border:solid windowtext .5pt;padding:0cm .5pt 0cm .5pt}
+   .FixH {font-size:9.0pt; font-family: "Comic Sans Ms";padding:0in 1.0pt 0in 1.0pt; height:30}
+   .FixD {font-size:8.0pt; font-family: Tahoma, Arial;padding:0in 1.0pt 0in 1.0pt; height:20}
+   .FixT {font-size:10.0pt;font-family: Arial;font-weight: 700;padding:0in 1.0pt 0in 1.0pt; height:20;white-space:nowrap}
+  </style>
+  <style>
+  body{
+    background-attachment:fixed;
+    background-repeat: no-repeat;
+    background-position: 50% 22%;
+  }
+  </style>
+ </HEAD>
+ 
+ <body onload="checkDate()" lang=EN-GB link=blue vlink=purple style='tab-interval:36.0pt'>
+ 
+  <TABLE width=100% border=0>
+   <tr>
+    <td valign=Top align=left>
+     <img src="/images/HTTLLogo.gif" width=196 height=153 border=0 usemap="#Access">
+     <map name="Access">
+      <area shape="circle" coords="124,46,10" href="LogMeIn.asp" Title="Log in, Big Time!">
+     </map>
+    </td>
+    <TD valign=top align=center> <Span class="HDTTL">Hertford & District Table Tennis League</Span><br><br><br><br>
+                                 <Span class="Season">2026-2027 Season</Span><br>
+    </TD>
+    <td width=15% valign=middle align=right>
+      <img id="xm1" src="./images/AniXmas1.gif" height=120 width=108>
+    </td>
+   </tr>
+   <tr><td valign=Top align=center colspan=3>
+      <span id="agM"><font face="Comic Sans Ms" color=black size=2>Coming up!  The 2026/27 AGM is on 8th June, at Thundridge Village Hall (home of Cheshunt TT).  19:45 start. Everyone welcome!!!</font></span>
+      <img  id="xm2" src="./images/lightstring.gif" height=0 width=0>
+   </td></tr>
+  </TABLE>
+ 
+  <TABLE border=0 cellpadding=0 width=100%>
+   <tr><td id="dbug">
+    <font face=Arial color=gray size=1>Site last updated 27th August 2026</font>
+   </td>
+  </tr>
+  <tr> <td colspan=100% align=right > 
+   <marquee direction=left align=top height=20 width=100% scrolldelay=10 scrollamount=3>
+    <font size=3 face="Comic Sans Ms" color=Black> 
+		Welcome to the 2026/27 Season! &nbsp; Please Note that Div 1 & 2 Fixtures were changed 23rd August and Final adjustments are still being made (including player details & cup draws), so please bear with us...the new season starts w/c 14th Sept with a Divisional preliminary Cup week...
+	</font>
+   </marquee>
+   </td></tr>
+   <tr> <td width = 100% align=center> &nbsp; </td>  </tr>
+  </TABLE>
+    
+  <DIV class=Section1>
+    
+   <Table border=0 width=100% valign=top class=boxH> 
+    <tr>
+     <td>
+      <ul id="verticalmenu" class="ttmenu">
+       <li><a href="Notices.asp" title="Up-coming TT Events for your diary & Adverts from other league players.">Special Notices</a></li>
+       <li><a href="Tables.asp" title="Latest league tables & outstanding league matches.">League Tables</a></li>
+       <li><a href="CupNews.asp" title="Latest Divisional & Handicap Cup results and Draws.">Cup News</a></li>
+       <li><a href="Newz.asp?NlNo=99" title="This season's Newsletters, most recent first.">Newsletters</a></li>
+       <li><a href="#" title="Club Locations, home nights & contact details.">Club Details</a>
+        <ul>
+         <li><a href="Clubz.asp?Club=Cheshunt">Cheshunt</a></li>
+         <li><a href="Clubz.asp?Club=Ellenborough">Ellenborough</a></li>
+         <li><a href="Clubz.asp?Club=Furneux Pelham">Furneux Pelham</a></li>
+         <li><a href="Clubz.asp?Club=Grundy Park">Grundy Park</a></li>
+         <li><a href="Clubz.asp?Club=HRC">HRC</a></li>
+         <li><a href="Clubz.asp?Club=Kidston">Kidston</a></li>
+         <li><a href="Clubz.asp?Club=PramaStars">PramaStars</a></li>
+         <li><a href="Clubz.asp?Club=St. Andrews">St. Andrews</a></li>
+         <li><a href="Clubz.asp?Club=Stanstead Abbotts">Stanstead Abbotts PH</a></li>
+         <li><a href="Clubz.asp?Club=Water Lane">Water Lane</a></li>
+        </ul>
+       </li>
+       <li><a href="#" title="League & Cup matches week by week.">Fixture Calendar</a>
+        <ul>
+         <li><a href="Calendarz.asp?Div=0">Premier Division</a></li>
+         <li><a href="Calendarz.asp?Div=1">Division One</a></li>   
+         <li><a href="Calendarz.asp?Div=2">Division Two</a></li>
+        </ul>	
+       </li>	
+       <li><a href="#" title="Constitution, Forms, Scoresheets, minutes & the 2025/26 handbook" >Forms & Documents</a>
+        <ul>
+         <li><a href="Constitution 2025.pdf" title="Our Constitution in PDF format - so you'll need Adobe to view this.">Our Constitution (PDF)</a></li>
+         <li><a href="HertsTTRegForm2026-27.pdf" title="Download the Registration form for 2026/27 Season (PDF format).">Registration Form (PDF)</a></li>
+         <li><a href="Handbook2627.pdf" title="2026/27 season's Handbook in PDF format - so you'll need Adobe to view this.">Handbook (PDF)</a></li>
+         <li><a href="AGM2025.pdf" title="Minutes of the 2025 AGM in PDF format - you'll need Adobe to view this.">AGM Minutes</a></li>
+         <li><a href="SingleScoreCard.htm" title="Score Card for League matches.">League Scorecard</a></li>
+         <li><a href="CupScoresheetNew.htm" title="Scoresheet for Cup matches (best of 5 games).">Cup Scoresheet</a></li>
+         <li><a href="CupScoresheet2015.doc" title="WORD Scoresheet for Cup matches (best of 5 games).">Cup Scoresheet DOC</a></li>
+         <li><a href="CupScoresheetHNew.htm" title="Scoresheet for HANDICAP matches (best of 3 games & up to 21 points).">Handicap Scoresheet</a></li>
+         <li><a href="CupScoresheetH2022.doc" title="WORD Scoresheet for HANDICAP cup matches (best of 3 games & up to 21 points).">Handicap Scoresheet DOC</a></li>
+         <li id="hcW"><a href="HandicapForm2019-20.doc" title="2019/20 Handicap Tournament Entry form in WORD format.">Handicap Form (DOC)</a></li>
+         <li id="hcH"><a href="HandicapForm2019-20.htm" title="2018/19 Handicap Tournament Entry form.">Handicap form</a></li>
+         <li id="clW"><a href="ClosedForm2019-20.doc" title="2018/19 Closed Competition Entry form in WORD.">Closed Form (DOC)</a></li>
+         <li id="clH"><a href="ClosedForm2019-20.htm" title="2018/19 Closed Competition Entry form.">Closed Form</a></li>
+         <li><a href="CommitteeMinutes.htm" title="Minutes of the last Committee Meeting.">Committee Minutes</a></li>
+         <li><a href="TT001.pdf" title="Table Tennis England form in PDF format.">TTE form (PDF)</a></li>
+        </ul>
+       </li>
+   
+       <li><a href="#" title="Apply for a current Competition online or leave Feedback.">Do it Online</a>
+        <ul>
+   <!--  <li id="clA"><a href="ClosedInvite.asp" title="Fill in the 2019/20 Closed Competition Entry Form online. You'll need to input your email address.">Closed Competition</a></li> -->
+   <!--  <li id="hcA"><a href="HCapApp1.asp" title="Apply for the 2019/20 Handicap Competition online. You'll need to input your email address.">Handicap Competition</a></li> -->
+         <li><a href="Feedback.asp?Msg=Ask" title="A forum to leave your feedback, comments & suggestions.">Leave Feedback</a></li>
+        </ul>
+       </li>
+   
+       <li><a href="#" title="Each player's latest available HANDICAP and AVERAGES." >Handicaps / Averages</a>
+        <ul> 
+         <li><a href="Handicaps.asp" title="Each player's HANDICAP for the 2024/25 season.">Handicaps</a></li>
+         <li><a href="Averages.asp"  title="Latest available AVERAGES for each player across the divisions.">Averages</a></li>
+        </ul>
+       </li>
+       <li><a href="RollofHonour2025-26.htm" title="2025/26 season's Winners and Runners up.">Roll of Honour</a></li>
+       <li><a href="Admin.asp?ADMI=0" title="Administrative Functions.">Admin</a></li>
+       <li><a href="#" title="Links to Table Tennis England & other Table Tennis-related sites." >TTE etc.</a>
+        <ul>
+         <li><a href="https://tabletennisengland.sport80.com/public/wizard/a/836/home" target="_blank" title="Renew your Table Tennis England membership">Membership renewal</a></li>
+         <li><a href="TT001.pdf" target="_blank">Table Tennis England form (PDF)</a></li>
+        </ul>
+       </li>
+       <li><a href="Links.htm">Our Links</a></li>
+      </ul>
+     </td>
+     <td colspan=2 align=right>
+      <h3>
+       <font size=3 face=Arial color=DarkBlue>
+        Formed in 1936, the Hertford &amp; District Table tennis league celebrates 90 years of Table Tennis this year and is<br>
+        quite probably the 13<sup>th</sup> oldest TT league in UK, this season covering an area from Bishops Stortford to Southbury Road, Enfield.<br>
+        The league is affiliated to Table Tennis England and the Hertfordshire County Table Tennis Association.<br>
+       </font> 
+      </h3> 
+
+      <h3>
+       <font size=3 face=Arial color=DarkBlue> 
+        For the 2026/27 season there are 10 clubs in the league, providing 26 teams spread over the 3 divisions,<br> 
+        competing in regular league matches as well as cup and special tournament fixtures. <br>
+        This season we've gained a 2nd Ellenborough team and a 5th Water Lane team.<br> 
+       </font>  
+      </h3> 
+
+      <h3> <font size=3 face=Arial color=DarkBlue>
+      <h3> <font size=3 face=Arial color=DarkBlue>
+       New players, teams and clubs of all standards are always welcome - contact any of our committee for details:<br> 
+        Jo Swain - Chairperson &nbsp; <br>
+        Andy Reeve - Treasurer &nbsp; <br>
+        Colin Bullworthy - Match Secretary &nbsp; <br>
+        Gordon Imroth &nbsp; <br>
+        John Barnes &nbsp; <br>
+        Steve Hooker &nbsp; <br>
+           </font>
+      </h3>
+     </td>
+    </tr>
+    <tr> 
+     <td colspan=100% align=right > 
+      <font size=3 face=Arial color=Indigo> 
+       <marquee direction=left align=top height=20 width=100% scrolldelay=20 scrollamount=2> 
+        <font size=3 face="Comic Sans Ms" color=Black> 
+          Players are requested to ensure their details at Table Tennis England include <b>Hertford Table Tennis League</b> and the <b>name of their club</b> in their list of Memberships.
+        </font> 
+       </marquee> 
+      </font> 
+     </td> 
+    </tr> 
+    <tr><td>&nbsp;</td></tr> 
+    <tr><td colspan=100% align=center> 
+     <img  id="xm3" src="./images/lightstring.gif">
+     <img  id="pmb" src="./images/aniline-waveRWB.gif" width=880 height=16>
+    </td></tr> 
+   </table> 
+      
+   <table width=100% columns=5 border=0> 
+    <tr> 
+     <td valign=top align=center width=25%> 
+      <h6><a href="http://www.kituout.eu"> 
+           <img src="./images/KitUOut170x99.jpg" border=0 width=170 height=99 
+            title="KIT-U-OUT - a high-quality, friendly local service that prints or embroiders sportswear with your club emblem."><br>Sportswear with your club emblem.
+          </a> 
+      </h6> 
+     </td> 
+
+     <td width=2%>&nbsp;</td> 
+
+     <td align=center width=25%> 
+      <a href="http://www.tabletennisengland.co.uk"> 
+       <img src="./images/TTELogo.png" border=1 title="Click to visit the Table Tennis England website" width=80 height=40> 
+      </a><br> 
+      <font size=1 face="Comic Sans Ms" color=Gray> 
+       Any views expressed on this site are not necessarily those of Table Tennis England, the chairman or even the committee</font> 
+     </td> 
+
+     <td width=2%>&nbsp;</td> 
+
+     <td valign=top align=center width=25%> 
+      <h6><a href="http://www.thorntonstabletennis.co.uk"> 
+       <img src="./images/ThorntonsLogo690x170.png" border=0 title="Click for all leading table tennis brands." width=230 height=57><br>
+          Thorntons for all leading table tennis brands.</a> 
+      </h6>
+     </td> 
+    </tr> 
+
+   </table> 
+  <!--#include file="footer.inc"--> 
+  </body> 
+ </HTML> 
+      

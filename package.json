@@ -19,7 +19,8 @@
     "directus:schema:apply": "npm --prefix directus run schema:apply",
     "directus:permissions:apply": "npm --prefix directus run permissions:apply",
     "directus:seed": "npm --prefix directus run seed",
-    "directus:import:league": "npm --prefix directus run import:league"
+    "directus:import:league": "npm --prefix directus run import:league",
+    "directus:import:content": "npm --prefix directus run import:content"
   },
   "dependencies": {
     "@directus/sdk": "^18.0.3",

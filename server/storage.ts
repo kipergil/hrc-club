@@ -285,6 +285,7 @@ function toHonour(row: Row): Honour {
     title: row.title,
     honourType: row.honour_type ?? "team",
     competition: row.competition ?? null,
+    competitionName: str(row.competition_name),
     seasonLabel: row.season_label ?? "",
     recipientName: str(row.recipient_name) ?? member?.full_name ?? null,
     notes: str(row.notes),

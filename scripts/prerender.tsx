@@ -62,12 +62,6 @@ async function collectRoutes(): Promise<RouteSpec[]> {
     route("/about/history", async (client) => {
       await client.prefetchQuery({ queryKey: keys.page("history"), queryFn: () => storage.getPage("history") });
     }),
-    route("/coaching", async (client) => {
-      await client.prefetchQuery({ queryKey: keys.page("coaching"), queryFn: () => storage.getPage("coaching") });
-    }),
-    route("/juniors", async (client) => {
-      await client.prefetchQuery({ queryKey: keys.page("juniors"), queryFn: () => storage.getPage("juniors") });
-    }),
     route("/privacy", async (client) => {
       await client.prefetchQuery({ queryKey: keys.page("privacy"), queryFn: () => storage.getPage("privacy") });
     }),
@@ -84,21 +78,6 @@ async function collectRoutes(): Promise<RouteSpec[]> {
       });
     }),
 
-    route("/play", async (client) => {
-      await Promise.all([
-        client.prefetchQuery({ queryKey: keys.sessions, queryFn: () => storage.getSessions() }),
-        client.prefetchQuery({ queryKey: keys.venues, queryFn: () => storage.getVenues() }),
-      ]);
-    }),
-    route("/join", async (client) => {
-      await Promise.all([
-        client.prefetchQuery({
-          queryKey: keys.membershipOptions,
-          queryFn: () => storage.getMembershipOptions(),
-        }),
-        client.prefetchQuery({ queryKey: keys.page("join"), queryFn: () => storage.getPage("join") }),
-      ]);
-    }),
 
     route("/committee", async (client) => {
       await client.prefetchQuery({ queryKey: keys.committee, queryFn: () => storage.getCommitteeRoles() });

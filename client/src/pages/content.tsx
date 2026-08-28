@@ -54,8 +54,6 @@ export function CmsPage({ slug, fallbackTitle }: { slug: string; fallbackTitle?:
 
 export const AboutPage = () => <CmsPage slug="about" fallbackTitle="About the club" />;
 export const HistoryPage = () => <CmsPage slug="history" fallbackTitle="Our history" />;
-export const CoachingPage = () => <CmsPage slug="coaching" fallbackTitle="Coaching" />;
-export const JuniorsPage = () => <CmsPage slug="juniors" fallbackTitle="Juniors" />;
 export const PrivacyPage = () => <CmsPage slug="privacy" fallbackTitle="Privacy notice" />;
 export const AccessibilityPage = () => (
   <CmsPage slug="accessibility" fallbackTitle="Accessibility statement" />

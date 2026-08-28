@@ -5,13 +5,11 @@ import NotFoundPage from "@/pages/not-found";
 import {
   AboutPage,
   AccessibilityPage,
-  CoachingPage,
   HistoryPage,
-  JuniorsPage,
   PrivacyPage,
   SafeguardingPage,
 } from "@/pages/content";
-import { JoinPage, PlayPage, VenuePage } from "@/pages/play";
+import { VenuePage } from "@/pages/play";
 import { PlayerPage, PlayersPage, TeamPage, TeamsPage } from "@/pages/teams";
 import { ClubPage, ClubsPage } from "@/pages/clubs";
 import {
@@ -53,12 +51,8 @@ export default function App() {
       <Switch>
         <Route path="/" component={HomePage} />
 
-        {/* Play */}
-        <Route path="/play" component={PlayPage} />
+        {/* Venues are reached from a club's page */}
         <Route path="/play/venue/:slug">{(params) => <VenuePage slug={params.slug} />}</Route>
-        <Route path="/join" component={JoinPage} />
-        <Route path="/coaching" component={CoachingPage} />
-        <Route path="/juniors" component={JuniorsPage} />
 
         {/* Teams and competition */}
         <Route path="/clubs" component={ClubsPage} />
