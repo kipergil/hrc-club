@@ -232,7 +232,7 @@ export function TablesPage() {
 
   return (
     <div>
-      <PageHeader title="League tables" subtitle="Where our three teams stand">
+      <PageHeader title="League tables" subtitle="Where our teams stand in their divisions">
         <PrintButton label="Print the tables" />
       </PageHeader>
 

@@ -44,10 +44,10 @@ export const NAV: readonly [NavGroup, NavGroup, NavGroup, NavGroup, NavGroup] = 
     label: "Teams",
     href: "/teams",
     links: [
-      { href: "/teams", title: "Our teams", subtitle: "HRC A, B and C, and who plays for them" },
+      { href: "/teams", title: "Our teams", subtitle: "Every HRC team, and who plays for them" },
       { href: "/fixtures", title: "Fixture calendar", subtitle: "Every match still to play" },
       { href: "/results", title: "Match history", subtitle: "Every match our teams have played" },
-      { href: "/tables", title: "League tables", subtitle: "Where our three teams stand" },
+      { href: "/tables", title: "League tables", subtitle: "Where our teams stand in their divisions" },
       { href: "/averages", title: "Averages", subtitle: "Who has won what, this season" },
       { href: "/handicaps", title: "Handicaps", subtitle: "This season's handicap ratings" },
       { href: "/cups", title: "Cup matches", subtitle: "The four cups and how we're doing" },
