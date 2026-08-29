@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isKnownRoute } from "@shared/routes.js";
-import { ALL_LINKS, NAV, findGroup, findLink } from "./nav";
+import { ALL_LINKS, NAV, findGroup, findLink, findSection } from "./nav";
 
 describe("navigation", () => {
   /**
@@ -75,6 +75,40 @@ describe("navigation", () => {
     // A section the app does route, but deeper than any prerendered page.
     expect(isKnownRoute("/results/8f2a-not-prerendered")).toBe(true);
     expect(isKnownRoute("/")).toBe(true);
+  });
+
+  /**
+   * The breadcrumb trail is built from these. `findLink` only ever matched
+   * a page exactly, so every detail page fell through it and its trail read
+   * "Home › Clubs" — no section, and no mention of the thing the page is
+   * about.
+   */
+  describe("findSection", () => {
+    it("files a detail page under the menu entry it belongs to", () => {
+      expect(findSection("/teams/water-lane-c")?.title).toBe("Teams");
+      expect(findSection("/clubs/hrc")?.title).toBe("Club details");
+      expect(findSection("/players/jo-swain")?.title).toBe("Players");
+      expect(findSection("/results/8f2a")?.title).toBe("Match history");
+      expect(findSection("/news/agm-notice")?.title).toBe("Special notices");
+    });
+
+    it("returns the page itself when it is a menu entry", () => {
+      expect(findSection("/tables")?.title).toBe("League tables");
+    });
+
+    it("does not let one section claim another whose path merely starts the same", () => {
+      // "/newsletters".startsWith("/news") is true, and without a path
+      // boundary a newsletter's trail says it is a special notice.
+      expect(findSection("/newsletters")?.title).toBe("Newsletters");
+      expect(findGroup("/newsletters")?.label).toBe("More");
+    });
+
+    it("has nothing to say about a page outside the menu", () => {
+      // Policies are reachable from the footer, not the menu, and the trail
+      // falls back to Home › the page's own name.
+      expect(findSection("/privacy")).toBeUndefined();
+      expect(findSection("/gallery/finals-night")).toBeUndefined();
+    });
   });
 
   it("resolves a path to its group for the breadcrumb trail", () => {

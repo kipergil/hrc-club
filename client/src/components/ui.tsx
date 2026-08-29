@@ -1,6 +1,6 @@
 import * as Accordion from "@radix-ui/react-accordion";
-import { ChevronDown, Search, X } from "lucide-react";
-import { useId, type ReactNode } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
@@ -568,6 +568,159 @@ export function FilterChips<T extends string>({
         })}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pagination
+// ---------------------------------------------------------------------------
+
+/**
+ * A page of a long list.
+ *
+ * `resetKey` is what a filter changes: without it, searching a list while
+ * on page 4 leaves the reader on page 4 of two, staring at nothing.
+ * Clamping alone would fix the blank page and still leave them somewhere
+ * they did not ask to be, so the page returns to the first on any change.
+ */
+export function usePagination<T>(items: T[], perPage = 25, resetKey?: unknown) {
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [resetKey, items.length]);
+
+  const pageCount = Math.max(1, Math.ceil(items.length / perPage));
+  // Clamped as well as reset, because the effect runs a render late and
+  // the slice below must never be out of range even for that one render.
+  const current = Math.min(page, pageCount);
+  const start = (current - 1) * perPage;
+
+  return {
+    page: current,
+    pageCount,
+    total: items.length,
+    from: items.length === 0 ? 0 : start + 1,
+    to: Math.min(start + perPage, items.length),
+    items: items.slice(start, start + perPage),
+    setPage,
+  };
+}
+
+/** The page numbers to show, with gaps where a long run is elided. */
+function pageWindow(page: number, pageCount: number): Array<number | "gap"> {
+  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1);
+
+  const pages = new Set([1, pageCount, page, page - 1, page + 1]);
+  const shown = [...pages].filter((value) => value >= 1 && value <= pageCount).sort((a, b) => a - b);
+
+  const result: Array<number | "gap"> = [];
+  let previous = 0;
+  for (const value of shown) {
+    if (previous && value - previous > 1) result.push("gap");
+    result.push(value);
+    previous = value;
+  }
+  return result;
+}
+
+export function Pagination({
+  state,
+  noun,
+  className,
+}: {
+  state: ReturnType<typeof usePagination<unknown>>;
+  /** What is being counted, e.g. "players". Read out with the range. */
+  noun: string;
+  className?: string;
+}) {
+  const { page, pageCount, from, to, total, setPage } = state;
+  if (pageCount <= 1) return null;
+
+  const button =
+    "inline-flex min-h-touch min-w-touch items-center justify-center rounded-card border px-3 font-semibold transition-colors";
+
+  function go(next: number) {
+    setPage(next);
+    /*
+     * Back to the top of the list, not the top of the document: the reader
+     * asked for the next page of a table, and landing them above the
+     * page's own heading makes them scroll back down to find it.
+     */
+    document.getElementById("main")?.scrollIntoView({ block: "start" });
+  }
+
+  return (
+    <nav
+      aria-label={`${noun} pages`}
+      className={cn("mt-6 flex flex-wrap items-center justify-between gap-4 no-print", className)}
+    >
+      {/* Announced on change, so the range is not something only sighted
+          readers get. */}
+      <p aria-live="polite" className="tabular text-ink-muted">
+        Showing {from}–{to} of {total} {noun}
+      </p>
+
+      <ul className="flex flex-wrap items-center gap-1.5">
+        <li>
+          <button
+            type="button"
+            onClick={() => go(page - 1)}
+            disabled={page === 1}
+            className={cn(
+              button,
+              "gap-1 border-line-strong bg-surface text-ink hover:border-brand hover:text-brand",
+              "disabled:pointer-events-none disabled:opacity-50",
+            )}
+          >
+            <ChevronLeft aria-hidden="true" className="size-5" />
+            <span className="sr-only sm:not-sr-only">Previous</span>
+          </button>
+        </li>
+
+        {pageWindow(page, pageCount).map((entry, index) =>
+          entry === "gap" ? (
+            <li key={`gap-${index}`} aria-hidden="true" className="px-1 text-ink-muted">
+              …
+            </li>
+          ) : (
+            <li key={entry}>
+              <button
+                type="button"
+                onClick={() => go(entry)}
+                aria-current={entry === page ? "page" : undefined}
+                aria-label={`Page ${entry} of ${pageCount}`}
+                className={cn(
+                  button,
+                  "tabular",
+                  entry === page
+                    ? "border-brand bg-brand text-brand-ink"
+                    : "border-line-strong bg-surface text-ink hover:border-brand hover:text-brand",
+                )}
+              >
+                {entry}
+              </button>
+            </li>
+          ),
+        )}
+
+        <li>
+          <button
+            type="button"
+            onClick={() => go(page + 1)}
+            disabled={page === pageCount}
+            className={cn(
+              button,
+              "gap-1 border-line-strong bg-surface text-ink hover:border-brand hover:text-brand",
+              "disabled:pointer-events-none disabled:opacity-50",
+            )}
+          >
+            <span className="sr-only sm:not-sr-only">Next</span>
+            <ChevronRight aria-hidden="true" className="size-5" />
+          </button>
+        </li>
+      </ul>
+    </nav>
   );
 }
 

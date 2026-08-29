@@ -1,7 +1,18 @@
 import { Link } from "wouter";
 import type { Fixture, PlayerStat, Standing, TeamFixture, TeamRef } from "@shared/types.js";
 import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
-import { Badge, Card, Empty, TableNote, TableScroller, Td, Th, Tr } from "@/components/ui";
+import {
+  Badge,
+  Card,
+  Empty,
+  Pagination,
+  TableNote,
+  TableScroller,
+  Td,
+  Th,
+  Tr,
+  usePagination,
+} from "@/components/ui";
 import { cn, divisionLabel, formatDateShort, formatTime, resultLabel } from "@/lib/utils";
 
 /**
@@ -70,10 +81,16 @@ function CompetitionNote({ competition }: { competition: Fixture["competition"] 
 export function FixtureList({
   fixtures,
   emptyMessage,
+  perPage,
 }: {
   fixtures: Fixture[];
   emptyMessage: string;
+  /** Set on the flat league-wide lists, which run to two hundred rows. */
+  perPage?: number;
 }) {
+  const paged = usePagination(fixtures, perPage ?? Number.MAX_SAFE_INTEGER);
+  const shown = paged.items as Fixture[];
+
   if (fixtures.length === 0) return <Empty>{emptyMessage}</Empty>;
 
   return (
@@ -89,7 +106,7 @@ export function FixtureList({
             </tr>
           </thead>
           <tbody>
-            {fixtures.map((fixture) => (
+            {shown.map((fixture) => (
               <Tr key={fixture.id}>
                 <Td className="whitespace-nowrap text-ink-muted">
                   {formatDateShort(fixture.playedOn)}
@@ -119,7 +136,7 @@ export function FixtureList({
       </div>
 
       <ul className="space-y-3 sm:hidden">
-        {fixtures.map((fixture) => (
+        {shown.map((fixture) => (
           <li key={fixture.id}>
             <Card>
               <p className="text-ink-muted">
@@ -146,6 +163,8 @@ export function FixtureList({
           </li>
         ))}
       </ul>
+
+      {perPage ? <Pagination state={paged} noun="matches" /> : null}
     </>
   );
 }
@@ -434,6 +453,9 @@ function WinRate({ percentage }: { percentage: number | null }) {
 }
 
 export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
+  const paged = usePagination(stats, 25);
+  const shown = paged.items as PlayerStat[];
+
   if (stats.length === 0) {
     return (
       <Empty>
@@ -465,7 +487,7 @@ export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
             </tr>
           </thead>
           <tbody>
-            {stats.map((row) => (
+            {shown.map((row) => (
               <Tr key={row.id}>
                 <Td className="font-semibold">
                   {row.memberSlug ? (
@@ -497,7 +519,7 @@ export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
       </div>
 
       <ul className="space-y-3 sm:hidden">
-        {stats.map((row) => (
+        {shown.map((row) => (
           <li key={row.id}>
             <Card>
               <p className="text-lg font-semibold">
@@ -525,12 +547,16 @@ export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
           </li>
         ))}
       </ul>
+
+      <Pagination state={paged} noun="players" />
     </>
   );
 }
 
 export function HandicapTable({ stats }: { stats: PlayerStat[] }) {
   const rated = stats.filter((row) => row.handicap !== null);
+  const paged = usePagination(rated, 25);
+  const shown = paged.items as PlayerStat[];
 
   if (rated.length === 0) {
     return (
@@ -559,7 +585,7 @@ export function HandicapTable({ stats }: { stats: PlayerStat[] }) {
             </tr>
           </thead>
           <tbody>
-            {rated.map((row) => (
+            {shown.map((row) => (
               <Tr key={row.id}>
                 <Td className="font-semibold">
                   {row.memberSlug ? (
@@ -579,7 +605,7 @@ export function HandicapTable({ stats }: { stats: PlayerStat[] }) {
       </div>
 
       <ul className="space-y-3 sm:hidden">
-        {rated.map((row) => (
+        {shown.map((row) => (
           <li key={row.id}>
             <Card>
               <div className="flex items-baseline justify-between gap-3">
@@ -591,6 +617,8 @@ export function HandicapTable({ stats }: { stats: PlayerStat[] }) {
           </li>
         ))}
       </ul>
+
+      <Pagination state={paged} noun="players" />
     </>
   );
 }

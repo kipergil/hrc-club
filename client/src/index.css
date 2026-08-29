@@ -58,12 +58,20 @@
     --shadow-lifted: 0 2px 4px rgb(25 28 26 / 0.06), 0 8px 24px rgb(25 28 26 / 0.08);
 
     /*
-     * Multiplied by the in-page text-size control (A / A+ / A++). The
-     * control exists because older users frequently do not know browser
-     * zoom exists, and the site should not assume they do.
+     * 18px, multiplied by the in-page text-size control (A / A+ / A++).
+     *
+     * The control exists because older users frequently do not know
+     * browser zoom exists, and the site should not assume they do.
+     *
+     * The base was 125% — 20px — taken from the league PRD's §7. In
+     * practice it read as oversized on a desktop screen: a page title came
+     * out at 45px and a paragraph filled the column in six or seven words.
+     * 112.5% is still well above the 16px the PRD sets as its floor, and
+     * the A+ step lands on 20.7px, so the reader who wants the old size
+     * gets it in one tap rather than having it imposed.
      */
     --text-scale: 1;
-    font-size: calc(125% * var(--text-scale));
+    font-size: calc(112.5% * var(--text-scale));
   }
 
   :root[data-theme="dark"] {

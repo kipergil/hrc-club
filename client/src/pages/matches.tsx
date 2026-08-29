@@ -9,12 +9,14 @@ import {
   Empty,
   ErrorNote,
   Loading,
+  Pagination,
   Prose,
   TableNote,
   TableScroller,
   Td,
   Th,
   Tr,
+  usePagination,
 } from "@/components/ui";
 import { useAverages, useFixture, useFixtures, useSeasons, useSettings, useStandings } from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
@@ -60,6 +62,14 @@ export function FixturesPage() {
     weeks.set(key, [...(weeks.get(key) ?? []), fixture]);
   }
 
+  /*
+   * Paginated by week rather than by match, so a page break never falls
+   * inside a week. The season is two hundred fixtures across sixteen
+   * weeks; four weeks is about a screenful and keeps each page a unit
+   * somebody would actually ask for — "the next month".
+   */
+  const paged = usePagination([...weeks.entries()], 4);
+
   return (
     <div>
       <PageHeader
@@ -75,7 +85,7 @@ export function FixturesPage() {
         </Empty>
       ) : (
         <div className="space-y-10">
-          {[...weeks.entries()].map(([week, weekFixtures]) => (
+          {paged.items.map(([week, weekFixtures]) => (
             <section key={week}>
               <h2 className="mb-3 text-xl">Week of {formatDateLong(week)}</h2>
               <FixtureList fixtures={weekFixtures ?? []} emptyMessage="Nothing this week." />
@@ -83,6 +93,8 @@ export function FixturesPage() {
           ))}
         </div>
       )}
+
+      {weeks.size > 0 ? <Pagination state={paged} noun="weeks" /> : null}
 
       <SyncNote lastSyncedAt={fixtures?.[0]?.lastSyncedAt} />
     </div>
@@ -107,6 +119,7 @@ export function ResultsPage() {
 
       <FixtureList
         fixtures={fixtures ?? []}
+        perPage={25}
         emptyMessage="No results yet this season. They appear here once matches have been played and the cards confirmed."
       />
 

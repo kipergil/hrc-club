@@ -15,7 +15,7 @@ npm install
 cp .env.example .env        # DIRECTUS_URL + DIRECTUS_SERVICE_TOKEN
 npm run dev                 # API on :5000
 npx vite                    # client with hot reload, proxying /api
-npm test                    # 137 tests
+npm test                    # 141 tests
 npm run build               # client, then prerender, then server bundle
 ```
 
@@ -49,19 +49,21 @@ Not yet built: the members' area and the axe-core CI gate. See the implementatio
 
 The look is warm paper, ink-first type, and one evergreen used sparingly — as a tint, a hairline or a single filled control, never as a slab.
 
-Accessibility is built in rather than retrofitted, and it lives in the tokens rather than in a checklist: 20px base type in `rem` with an A / A+ / A++ control, AAA contrast in light and dark, 48px targets, no hover-dependent behaviour, a labelled **Menu** button on mobile, wide tables reflowing to cards below 640px, colour never the only signal, and print stylesheets.
+Accessibility is built in rather than retrofitted, and it lives in the tokens rather than in a checklist: 18px base type in `rem` with an A / A+ / A++ control that reaches 21px and 23px, AAA contrast in light and dark, 48px targets, no hover-dependent behaviour, a labelled **Menu** button on mobile, wide tables reflowing to cards below 640px, colour never the only signal, and print stylesheets.
 
 | Path | What it is |
 |---|---|
 | [`client/src/index.css`](client/src/index.css) | The palette, in both themes, plus the base type and the link, focus and skeleton treatments |
 | [`tailwind.config.ts`](tailwind.config.ts) | The type scale, spacing, radii and elevation built on those tokens |
-| [`client/src/components/ui.tsx`](client/src/components/ui.tsx) | The whole component vocabulary — buttons, cards, badges, alerts, tables, disclosure, fields, search, filters, empty and loading states |
+| [`client/src/components/ui.tsx`](client/src/components/ui.tsx) | The whole component vocabulary — buttons, cards, badges, alerts, tables, disclosure, fields, search, filters, pagination, empty and loading states |
 | [`scripts/contrast.test.ts`](scripts/contrast.test.ts) | Computes every contrast ratio from the CSS and fails the build if one drops below its requirement |
 
 Two rules are enforced by tests rather than by care, because both have already been broken once:
 
 - **Every contrast ratio is computed, not asserted in a comment.** A redesign is exactly the moment a colour gets nudged for looks while the comment above it still claims 7.4:1.
 - **Colour is never the only signal.** The league table tints the home club's row *and* labels it; the label was dropped once during a reframe and the tint quietly became the only marker.
+
+Navigation is built from the site map rather than from each page: `findSection` files a detail page under the menu entry it belongs to, so a breadcrumb trail reads *Home › Clubs › Teams › Water Lane C* rather than stopping at the group. Every page ends with **Back**, the section above it and **Home**, because on a page two screens long the header is a scroll away.
 
 Palette tokens are stored as RGB channel triplets rather than hex, so Tailwind's opacity modifiers (`border-accent/30`) resolve. Written as hex they do not merely fail to apply — the class is never generated at all, and the border silently falls back to `currentColor`.
 
