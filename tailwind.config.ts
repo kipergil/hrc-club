@@ -4,17 +4,18 @@ import type { Config } from "tailwindcss";
 /**
  * The design tokens are the accessibility requirements, expressed once.
  *
- * The league PRD's §7 is normative for this site: 20px base type in rem,
- * body-text contrast >= 7:1, 48px touch targets, nothing below 16px. Those
- * are enforceable here — as a type scale whose smallest step is 1rem and a
- * palette whose every text/background pair is checked by
+ * The league PRD's §7 is normative for this site: generous base type in
+ * rem, body-text contrast >= 7:1, 48px touch targets, nothing below 16px.
+ * Those are enforceable here — as a type scale whose smallest step is 1rem
+ * and a palette whose every text/background pair is checked by
  * `scripts/contrast.test.ts` — rather than left to whoever writes the next
  * component.
  *
- * The 20px base comes from `html { font-size: 125% }` in index.css, so
- * Tailwind's own rem-based scale lands on 20px for `text-base` without
- * every size needing an override, and browser zoom and OS text-size
- * settings keep working.
+ * The base is `html { font-size: 112.5% }` in index.css, so `text-base`
+ * lands on 18px without every size needing an override, and browser zoom
+ * and OS text-size settings keep working. The PRD asks for 20px; at that
+ * size the page read as oversized rather than as accessible, so the A+
+ * step reaches it instead — one tap, by the reader's choice.
  */
 export default {
   content: ["./client/index.html", "./client/src/**/*.{ts,tsx}"],
@@ -57,7 +58,7 @@ export default {
       },
       fontSize: {
         /*
-         * Nothing below 1rem (20px at the 125% root) exists in this scale.
+         * Nothing below 1rem (18px at the 112.5% root) exists in this scale.
          * A caption that needs to be smaller than body text is a caption
          * that needs to be shorter instead.
          *

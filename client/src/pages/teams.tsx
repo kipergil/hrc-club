@@ -12,9 +12,11 @@ import {
   ErrorNote,
   FilterChips,
   Loading,
+  Pagination,
   Prose,
   SearchBox,
   Stat,
+  usePagination,
 } from "@/components/ui";
 import { usePlayer, usePlayers, useSeasons, useTeam, useTeams } from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
@@ -289,6 +291,8 @@ export function PlayersPage() {
     );
   }, [all, query]);
 
+  const paged = usePagination(filtered, 24, query);
+
   if (isLoading) return <Loading what="the players" variant="cards" />;
   if (isError) return <ErrorNote what="players" />;
 
@@ -328,7 +332,7 @@ export function PlayersPage() {
         </Empty>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((player) => {
+          {paged.items.map((player) => {
             const photo = fileUrl(player.photoId, { width: 96, height: 96, fit: "cover" });
             return (
               <li key={player.id}>
@@ -372,6 +376,8 @@ export function PlayersPage() {
           })}
         </ul>
       )}
+
+      {filtered.length > 0 ? <Pagination state={paged} noun="players" /> : null}
     </div>
   );
 }

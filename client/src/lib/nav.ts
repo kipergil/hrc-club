@@ -81,9 +81,30 @@ export function findLink(pathname: string): NavLink | undefined {
   return ALL_LINKS.find((link) => link.href === pathname);
 }
 
+/** Is `pathname` this link's page, or something filed under it? */
+function isUnder(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  // The trailing slash matters: without it "/news" claims "/newsletters",
+  // and a newsletter's breadcrumb trail says it is a special notice.
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * The menu entry a page belongs under — the deepest one that matches.
+ *
+ * `findLink` only ever matched a page exactly, so every detail page fell
+ * through it: `/teams/water-lane-c` had no entry, and its trail read "Home
+ * › Clubs" with neither the section it sits in nor the team it is about.
+ * Depth-first because `/about/history` belongs under `/about`, and if
+ * both were ever in the menu the more specific one is the right answer.
+ */
+export function findSection(pathname: string): NavLink | undefined {
+  return ALL_LINKS.filter((link) => link.href !== "/" && isUnder(pathname, link.href)).sort(
+    (a, b) => b.href.length - a.href.length,
+  )[0];
+}
+
 export function findGroup(pathname: string): NavGroup | undefined {
   if (pathname === "/") return NAV[0];
-  return NAV.find((group) =>
-    group.links.some((link) => link.href !== "/" && pathname.startsWith(link.href)),
-  );
+  return NAV.find((group) => group.links.some((link) => isUnder(pathname, link.href)));
 }

@@ -1,7 +1,7 @@
-import { ChevronRight, Megaphone, Menu, Moon, Printer, Sun, X } from "lucide-react";
+import { ArrowLeft, ArrowUp, ChevronRight, Home, Megaphone, Menu, Moon, Printer, Sun, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { NAV, findGroup, findLink } from "@/lib/nav";
+import { NAV, findGroup, findSection } from "@/lib/nav";
 import { useSettings } from "@/lib/queries";
 import { useRouteTransition } from "@/lib/scroll";
 import { cn } from "@/lib/utils";
@@ -493,33 +493,50 @@ function LeagueNotice({ announcement }: { announcement: string }) {
 // Page furniture
 // ---------------------------------------------------------------------------
 
-function Breadcrumbs({ pathname }: { pathname: string }) {
+/**
+ * The trail, rendered from inside `PageHeader`.
+ *
+ * It used to live in `Layout`, above the page's own content, which meant
+ * it could only ever name things the menu knows: a detail page fell
+ * through `findLink` entirely and read "Home › Clubs" with no section and
+ * no subject. Rendering it here gives it the page's own title — the team,
+ * the club, the match — with no context, no effect and nothing to go
+ * stale on a route change.
+ *
+ * Four levels at most: Home › group › section › this page. The section is
+ * dropped when it *is* this page, so a top-level page keeps a two-step
+ * trail rather than repeating itself.
+ */
+function Breadcrumbs({ pathname, title }: { pathname: string; title: string }) {
   if (pathname === "/") return null;
+
   const group = findGroup(pathname);
-  const link = findLink(pathname);
+  const section = findSection(pathname);
+  const trail: Array<{ label: string; href?: string }> = [{ label: "Home", href: "/" }];
+
+  if (group && group.label !== "Home") trail.push({ label: group.label, href: group.href });
+  if (section && section.href !== pathname && section.href !== group?.href) {
+    trail.push({ label: section.title, href: section.href });
+  }
+  // The leaf is the page's own name, which for a detail page is the only
+  // place its subject appears in the trail at all.
+  trail.push({ label: section?.href === pathname ? section.title : title });
 
   return (
-    <nav aria-label="Breadcrumb" className="mb-5 no-print">
+    <nav aria-label="Breadcrumb" className="mb-4 no-print">
       <ol className="flex flex-wrap items-center gap-1.5 text-ink-muted">
-        <li>
-          <Link href="/" className="link">
-            Home
-          </Link>
-        </li>
-        {group && group.label !== "Home" ? (
-          <li className="flex items-center gap-1.5">
-            <ChevronRight aria-hidden="true" className="size-4" />
-            <Link href={group.href} className="link">
-              {group.label}
-            </Link>
+        {trail.map((step, index) => (
+          <li key={`${step.label}-${index}`} className="flex items-center gap-1.5">
+            {index > 0 ? <ChevronRight aria-hidden="true" className="size-4 shrink-0" /> : null}
+            {step.href ? (
+              <Link href={step.href} className="link">
+                {step.label}
+              </Link>
+            ) : (
+              <span aria-current="page">{step.label}</span>
+            )}
           </li>
-        ) : null}
-        {link && link.href !== group?.href ? (
-          <li className="flex items-center gap-1.5">
-            <ChevronRight aria-hidden="true" className="size-4" />
-            <span aria-current="page">{link.title}</span>
-          </li>
-        ) : null}
+        ))}
       </ol>
     </nav>
   );
@@ -544,8 +561,11 @@ export function PageHeader({
   actions?: ReactNode;
   children?: ReactNode;
 }) {
+  const [pathname] = useLocation();
+
   return (
     <div className="mb-8">
+      <Breadcrumbs pathname={pathname} title={title} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl">{title}</h1>
@@ -569,6 +589,75 @@ export function PrintButton({ label = "Print this page" }: { label?: string }) {
       <Printer aria-hidden="true" className="size-5" />
       {label}
     </button>
+  );
+}
+
+/**
+ * Back, up a level, and home — at the foot of the page, where someone who
+ * has read to the end actually is.
+ *
+ * The header is a scroll away by then, and on a phone it is behind a Menu
+ * button and two screens of table. "Back" is the browser's own history
+ * rather than a guessed parent, because after arriving from a league table
+ * the page a reader wants is the one they came from; the section link
+ * beside it is the guess, offered separately and labelled.
+ */
+function PageFooterNav({ pathname }: { pathname: string }) {
+  const section = findSection(pathname);
+  const group = findGroup(pathname);
+
+  /*
+   * A link to the page you are already on is furniture. On a section page
+   * the section resolves to itself and the group resolves to the same
+   * href, so both are dropped and the row is just Back and Home.
+   */
+  const candidate = section?.href !== pathname ? section : undefined;
+  const up = candidate ?? (group && group.href !== pathname && group.href !== "/" ? group : undefined);
+
+  if (pathname === "/") return null;
+
+  return (
+    <nav aria-label="Page navigation" className="mt-14 border-t border-line pt-6 no-print">
+      <ul className="flex flex-wrap items-center gap-3">
+        <li>
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            className="inline-flex min-h-touch items-center gap-2 rounded-card border border-line-strong bg-surface px-4 font-semibold text-ink shadow-raised transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
+          >
+            <ArrowLeft aria-hidden="true" className="size-5" />
+            Back
+          </button>
+        </li>
+        {up ? (
+          <li>
+            <Link
+              href={up.href}
+              className="inline-flex min-h-touch items-center gap-2 rounded-card border border-line-strong bg-surface px-4 font-semibold text-ink no-underline shadow-raised transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
+            >
+              <ArrowUp aria-hidden="true" className="size-5" />
+              {"title" in up ? up.title : up.label}
+            </Link>
+          </li>
+        ) : null}
+        <li>
+          <Link
+            href="/"
+            className="inline-flex min-h-touch items-center gap-2 rounded-card border border-line-strong bg-surface px-4 font-semibold text-ink no-underline shadow-raised transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
+          >
+            <Home aria-hidden="true" className="size-5" />
+            Home
+          </Link>
+        </li>
+        <li className="ml-auto">
+          {/* Long pages are the reason this block exists; on those, getting
+              back to the menu is its own small journey. */}
+          <a href="#main" className="link font-semibold">
+            Back to top
+          </a>
+        </li>
+      </ul>
+    </nav>
   );
 }
 
@@ -601,8 +690,8 @@ export function Layout({ children }: { children: ReactNode }) {
         user gets told where they have been put.
       */}
       <main id="main" tabIndex={-1} className="mx-auto w-full max-w-page flex-1 px-4 py-8">
-        <Breadcrumbs pathname={pathname} />
         {children}
+        <PageFooterNav pathname={pathname} />
       </main>
 
       <Footer />
