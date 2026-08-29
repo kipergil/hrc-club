@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import type { Fixture, PlayerStat, Standing } from "@shared/types.js";
+import type { Fixture, PlayerStat, Standing, TeamFixture, TeamRef } from "@shared/types.js";
 import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
 import { Badge, Card, Empty, TableNote, TableScroller, Td, Th, Tr } from "@/components/ui";
 import { cn, divisionLabel, formatDateShort, formatTime, resultLabel } from "@/lib/utils";
@@ -19,42 +19,62 @@ import { cn, divisionLabel, formatDateShort, formatTime, resultLabel } from "@/l
 // Fixtures and results
 // ---------------------------------------------------------------------------
 
-function ResultBadge({ fixture }: { fixture: Fixture }) {
-  const label = resultLabel(fixture.result, fixture.status);
-  const tone =
-    fixture.result === "win" ? "positive" : fixture.result === "loss" ? "negative" : "neutral";
-  return <Badge tone={tone}>{label}</Badge>;
+/**
+ * A team name that links to its page when the site holds one.
+ *
+ * An archived season can name a team that has since folded, and a name with
+ * a dead link behind it is worse than a name.
+ */
+function TeamName({ team, bold = false }: { team: TeamRef; bold?: boolean }) {
+  if (!team.slug) return <span className={cn(bold && "font-semibold")}>{team.name}</span>;
+  return (
+    <Link href={`/teams/${team.slug}`} className={cn("link", bold && "font-semibold")}>
+      {team.name}
+    </Link>
+  );
 }
 
-function ScoreText({ fixture }: { fixture: Fixture }) {
-  if (fixture.hrcScore === null || fixture.opponentScore === null) return <span>—</span>;
+function Scoreline({ home, away }: { home: number | null; away: number | null }) {
+  if (home === null || away === null) {
+    return (
+      <span className="text-ink-muted">
+        {/* Not "0–0", which is a result somebody played for. */}
+        not yet played
+      </span>
+    );
+  }
   return (
     <span className="tabular text-lg font-semibold">
-      {fixture.hrcScore}–{fixture.opponentScore}
+      {home}–{away}
     </span>
   );
 }
 
-function VenueWord({ fixture }: { fixture: Fixture }) {
-  // Home and away get a word, not a colour and not an H/A the reader has to
-  // decode from a key somewhere else on the page.
-  return <span>{fixture.isHome ? "at home" : "away"}</span>;
+function CompetitionNote({ competition }: { competition: Fixture["competition"] }) {
+  if (competition === "league") return null;
+  return (
+    <span className="ml-2 text-ink-muted">
+      ({COMPETITION_LABELS[competition] ?? competition})
+    </span>
+  );
 }
 
+/**
+ * Every match in a list, home team first — the league's own fixture format.
+ *
+ * This used to show a team and an "opponent", which only reads correctly on
+ * a site belonging to one of the two clubs. On the league's own site both
+ * sides are equal, and the scoreline has to be the right way round for a
+ * reader who supports either of them.
+ */
 export function FixtureList({
   fixtures,
-  showTeam = true,
-  showResult = false,
   emptyMessage,
 }: {
   fixtures: Fixture[];
-  showTeam?: boolean;
-  showResult?: boolean;
   emptyMessage: string;
 }) {
-  if (fixtures.length === 0) {
-    return <Empty>{emptyMessage}</Empty>;
-  }
+  if (fixtures.length === 0) return <Empty>{emptyMessage}</Empty>;
 
   return (
     <>
@@ -63,48 +83,34 @@ export function FixtureList({
           <thead>
             <tr>
               <Th>Date</Th>
-              {showTeam ? <Th>Team</Th> : null}
-              <Th>Opponent</Th>
-              <Th>Where</Th>
-              {showResult ? <Th>Score</Th> : null}
-              <Th>{showResult ? "Result" : "Start"}</Th>
+              <Th className="text-right">Home</Th>
+              <Th className="w-28 text-center">Score</Th>
+              <Th>Away</Th>
             </tr>
           </thead>
           <tbody>
             {fixtures.map((fixture) => (
               <Tr key={fixture.id}>
-                <Td className="whitespace-nowrap">{formatDateShort(fixture.playedOn)}</Td>
-                {showTeam ? (
-                  <Td className="whitespace-nowrap font-semibold">
-                    <Link href={`/teams/${fixture.teamSlug}`} className="link">
-                      {fixture.teamName}
-                    </Link>
-                  </Td>
-                ) : null}
-                <Td>
-                  {fixture.opponentName}
-                  {fixture.competition !== "league" ? (
-                    <span className="ml-2 text-ink-muted">
-                      ({COMPETITION_LABELS[fixture.competition] ?? fixture.competition})
-                    </span>
-                  ) : null}
+                <Td className="whitespace-nowrap text-ink-muted">
+                  {formatDateShort(fixture.playedOn)}
+                  <CompetitionNote competition={fixture.competition} />
                 </Td>
-                <Td className="text-ink-muted">
-                  <VenueWord fixture={fixture} />
+                <Td className="text-right">
+                  <TeamName team={fixture.homeTeam} bold />
                 </Td>
-                {showResult ? (
-                  <Td>
+                <Td className="text-center">
+                  {fixture.status === "played" ? (
                     <Link href={`/results/${fixture.id}`} className="link">
-                      <ScoreText fixture={fixture} />
+                      <Scoreline home={fixture.homeScore} away={fixture.awayScore} />
                     </Link>
-                  </Td>
-                ) : null}
-                <Td>
-                  {showResult ? (
-                    <ResultBadge fixture={fixture} />
                   ) : (
-                    <span className="tabular">{formatTime(fixture.startTime) || "—"}</span>
+                    <span className="tabular text-ink-muted">
+                      {formatTime(fixture.startTime) || "v"}
+                    </span>
                   )}
+                </Td>
+                <Td>
+                  <TeamName team={fixture.awayTeam} bold />
                 </Td>
               </Tr>
             ))}
@@ -116,26 +122,26 @@ export function FixtureList({
         {fixtures.map((fixture) => (
           <li key={fixture.id}>
             <Card>
-              <p className="font-semibold text-ink-muted">{formatDateShort(fixture.playedOn)}</p>
+              <p className="text-ink-muted">
+                {formatDateShort(fixture.playedOn)}
+                <CompetitionNote competition={fixture.competition} />
+              </p>
               <p className="mt-1 text-lg">
-                {showTeam ? <span className="font-semibold">{fixture.teamName} </span> : null}v{" "}
-                {fixture.opponentName}
+                <TeamName team={fixture.homeTeam} bold />
+                <span className="text-ink-muted"> v </span>
+                <TeamName team={fixture.awayTeam} bold />
               </p>
-              <p className="mt-1 text-ink-muted">
-                <VenueWord fixture={fixture} />
-                {fixture.competition !== "league"
-                  ? ` · ${COMPETITION_LABELS[fixture.competition] ?? fixture.competition}`
-                  : null}
-                {!showResult && fixture.startTime ? ` · ${formatTime(fixture.startTime)}` : null}
-              </p>
-              {showResult ? (
-                <p className="mt-3 flex items-center gap-3">
-                  <ResultBadge fixture={fixture} />
+              <p className="mt-2">
+                {fixture.status === "played" ? (
                   <Link href={`/results/${fixture.id}`} className="link">
-                    <ScoreText fixture={fixture} />
+                    <Scoreline home={fixture.homeScore} away={fixture.awayScore} />
                   </Link>
-                </p>
-              ) : null}
+                ) : (
+                  <span className="text-ink-muted">
+                    {fixture.startTime ? formatTime(fixture.startTime) : "Not yet played"}
+                  </span>
+                )}
+              </p>
             </Card>
           </li>
         ))}
@@ -144,11 +150,113 @@ export function FixtureList({
   );
 }
 
+/**
+ * One team's season, the way `MatchHistory.asp` lists it: every match the
+ * team plays, home and away, with the result from their side.
+ */
+export function TeamFixtureList({
+  fixtures,
+  emptyMessage,
+}: {
+  fixtures: TeamFixture[];
+  emptyMessage: string;
+}) {
+  if (fixtures.length === 0) return <Empty>{emptyMessage}</Empty>;
+
+  return (
+    <>
+      <div className="hidden sm:block">
+        <TableScroller>
+          <thead>
+            <tr>
+              <Th>Date</Th>
+              <Th>Opponent</Th>
+              <Th>Where</Th>
+              <Th className="w-28 text-center">Score</Th>
+              <Th>Result</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {fixtures.map((fixture) => (
+              <Tr key={fixture.id}>
+                <Td className="whitespace-nowrap text-ink-muted">
+                  {formatDateShort(fixture.playedOn)}
+                  <CompetitionNote competition={fixture.competition} />
+                </Td>
+                <Td>
+                  <TeamName team={fixture.opponent} bold />
+                </Td>
+                {/* A word, not an H or an A the reader has to decode. */}
+                <Td className="text-ink-muted">{fixture.isHome ? "at home" : "away"}</Td>
+                <Td className="text-center">
+                  {fixture.status === "played" ? (
+                    <Link href={`/results/${fixture.id}`} className="link">
+                      <Scoreline home={fixture.teamScore} away={fixture.opponentScore} />
+                    </Link>
+                  ) : (
+                    <span className="tabular text-ink-muted">
+                      {formatTime(fixture.startTime) || "—"}
+                    </span>
+                  )}
+                </Td>
+                <Td>
+                  <ResultBadge fixture={fixture} />
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </TableScroller>
+      </div>
+
+      <ul className="space-y-3 sm:hidden">
+        {fixtures.map((fixture) => (
+          <li key={fixture.id}>
+            <Card>
+              <p className="text-ink-muted">
+                {formatDateShort(fixture.playedOn)}
+                <CompetitionNote competition={fixture.competition} />
+              </p>
+              <p className="mt-1 text-lg">
+                <span className="text-ink-muted">{fixture.isHome ? "at home to " : "away to "}</span>
+                <TeamName team={fixture.opponent} bold />
+              </p>
+              <p className="mt-2 flex flex-wrap items-center gap-3">
+                <ResultBadge fixture={fixture} />
+                {fixture.status === "played" ? (
+                  <Link href={`/results/${fixture.id}`} className="link">
+                    <Scoreline home={fixture.teamScore} away={fixture.opponentScore} />
+                  </Link>
+                ) : fixture.startTime ? (
+                  <span className="text-ink-muted">{formatTime(fixture.startTime)}</span>
+                ) : null}
+              </p>
+            </Card>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function ResultBadge({ fixture }: { fixture: TeamFixture }) {
+  const label = resultLabel(fixture.result, fixture.status);
+  const tone =
+    fixture.result === "win" ? "positive" : fixture.result === "loss" ? "negative" : "neutral";
+  return <Badge tone={tone}>{label}</Badge>;
+}
+
 // ---------------------------------------------------------------------------
 // League tables
 // ---------------------------------------------------------------------------
 
-export function StandingsTable({ standings }: { standings: Standing[] }) {
+export function StandingsTable({
+  standings,
+  season,
+}: {
+  standings: Standing[];
+  /** Carried into the team links so a table row leads to that season. */
+  season?: string;
+}) {
   if (standings.length === 0) {
     return (
       <Empty>
@@ -187,7 +295,22 @@ export function StandingsTable({ standings }: { standings: Standing[] }) {
               <Tr key={row.id} highlight={row.isHrc}>
                 <Td className="tabular text-right text-ink-muted">{row.position}</Td>
                 <Td className="font-semibold">
-                  {row.teamName}
+                  {/*
+                    "Click on your Team Name in the relevant table below to
+                    see all your team's League Matches for the season" — the
+                    league's own instruction on its tables page, and the
+                    main way anyone navigates it.
+                  */}
+                  {row.teamSlug ? (
+                    <Link
+                      href={`/teams/${row.teamSlug}${season ? `?season=${season}` : ""}`}
+                      className="link"
+                    >
+                      {row.teamName}
+                    </Link>
+                  ) : (
+                    row.teamName
+                  )}
                   {/*
                     The tint is never the only thing marking this row.
                     `isHrc` flags a team belonging to the club whose site
@@ -218,7 +341,17 @@ export function StandingsTable({ standings }: { standings: Standing[] }) {
             <Card className={cn(row.isHrc && "border-brand bg-brand-soft")}>
               <div className="flex items-baseline justify-between gap-3">
                 <p className="text-lg font-semibold">
-                  <span className="tabular text-ink-muted">{row.position}.</span> {row.teamName}
+                  <span className="tabular text-ink-muted">{row.position}.</span>{" "}
+                  {row.teamSlug ? (
+                    <Link
+                      href={`/teams/${row.teamSlug}${season ? `?season=${season}` : ""}`}
+                      className="link"
+                    >
+                      {row.teamName}
+                    </Link>
+                  ) : (
+                    row.teamName
+                  )}
                 </p>
                 <p className="shrink-0 text-lg font-semibold tabular">{row.points} pts</p>
               </div>
@@ -238,7 +371,13 @@ export function StandingsTable({ standings }: { standings: Standing[] }) {
   );
 }
 
-export function StandingsByDivision({ standings }: { standings: Standing[] }) {
+export function StandingsByDivision({
+  standings,
+  season,
+}: {
+  standings: Standing[];
+  season?: string;
+}) {
   // Ordered by the league's own hierarchy, not alphabetically — a page that
   // opens with Division 1 above the Premier Division reads as a mistake.
   const divisions = DIVISION.filter((division) =>
@@ -259,7 +398,10 @@ export function StandingsByDivision({ standings }: { standings: Standing[] }) {
       {divisions.map((division) => (
         <section key={division}>
           <h2 className="mb-3 text-2xl">{divisionLabel(division)}</h2>
-          <StandingsTable standings={standings.filter((row) => row.division === division)} />
+          <StandingsTable
+            standings={standings.filter((row) => row.division === division)}
+            season={season}
+          />
         </section>
       ))}
     </div>

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { Fixture, Standing } from "@shared/types.js";
-import { FixtureList, StandingsTable } from "./data";
+import type { Fixture, Standing, TeamFixture } from "@shared/types.js";
+import { FixtureList, StandingsTable, TeamFixtureList } from "./data";
 
 function fixture(overrides: Partial<Fixture> = {}): Fixture {
   return {
@@ -11,17 +11,28 @@ function fixture(overrides: Partial<Fixture> = {}): Fixture {
     startTime: "19:30:00",
     weekCommencing: "2026-09-14",
     competition: "league",
-    opponentName: "Water Lane A",
-    isHome: true,
     status: "played",
-    result: "win",
-    hrcScore: 7,
-    opponentScore: 3,
+    homeTeam: { name: "HRC A", slug: "hrc-a", division: "premier" },
+    awayTeam: { name: "Water Lane A", slug: "water-lane-a", division: "premier" },
+    homeScore: 7,
+    awayScore: 3,
     scorecardUrl: null,
-    teamName: "HRC A",
-    teamSlug: "hrc-a",
     venueName: "HRC main hall",
     lastSyncedAt: null,
+    ...overrides,
+  };
+}
+
+/** The same match as one of the two teams sees it. */
+function teamFixture(overrides: Partial<TeamFixture> = {}): TeamFixture {
+  const base = fixture();
+  return {
+    ...base,
+    isHome: true,
+    opponent: base.awayTeam,
+    teamScore: 7,
+    opponentScore: 3,
+    result: "win",
     ...overrides,
   };
 }
@@ -32,6 +43,7 @@ function standing(overrides: Partial<Standing> = {}): Standing {
     division: "premier",
     position: 2,
     teamName: "HRC A",
+    teamSlug: "hrc-a",
     isHrc: true,
     played: 3,
     won: 2,
@@ -51,14 +63,21 @@ function standing(overrides: Partial<Standing> = {}): Standing {
  * something look tidier.
  */
 describe("FixtureList", () => {
-  it("says whether we won in words, not only in colour", () => {
-    render(<FixtureList fixtures={[fixture()]} showResult emptyMessage="none" />);
-    expect(screen.getAllByText("Won").length).toBeGreaterThan(0);
+  it("names both teams, because neither side of a league match is 'us'", () => {
+    render(<FixtureList fixtures={[fixture()]} emptyMessage="none" />);
+    expect(screen.getAllByText("HRC A").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Water Lane A").length).toBeGreaterThan(0);
   });
 
-  it("says home or away in words", () => {
-    render(<FixtureList fixtures={[fixture({ isHome: false })]} emptyMessage="none" />);
-    expect(screen.getAllByText("away").length).toBeGreaterThan(0);
+  it("does not print a scoreline for a match nobody has played", () => {
+    // 0–0 is a result somebody played for; an unplayed match has none.
+    render(
+      <FixtureList
+        fixtures={[fixture({ status: "scheduled", homeScore: null, awayScore: null })]}
+        emptyMessage="none"
+      />,
+    );
+    expect(screen.queryByText("0–0")).toBeNull();
   });
 
   it("names the cup when a match is not a league match", () => {
@@ -74,6 +93,48 @@ describe("FixtureList", () => {
   it("explains an empty list rather than saying 'no results'", () => {
     render(<FixtureList fixtures={[]} emptyMessage="No matches left in the calendar." />);
     expect(screen.getByText("No matches left in the calendar.")).toBeDefined();
+  });
+});
+
+describe("TeamFixtureList", () => {
+  it("says whether the team won in words, not only in colour", () => {
+    render(<TeamFixtureList fixtures={[teamFixture()]} emptyMessage="none" />);
+    expect(screen.getAllByText("Won").length).toBeGreaterThan(0);
+  });
+
+  it("says home or away in words", () => {
+    render(
+      <TeamFixtureList
+        fixtures={[teamFixture({ isHome: false })]}
+        emptyMessage="none"
+      />,
+    );
+    expect(screen.getAllByText(/away/).length).toBeGreaterThan(0);
+  });
+
+  it("puts the team's own score first, whichever side of the match they were", () => {
+    /*
+     * The away side of a 7–3 home win lost 3–7. Reading the stored score
+     * straight through would tell half the league they won matches they
+     * lost.
+     */
+    const base = fixture();
+    render(
+      <TeamFixtureList
+        fixtures={[
+          teamFixture({
+            isHome: false,
+            opponent: base.homeTeam,
+            teamScore: 3,
+            opponentScore: 7,
+            result: "loss",
+          }),
+        ]}
+        emptyMessage="none"
+      />,
+    );
+    expect(screen.getAllByText("3–7").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Lost").length).toBeGreaterThan(0);
   });
 });
 

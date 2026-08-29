@@ -15,7 +15,7 @@ npm install
 cp .env.example .env        # DIRECTUS_URL + DIRECTUS_SERVICE_TOKEN
 npm run dev                 # API on :5000
 npx vite                    # client with hot reload, proxying /api
-npm test                    # 112 tests
+npm test                    # 137 tests
 npm run build               # client, then prerender, then server bundle
 ```
 
@@ -28,12 +28,22 @@ npm run build               # client, then prerender, then server bundle
 | Area | Pages |
 |---|---|
 | **Fixtures** | Fixture calendar grouped by league week, match history, match detail with the rubber-by-rubber card, cup news |
-| **Tables** | League tables by division, averages with the eligibility rule explained, handicaps |
+| **Tables** | League tables by division and by season, averages with the eligibility rule explained, handicaps |
 | **Clubs** | All ten clubs with their halls, teams and squads; every team by division; every registered player |
 | **More** | Special notices, newsletters, the roll of honour and hall of fame, forms and documents, the committee, about the league, our links, how do I…?, feedback |
 | **Policies** | Privacy, accessibility statement, safeguarding |
 
-Not yet built: the league data sync (fixtures and results are entered by hand until then), the members' area, and the axe-core CI gate. See the implementation plan.
+### Seasons, fixtures and tables
+
+A match is a row naming **two of the league's own teams** and the rubbers each won, scoped to a season. Everything else follows from that:
+
+- **The league table is computed, not stored.** Points are rubbers won — read off the league's own 2025 final tables, where the Premier Division was won on 118 points from 14 matches of ten rubbers each. Entering a result moves the table; there is no second copy to drift. Rule 20 breaks ties on matches won and then on the games between the tied teams, as the handbook says.
+- **Every page is per season.** `/tables?season=2025-26` and `/teams/water-lane-c?season=2025-26` are addresses you can send someone, which is the one property of the old site's `Tables2025.htm` worth keeping.
+- **A team's row exists once per season**, so a promotion is history rather than an edit, and its slug is unique within a season rather than across them.
+
+Archived seasons that were never played through this site keep their final table in `hrc_standings`, which is used when a season has no results to compute from.
+
+Not yet built: the members' area and the axe-core CI gate. See the implementation plan.
 
 ## Design
 
@@ -92,6 +102,8 @@ npm run permissions:apply # creates the service role and prints its token once
 npm run seed              # placeholder editorial content (pages, FAQs, links)
 npm run import:league     # all ten clubs, their venues, teams and squads
 npm run import:content    # the league's description, committee, documents, links and honours
+npm run import:fixtures   # the season's fixture programme, from every team's match page
+npm run schema:drop -- <collection>   # drop an empty collection so apply can rebuild it
 ```
 
 **The seeded content is placeholder, and the site knows it.** It exists so the layouts and the empty states can be judged against something realistic. Every seeded body begins with the word `PLACEHOLDER`, and `server/storage.ts` refuses to serve any text that does — an article or event whose body is placeholder is dropped from the API entirely, and a page's body comes back null so the reader is told it has not been written yet.

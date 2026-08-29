@@ -235,7 +235,11 @@ export const teamsCollection: CollectionDefinition = {
   fields: [
     idField(),
     textField("name", { required: true, note: 'As the league writes it, e.g. "HRC A".' }),
-    slugField("slug", { note: 'URL segment, e.g. "hrc-a" in /teams/hrc-a — matches the league\'s own new URL scheme.' }),
+    slugField("slug", {
+      unique: false,
+      note:
+        'URL segment, e.g. "hrc-a" in /teams/hrc-a. Unique within a season, not across them: this collection holds one row per team per season, so the same team carries the same slug year after year and the season decides which row is meant.',
+    }),
     selectField("division", DIVISION, { labels: DIVISION_LABELS, nullable: false, required: true }),
     selectField("home_night", DAY_OF_WEEK, { note: "The night this team plays at home." }),
     timeOnlyField("home_start_time", { note: "Usual start time for a home match." }),
@@ -328,30 +332,29 @@ export const fixturesCollection: CollectionDefinition = {
   collection: "hrc_fixtures",
   icon: "sports_tennis",
   note:
-    "Every match an HRC team plays, fixture and result in one row. Mirrored from the league's data by the sync job — `league_fixture_ref` and `last_synced_at` are what make the sync idempotent. Club-authored fields (report, photos) survive re-sync because the sync only writes the columns it owns.",
-  displayTemplate: "{{played_on}} — {{team.name}} v {{opponent_name}}",
+    "One league match, between two of the league's own teams. Fixture and result are the same row: the fixture is created when the programme is published, and the scores are filled in when the card comes back. `league_fixture_ref` is what makes a re-sync update rather than duplicate.",
+  displayTemplate: "{{played_on}} — {{home_team.name}} v {{away_team.name}}",
   fields: [
     idField(),
     dateOnlyField("played_on", { note: "Match date. The site's single ordering key for fixtures and results." }),
     timeOnlyField("start_time"),
     dateOnlyField("week_commencing", {
-      note: "Monday of the league week. The league schedules by week; this is what the fixture calendar groups on.",
+      note: "Monday of the league week. The league schedules by week, and its own fixture lists are headed 'W/C Date', so this is what the calendar groups on.",
     }),
     selectField("competition", COMPETITION, {
       labels: COMPETITION_LABELS,
       defaultValue: "league",
       nullable: false,
     }),
-    textField("opponent_name", { required: true, note: 'Opposing team as the league names it, e.g. "Water Lane B".' }),
-    textField("opponent_slug", { nullable: true, note: "Slug of the opposing team, for linking to the league site." }),
-    booleanField("is_home", true, "Home or away. Never the only signal in the UI — it always carries a text label too."),
     selectField("status", FIXTURE_STATUS, { defaultValue: "scheduled", nullable: false }),
-    selectField("result", FIXTURE_RESULT, {
-      labels: FIXTURE_RESULT_LABELS,
-      note: "From HRC's point of view, regardless of home or away. Null until the card is confirmed.",
-    }),
-    integerField("hrc_score", { nullable: true, note: "Rubbers won by HRC." }),
-    integerField("opponent_score", { nullable: true, note: "Rubbers won by the opposition." }),
+    /*
+     * Rubbers won by each side, which is also what the league counts as
+     * points: the 2025 Premier Division was won on 118 points from 14
+     * matches, and a match is ten rubbers. Null until the card is
+     * confirmed, which is what separates a fixture from a result.
+     */
+    integerField("home_score", { nullable: true, note: "Rubbers won by the home team. Null until the card is in." }),
+    integerField("away_score", { nullable: true, note: "Rubbers won by the away team. Null until the card is in." }),
     textField("league_fixture_ref", {
       nullable: true,
       unique: true,
@@ -359,18 +362,35 @@ export const fixturesCollection: CollectionDefinition = {
     }),
     textField("scorecard_url", { nullable: true, note: "Deep link to the full scorecard on the league site." }),
     richTextField("report", {
-      note: "Club-written match report. Authored here, never touched by the sync.",
+      note: "Written by a club or the match secretary. Authored here, never touched by the sync.",
     }),
     timestampField("last_synced_at", { note: "When the sync last wrote to this row. Shown as 'last updated' on the fixtures page." }),
     dateCreatedField(),
     dateUpdatedField(),
   ],
   relationFields: [
-    m2o("hrc_fixtures", "team", "hrc_teams", {
+    /*
+     * Both sides are teams in this league, not a team and a string.
+     *
+     * These were `team` plus an `opponent_name` text field, with the score
+     * split into `hrc_score` and `opponent_score` — the right shape for one
+     * club's site, where every match has an "us" and a "them". On the
+     * league's own site there is no "us": every match belongs to two teams
+     * that each have a page, a table row and a season's fixtures, and a
+     * match entered once has to appear correctly on both.
+     */
+    m2o("hrc_fixtures", "home_team", "hrc_teams", {
       required: true,
       nullable: false,
       template: "{{name}}",
-      oneField: "fixtures",
+      oneField: "home_fixtures",
+      onDelete: "CASCADE",
+    }),
+    m2o("hrc_fixtures", "away_team", "hrc_teams", {
+      required: true,
+      nullable: false,
+      template: "{{name}}",
+      oneField: "away_fixtures",
       onDelete: "CASCADE",
     }),
     m2o("hrc_fixtures", "season", "hrc_seasons", {
@@ -384,10 +404,11 @@ export const fixturesCollection: CollectionDefinition = {
       template: "{{name}}",
       oneField: "fixtures",
       onDelete: "SET NULL",
-      note: "Where it is played. For away matches this is the opposition's hall, if known.",
+      note: "Where it is played — normally the home team's hall.",
     }),
     fileField("hrc_fixtures", "report_image"),
   ],
+
 };
 
 export const rubbersCollection: CollectionDefinition = {
@@ -437,7 +458,11 @@ export const standingsCollection: CollectionDefinition = {
     idField(),
     selectField("division", DIVISION, { labels: DIVISION_LABELS, nullable: false, required: true }),
     integerField("position", { defaultValue: 0, nullable: false }),
-    textField("team_name", { required: true }),
+    textField("team_name", {
+      required: true,
+      note:
+        "The team as the league names it. Kept alongside the relation because an archived season's table can outlive the team record it refers to.",
+    }),
     booleanField("is_hrc", false, "Marks HRC's own rows so the table can highlight them — with a text label, never colour alone."),
     integerField("played", { defaultValue: 0 }),
     integerField("won", { defaultValue: 0 }),
@@ -451,6 +476,14 @@ export const standingsCollection: CollectionDefinition = {
     dateUpdatedField(),
   ],
   relationFields: [
+    // Nullable on purpose: a table imported from an archived season may name
+    // a team that no longer has a record here.
+    m2o("hrc_standings", "team", "hrc_teams", {
+      template: "{{name}}",
+      oneField: "standings",
+      onDelete: "SET NULL",
+      note: "The team this row is for, when it is one the site still knows about.",
+    }),
     m2o("hrc_standings", "season", "hrc_seasons", {
       required: true,
       nullable: false,

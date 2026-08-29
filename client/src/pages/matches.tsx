@@ -16,8 +16,9 @@ import {
   Th,
   Tr,
 } from "@/components/ui";
-import { useAverages, useFixture, useFixtures, useSettings, useStandings } from "@/lib/queries";
-import { formatDateLong, formatTime, resultLabel } from "@/lib/utils";
+import { useAverages, useFixture, useFixtures, useSeasons, useSettings, useStandings } from "@/lib/queries";
+import { SeasonPicker, useSeasonParam } from "@/components/season";
+import { cn, formatDateLong, formatTime, resultLabel } from "@/lib/utils";
 
 /**
  * A small note under every page that shows synced league data, saying where
@@ -106,7 +107,6 @@ export function ResultsPage() {
 
       <FixtureList
         fixtures={fixtures ?? []}
-        showResult
         emptyMessage="No results yet this season. They appear here once matches have been played and the cards confirmed."
       />
 
@@ -123,35 +123,55 @@ export function MatchPage({ id }: { id: string }) {
   if (isLoading) return <Loading what="this match" variant="page" />;
   if (isError || !match) return <ErrorNote what="match" />;
 
-  const tone =
-    match.result === "win" ? "positive" : match.result === "loss" ? "negative" : "neutral";
+  /*
+   * No "we" on a league match. The old page put the home side's score under
+   * a win/loss badge written from HRC's point of view, which on the
+   * league's own site is a verdict on a match between two other clubs.
+   * The scoreline says who won; the winner's name is what carries it.
+   */
+  const played = match.homeScore !== null && match.awayScore !== null;
+  const homeWon = played && match.homeScore! > match.awayScore!;
+  const awayWon = played && match.awayScore! > match.homeScore!;
 
   return (
     <div className="space-y-10">
       <PageHeader
-        title={`${match.teamName} v ${match.opponentName}`}
-        subtitle={`${formatDateLong(match.playedOn)} · ${match.isHome ? "at home" : "away"}`}
+        title={`${match.homeTeam.name} v ${match.awayTeam.name}`}
+        subtitle={`${formatDateLong(match.playedOn)}${match.venueName ? ` · ${match.venueName}` : ""}`}
       />
 
       {/* The scoreline, at the size a scoreline deserves. */}
       <Card className="text-center">
         <p className="text-ink-muted">{COMPETITION_LABELS[match.competition] ?? match.competition}</p>
-        <p className="mt-2 flex items-center justify-center gap-4 text-4xl font-semibold tabular">
-          <span>{match.hrcScore ?? "—"}</span>
-          <span aria-hidden="true" className="text-ink-muted">
-            –
-          </span>
-          <span>{match.opponentScore ?? "—"}</span>
-        </p>
-        <p className="mt-1 text-ink-muted">
-          {match.teamName} v {match.opponentName}
-        </p>
+        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+          <p className={cn("text-right text-xl", homeWon && "font-semibold")}>
+            {match.homeTeam.name}
+          </p>
+          <p className="flex items-center gap-3 text-4xl font-semibold tabular">
+            <span>{match.homeScore ?? "—"}</span>
+            <span aria-hidden="true" className="text-ink-muted">
+              –
+            </span>
+            <span>{match.awayScore ?? "—"}</span>
+          </p>
+          <p className={cn("text-left text-xl", awayWon && "font-semibold")}>
+            {match.awayTeam.name}
+          </p>
+        </div>
         <p className="mt-4 flex flex-wrap items-center justify-center gap-3">
-          <Badge tone={tone}>{resultLabel(match.result, match.status)}</Badge>
+          {/* Colour is never the only signal, so the outcome is a sentence. */}
+          <Badge tone={played ? "positive" : "neutral"}>
+            {played
+              ? homeWon
+                ? `${match.homeTeam.name} won`
+                : awayWon
+                  ? `${match.awayTeam.name} won`
+                  : "Drawn"
+              : resultLabel(null, match.status)}
+          </Badge>
           {match.startTime ? (
             <span className="text-ink-muted">Started {formatTime(match.startTime)}</span>
           ) : null}
-          {match.venueName ? <span className="text-ink-muted">At {match.venueName}</span> : null}
         </p>
         {match.scorecardUrl ? (
           <p className="mt-4">
@@ -175,8 +195,8 @@ export function MatchPage({ id }: { id: string }) {
             <thead>
               <tr>
                 <Th className="w-14 text-right">#</Th>
-                <Th>{match.teamName}</Th>
-                <Th>{match.opponentName}</Th>
+                <Th>{match.homeTeam.name}</Th>
+                <Th>{match.awayTeam.name}</Th>
                 <Th className="text-right">Sets</Th>
                 <Th>Result</Th>
               </tr>
@@ -238,7 +258,11 @@ export function MatchPage({ id }: { id: string }) {
 // ---------------------------------------------------------------------------
 
 export function TablesPage() {
-  const { data: standings, isLoading, isError } = useStandings();
+  const { data: seasons } = useSeasons();
+  const [season, setSeason] = useSeasonParam();
+  const { data: standings, isLoading, isError } = useStandings(season);
+
+  const chosen = season ?? seasons?.find((entry) => entry.isCurrent)?.slug ?? seasons?.[0]?.slug;
 
   if (isLoading) return <Loading what="the league tables" variant="table" />;
   if (isError) return <ErrorNote what="league tables" />;
@@ -249,16 +273,26 @@ export function TablesPage() {
         title="League tables"
         subtitle="Who is top of each division, and how the season is going"
         actions={<PrintButton label="Print the tables" />}
-      />
+      >
+        <SeasonPicker seasons={seasons} value={chosen} onChange={setSeason} />
+      </PageHeader>
 
-      <StandingsByDivision standings={standings ?? []} />
+      <StandingsByDivision standings={standings ?? []} season={chosen} />
 
-      <div className="mt-10 max-w-readable">
-        <Disclosure summary="What happens if two teams have the same points?">
+      <div className="mt-10 max-w-readable space-y-3">
+        <Disclosure summary="How are points worked out?">
           <p>
-            The league separates them on the matches between those two teams first, and then on sets
-            won across the season. It is settled by the league — the table above shows the order the
-            league has published.
+            A match is ten individual games, and every game won is a point. So a team that wins a
+            match 6–4 takes six points from it and their opponents take four — which is why a
+            season’s totals run into the hundreds rather than the tens.
+          </p>
+        </Disclosure>
+        <Disclosure summary="What happens if two teams have the same points?">
+          {/* Rule 20, quoted from the league's own tables page. */}
+          <p>
+            Rule 20 of the handbook settles it: the team that has won the most matches is placed
+            higher. If that is still not decisive, it comes down to the games between the two teams
+            themselves.
           </p>
         </Disclosure>
       </div>
@@ -359,7 +393,6 @@ export function CupsPage() {
             </h2>
             <FixtureList
               fixtures={played}
-              showResult
               emptyMessage="No cup matches played yet this season."
             />
           </section>

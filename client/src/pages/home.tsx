@@ -88,7 +88,7 @@ export default function HomePage() {
             description="Every match still to play, across all divisions."
             meta={
               nextFixtures[0]
-                ? `${formatDateShort(nextFixtures[0].playedOn)} · ${nextFixtures[0].teamName} v ${nextFixtures[0].opponentName}`
+                ? `${formatDateShort(nextFixtures[0].playedOn)} · ${nextFixtures[0].homeTeam.name} v ${nextFixtures[0].awayTeam.name}`
                 : undefined
             }
           />
@@ -99,7 +99,7 @@ export default function HomePage() {
             description="Every match played, with the scorecards."
             meta={
               latestResults[0]
-                ? `${latestResults[0].teamName} ${latestResults[0].hrcScore ?? "?"}–${latestResults[0].opponentScore ?? "?"} ${latestResults[0].opponentName}`
+                ? `${latestResults[0].homeTeam.name} ${latestResults[0].homeScore ?? "?"}–${latestResults[0].awayScore ?? "?"} ${latestResults[0].awayTeam.name}`
                 : undefined
             }
           />
@@ -159,7 +159,6 @@ export default function HomePage() {
           </div>
           <FixtureList
             fixtures={latestResults}
-            showResult
             emptyMessage="No results yet this season. They will appear here as soon as matches have been played."
           />
         </section>
