@@ -108,7 +108,23 @@ async function main(): Promise<void> {
   for (const { ref, info } of clubs) {
     const clubName = info.clubName?.trim() || ref;
     const clubSlug = toSlug(clubName);
-    const isHome = ref === HOME_CLUB_REF;
+    /*
+     * No club is "ours" on the league's own site.
+     *
+     * This importer began life on a site belonging to HRC, and flagged
+     * them as the home club — which is what `is_home_club` and
+     * `is_home_venue` mean. Since the site became the league's, that flag
+     * makes the unqualified "teams" and "players" queries return four
+     * teams and twenty-eight players out of twenty-six and a hundred and
+     * sixty-five, and the league table compute only one division. Re-
+     * running the import used to quietly set it again and undo the
+     * reframe.
+     *
+     * The flag stays in the schema: it is what a club deploying this for
+     * itself would set. It is simply not this deployment's to set.
+     */
+    const isHome = false;
+    const isHomeClub = ref === HOME_CLUB_REF;
 
     // Venues are shared: two clubs play out of Stanstead Abbotts Parish
     // Hall, so a hall is matched on its name rather than created per club.
@@ -144,7 +160,7 @@ async function main(): Promise<void> {
         league_ref: ref,
         is_home_club: isHome,
         venue: venueId,
-        sort: isHome ? 0 : 1,
+        sort: isHomeClub ? 0 : 1,
         last_synced_at: new Date().toISOString(),
       },
     );
@@ -214,7 +230,7 @@ async function main(): Promise<void> {
 
     const players = info.teams.reduce((total, team) => total + team.players.length, 0);
     console.log(
-      `  = ${clubName.padEnd(20)} ${String(info.teams.length).padStart(2)} team(s), ${String(players).padStart(3)} squad places${isHome ? "   (this club)" : ""}`,
+      `  = ${clubName.padEnd(20)} ${String(info.teams.length).padStart(2)} team(s), ${String(players).padStart(3)} squad places${isHomeClub ? "   (HRC, this repository\u2019s namesake)" : ""}`,
     );
   }
 

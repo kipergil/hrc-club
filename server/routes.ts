@@ -137,7 +137,7 @@ export function registerRoutes(app: Express): void {
   app.get(
     "/api/teams/:slug",
     handler(async (req, res) => {
-      const team = await storage.getTeam(req.params.slug);
+      const team = await storage.getTeam(req.params.slug, param(req.query.season));
       if (!team) return notFound(res, "team");
       ok(res, team);
     }),
@@ -149,6 +149,7 @@ export function registerRoutes(app: Express): void {
       const fixtures = await storage.getFixtures({
         season: param(req.query.season),
         team: param(req.query.team),
+        division: param(req.query.division),
         status: param(req.query.status),
         competition: param(req.query.competition),
         limit: param(req.query.limit) ? Number(req.query.limit) : undefined,

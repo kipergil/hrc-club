@@ -154,28 +154,58 @@ export interface SquadPlace {
 
 export interface TeamDetail extends Team {
   squad: SquadPlace[];
-  fixtures: Fixture[];
-  results: Fixture[];
+  fixtures: TeamFixture[];
+  results: TeamFixture[];
   standing: Standing | null;
 }
 
+/** One side of a match, as the site refers to a team everywhere. */
+export interface TeamRef {
+  name: string;
+  slug: string;
+  /** Null for an archived row naming a team the site no longer holds. */
+  division: Division | null;
+}
+
+/**
+ * A league match: two of the league's own teams, and the rubbers each won.
+ *
+ * This was shaped for one club's site — a single `team`, an
+ * `opponentName` string, and `hrcScore`/`opponentScore`. On the league's
+ * own site there is no "us": a match belongs to two teams that each have a
+ * page and a table row, and entering it once has to serve both.
+ */
 export interface Fixture {
   id: string;
   playedOn: string | null;
   startTime: string | null;
   weekCommencing: string | null;
   competition: Competition;
-  opponentName: string;
-  isHome: boolean;
   status: FixtureStatus;
-  result: FixtureResult | null;
-  hrcScore: number | null;
-  opponentScore: number | null;
+  homeTeam: TeamRef;
+  awayTeam: TeamRef;
+  /** Rubbers won. Null until the card is confirmed. */
+  homeScore: number | null;
+  awayScore: number | null;
   scorecardUrl: string | null;
-  teamName: string;
-  teamSlug: string;
   venueName: string | null;
   lastSyncedAt: string | null;
+}
+
+/**
+ * A fixture seen from one team's side — what a team's own match list needs.
+ *
+ * `result` and the score order depend on which team is asking, so they are
+ * computed per view rather than stored: the same row is a win for one team
+ * and a loss for the other.
+ */
+export interface TeamFixture extends Fixture {
+  isHome: boolean;
+  opponent: TeamRef;
+  /** This team's rubbers, then the opposition's. */
+  teamScore: number | null;
+  opponentScore: number | null;
+  result: FixtureResult | null;
 }
 
 export interface Rubber {
@@ -202,6 +232,8 @@ export interface Standing {
   division: Division;
   position: number;
   teamName: string;
+  /** Set when the row is for a team the site still holds, so it can link. */
+  teamSlug: string | null;
   isHrc: boolean;
   played: number;
   won: number;

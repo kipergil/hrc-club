@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { DIVISION } from "@shared/enums.js";
 import type { Division } from "@shared/enums.js";
 import { PageHeader, PrintButton } from "@/components/layout";
-import { FixtureList } from "@/components/data";
+import { TeamFixtureList } from "@/components/data";
 import {
   Badge,
   Card,
@@ -16,7 +16,8 @@ import {
   SearchBox,
   Stat,
 } from "@/components/ui";
-import { usePlayer, usePlayers, useTeam, useTeams } from "@/lib/queries";
+import { usePlayer, usePlayers, useSeasons, useTeam, useTeams } from "@/lib/queries";
+import { SeasonPicker, useSeasonParam } from "@/components/season";
 import { divisionLabel, fileUrl, formatDayName, formatTime } from "@/lib/utils";
 
 export function TeamsPage() {
@@ -139,7 +140,9 @@ export function TeamsPage() {
 // ---------------------------------------------------------------------------
 
 export function TeamPage({ slug }: { slug: string }) {
-  const { data: team, isLoading, isError } = useTeam(slug);
+  const { data: seasons } = useSeasons();
+  const [season, setSeason] = useSeasonParam();
+  const { data: team, isLoading, isError } = useTeam(slug, season);
 
   if (isLoading) return <Loading what="this team" variant="page" />;
   if (isError || !team) return <ErrorNote what="team" />;
@@ -150,7 +153,14 @@ export function TeamPage({ slug }: { slug: string }) {
         title={team.name}
         subtitle={`${divisionLabel(team.division)} · ${team.seasonLabel || "current season"}`}
         actions={<PrintButton label="Print this team's fixtures" />}
-      />
+      >
+        {/*
+          A team's row exists once per season, so switching year here is
+          switching to a different record — which is what makes a promotion
+          history rather than an overwrite.
+        */}
+        <SeasonPicker seasons={seasons} value={season ?? team.seasonLabel} onChange={setSeason} />
+      </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
@@ -238,9 +248,8 @@ export function TeamPage({ slug }: { slug: string }) {
         <h2 id="fixtures-heading" className="mb-3 text-2xl">
           Still to play
         </h2>
-        <FixtureList
+        <TeamFixtureList
           fixtures={team.fixtures}
-          showTeam={false}
           emptyMessage="No matches left in the calendar for this team."
         />
       </section>
@@ -249,10 +258,8 @@ export function TeamPage({ slug }: { slug: string }) {
         <h2 id="history-heading" className="mb-3 text-2xl">
           Match history
         </h2>
-        <FixtureList
+        <TeamFixtureList
           fixtures={team.results}
-          showTeam={false}
-          showResult
           emptyMessage="This team hasn't played a match yet this season."
         />
       </section>

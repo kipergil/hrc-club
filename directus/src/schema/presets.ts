@@ -184,7 +184,10 @@ export function selectField(
  * looked up by a route parameter (`/news/:slug`, `/teams/:slug`), so the
  * index is load-bearing, not decorative.
  */
-export function slugField(field = "slug", opts: { note?: string } = {}): FieldDefinition {
+export function slugField(
+  field = "slug",
+  opts: { note?: string; unique?: boolean } = {},
+): FieldDefinition {
   return {
     field,
     type: "string",
@@ -194,7 +197,14 @@ export function slugField(field = "slug", opts: { note?: string } = {}): FieldDe
       note: opts.note ?? "URL segment — lowercase, hyphenated, never changed once published.",
       width: "half",
     },
-    schema: { is_nullable: false, max_length: 120, is_unique: true, is_indexed: true },
+    /*
+     * `unique: false` is for a slug that identifies a thing within a
+     * season rather than outright — a team, whose row exists once per
+     * season so that a promotion is history rather than an edit. Unique
+     * across the table, "water-lane-c" could only ever exist in one
+     * season, which quietly makes a multi-season site impossible.
+     */
+    schema: { is_nullable: false, max_length: 120, is_unique: opts.unique ?? true, is_indexed: true },
   };
 }
 

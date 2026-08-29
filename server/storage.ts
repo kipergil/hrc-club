@@ -25,10 +25,12 @@ import type {
   Standing,
   Team,
   TeamDetail,
+  TeamFixture,
+  TeamRef,
   Venue,
 } from "../shared/types.js";
 import type { EnquiryInput } from "../shared/schema.js";
-import type { Division } from "../shared/enums.js";
+import { DIVISION, type Division } from "../shared/enums.js";
 import { directus } from "./lib/directus.js";
 
 /*
@@ -173,8 +175,15 @@ function toTeam(row: Row): Team {
   };
 }
 
+function toTeamRef(row: Row | null): TeamRef {
+  return {
+    name: row?.name ?? "",
+    slug: row?.slug ?? "",
+    division: row?.division ?? null,
+  };
+}
+
 function toFixture(row: Row): Fixture {
-  const team = rel(row.team);
   const venue = rel(row.venue);
   return {
     id: row.id,
@@ -182,17 +191,45 @@ function toFixture(row: Row): Fixture {
     startTime: str(row.start_time),
     weekCommencing: str(row.week_commencing),
     competition: row.competition ?? "league",
-    opponentName: row.opponent_name ?? "",
-    isHome: Boolean(row.is_home),
     status: row.status ?? "scheduled",
-    result: row.result ?? null,
-    hrcScore: num(row.hrc_score),
-    opponentScore: num(row.opponent_score),
+    homeTeam: toTeamRef(rel(row.home_team)),
+    awayTeam: toTeamRef(rel(row.away_team)),
+    homeScore: num(row.home_score),
+    awayScore: num(row.away_score),
     scorecardUrl: str(row.scorecard_url),
-    teamName: team?.name ?? "",
-    teamSlug: team?.slug ?? "",
     venueName: venue?.name ?? null,
     lastSyncedAt: str(row.last_synced_at),
+  };
+}
+
+/**
+ * The same match, told from one team's side.
+ *
+ * A result is not a property of a match, it is a property of a match and a
+ * point of view: 6–4 is a win for the home team and a loss for the away
+ * one. Storing it would mean storing it twice and keeping the two in step,
+ * so it is worked out here instead, once, wherever a team's own list is
+ * being built.
+ */
+function toTeamFixture(fixture: Fixture, teamSlug: string): TeamFixture {
+  const isHome = fixture.homeTeam.slug === teamSlug;
+  const teamScore = isHome ? fixture.homeScore : fixture.awayScore;
+  const opponentScore = isHome ? fixture.awayScore : fixture.homeScore;
+
+  return {
+    ...fixture,
+    isHome,
+    opponent: isHome ? fixture.awayTeam : fixture.homeTeam,
+    teamScore,
+    opponentScore,
+    result:
+      teamScore === null || opponentScore === null
+        ? null
+        : teamScore > opponentScore
+          ? "win"
+          : teamScore < opponentScore
+            ? "loss"
+            : "draw",
   };
 }
 
@@ -216,7 +253,8 @@ function toStanding(row: Row): Standing {
     id: row.id,
     division: row.division,
     position: int(row.position),
-    teamName: row.team_name ?? "",
+    teamName: rel(row.team)?.name ?? row.team_name ?? "",
+    teamSlug: rel(row.team)?.slug ?? null,
     isHrc: Boolean(row.is_hrc),
     played: int(row.played),
     won: int(row.won),
@@ -610,12 +648,45 @@ export async function getTeams(seasonSlug?: string, clubSlug?: string): Promise<
   return rows.map(toTeam);
 }
 
-export async function getTeam(slug: string): Promise<TeamDetail | null> {
+/**
+ * Every team in the league for a season, ignoring the home-club default.
+ *
+ * `getTeams()` unqualified means "our teams", which is right for a club's
+ * own site and wrong for a league table: it computed the Premier Division
+ * from four teams and left the other two divisions off the page entirely.
+ */
+export async function getAllTeams(seasonSlug?: string): Promise<Team[]> {
   const client = await directus();
+  const seasonId = await seasonIdFor(seasonSlug);
+
   const rows = (await client.request(
     readItems("hrc_teams", {
       fields: TEAM_FIELDS as unknown as string[],
-      filter: { slug: { _eq: slug } },
+      filter: seasonId ? { season: { _eq: seasonId } } : {},
+      sort: ["sort", "name"],
+      limit: -1,
+    }),
+  )) as Row[];
+  return rows.map(toTeam);
+}
+
+export async function getTeam(slug: string, seasonSlug?: string): Promise<TeamDetail | null> {
+  const client = await directus();
+  const seasonId = await seasonIdFor(seasonSlug);
+
+  /*
+   * A team slug identifies a team within a season, not outright: this
+   * collection holds one row per team per season so that a promotion is
+   * history rather than an edit. Without a season the most recent row
+   * wins, which is what someone following a bare /teams/hrc-a means.
+   */
+  const teamFilter: Record<string, unknown>[] = [{ slug: { _eq: slug } }];
+  if (seasonId) teamFilter.push({ season: { _eq: seasonId } });
+
+  const rows = (await client.request(
+    readItems("hrc_teams", {
+      fields: TEAM_FIELDS as unknown as string[],
+      filter: { _and: teamFilter },
       sort: ["-season.label"],
       limit: 1,
     }),
@@ -640,22 +711,25 @@ export async function getTeam(slug: string): Promise<TeamDetail | null> {
     ) as Promise<Row[]>,
     client.request(
       readItems("hrc_fixtures", {
-        fields: ["*", { team: ["name", "slug"] }, { venue: ["name"] }],
-        filter: { team: { _eq: teamId } },
+        fields: FIXTURE_FIELDS as unknown as string[],
+        // Both halves of the fixture. Filtering on a single `team` column
+        // only ever found the matches this side happened to be entered as.
+        filter: {
+          _and: [
+            { season: { _eq: rel(rows[0].season)?.id } },
+            { _or: [{ home_team: { _eq: teamId } }, { away_team: { _eq: teamId } }] },
+          ],
+        },
         sort: ["played_on"],
         limit: -1,
       }),
     ) as Promise<Row[]>,
-    client.request(
-      readItems("hrc_standings", {
-        fields: ["*"],
-        filter: { _and: [{ division: { _eq: rows[0].division } }, { is_hrc: { _eq: true } }, { team_name: { _eq: rows[0].name } }] },
-        limit: 1,
-      }),
-    ) as Promise<Row[]>,
+    // The row for this team in its division's table, computed from results
+    // like every other row rather than looked up by name.
+    getStandings(rel(rows[0].season)?.slug, rows[0].division),
   ]);
 
-  const fixtures = fixtureRows.map(toFixture);
+  const teamFixtures = fixtureRows.map((row) => toTeamFixture(toFixture(row), slug));
 
   return {
     ...team,
@@ -664,15 +738,23 @@ export async function getTeam(slug: string): Promise<TeamDetail | null> {
       role: row.role ?? "player",
       member: toMemberSummary(rel(row.member) ?? {}),
     })),
-    fixtures: fixtures.filter((f) => f.status === "scheduled" || f.status === "postponed"),
-    results: fixtures.filter((f) => f.status === "played").reverse(),
-    standing: standingRows[0] ? toStanding(standingRows[0]) : null,
+    fixtures: teamFixtures.filter((f) => f.status === "scheduled" || f.status === "postponed"),
+    results: teamFixtures.filter((f) => f.status === "played").reverse(),
+    standing: standingRows.find((row) => row.teamSlug === slug) ?? null,
   };
 }
+
+const FIXTURE_FIELDS = [
+  "*",
+  { home_team: ["name", "slug", "division"] },
+  { away_team: ["name", "slug", "division"] },
+  { venue: ["name"] },
+] as const;
 
 export interface FixtureQuery {
   season?: string;
   team?: string;
+  division?: string;
   status?: string;
   competition?: string;
   limit?: number;
@@ -684,11 +766,20 @@ export async function getFixtures(query: FixtureQuery = {}): Promise<Fixture[]> 
 
   const filter: Record<string, unknown>[] = [];
   if (seasonId) filter.push({ season: { _eq: seasonId } });
-  if (query.team) filter.push({ team: { slug: { _eq: query.team } } });
+  // A team's matches are the ones it plays either half of. This is the whole
+  // reason both sides are relations: as an `opponent_name` string there was
+  // no way to ask this question.
+  if (query.team) {
+    filter.push({
+      _or: [{ home_team: { slug: { _eq: query.team } } }, { away_team: { slug: { _eq: query.team } } }],
+    });
+  }
+  if (query.division) {
+    filter.push({ home_team: { division: { _eq: query.division } } });
+  }
   if (query.status) filter.push({ status: { _eq: query.status } });
   if (query.competition === "cup") {
-    // Everything that is not league business — the club-site equivalent of
-    // the league's "Cup News" page.
+    // Everything that is not league business — the league's "Cup News" page.
     filter.push({ competition: { _neq: "league" } });
   } else if (query.competition) {
     filter.push({ competition: { _eq: query.competition } });
@@ -696,7 +787,7 @@ export async function getFixtures(query: FixtureQuery = {}): Promise<Fixture[]> 
 
   const rows = (await client.request(
     readItems("hrc_fixtures", {
-      fields: ["*", { team: ["name", "slug"] }, { venue: ["name"] }],
+      fields: FIXTURE_FIELDS as unknown as string[],
       filter: filter.length ? { _and: filter } : {},
       sort: query.status === "played" ? ["-played_on"] : ["played_on"],
       limit: query.limit ?? -1,
@@ -705,11 +796,17 @@ export async function getFixtures(query: FixtureQuery = {}): Promise<Fixture[]> 
   return rows.map(toFixture);
 }
 
+/** Every match a team plays in a season, in date order, from its own side. */
+export async function getTeamFixtures(teamSlug: string, seasonSlug?: string): Promise<TeamFixture[]> {
+  const fixtures = await getFixtures({ team: teamSlug, season: seasonSlug });
+  return fixtures.map((fixture) => toTeamFixture(fixture, teamSlug));
+}
+
 export async function getFixture(id: string): Promise<FixtureDetail | null> {
   const client = await directus();
   const rows = (await client.request(
     readItems("hrc_fixtures", {
-      fields: ["*", { team: ["name", "slug"] }, { venue: ["name"] }],
+      fields: FIXTURE_FIELDS as unknown as string[],
       filter: { id: { _eq: id } },
       limit: 1,
     }),
@@ -743,22 +840,199 @@ export async function getFixture(id: string): Promise<FixtureDetail | null> {
   };
 }
 
+/**
+ * The league table for a season.
+ *
+ * Computed from the results, not stored — which is the point of entering
+ * results at all. A card goes in, the table moves. A stored table is a
+ * second copy of the same facts, and a second copy is a copy that drifts.
+ *
+ * The league's own scoring, read off its 2025 final tables: **points are
+ * rubbers won**, not two-for-a-win. Water Lane A finished the Premier
+ * Division on 118 points from 14 matches, and a match is ten rubbers —
+ * which only makes sense if every rubber is a point. `played` is matches
+ * played, and wins matter only for separating equal totals.
+ *
+ * Seasons the league archived before this site existed have a final table
+ * and no match cards behind it. Those rows still live in `hrc_standings`,
+ * and are used when a season has no results to compute from.
+ */
 export async function getStandings(seasonSlug?: string, division?: string): Promise<Standing[]> {
+  const computed = await computeStandings(seasonSlug);
+  const rows = computed.length > 0 ? computed : await getStoredStandings(seasonSlug);
+  return division ? rows.filter((row) => row.division === division) : rows;
+}
+
+/** The archived tables, for seasons whose matches were never entered here. */
+async function getStoredStandings(seasonSlug?: string): Promise<Standing[]> {
   const client = await directus();
   const seasonId = await seasonIdFor(seasonSlug);
   const filter: Record<string, unknown>[] = [];
   if (seasonId) filter.push({ season: { _eq: seasonId } });
-  if (division) filter.push({ division: { _eq: division } });
 
   const rows = (await client.request(
     readItems("hrc_standings", {
-      fields: ["*"],
+      fields: ["*", { team: ["name", "slug"] }],
       filter: filter.length ? { _and: filter } : {},
       sort: ["division", "position"],
       limit: -1,
     }),
   )) as Row[];
   return rows.map(toStanding);
+}
+
+interface TableRow {
+  team: TeamRef;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  setsFor: number;
+  setsAgainst: number;
+  points: number;
+  /** Rubbers won against each other team, for the rule 20 tie-break. */
+  against: Map<string, number>;
+}
+
+function blankRow(team: TeamRef): TableRow {
+  return {
+    team,
+    played: 0,
+    won: 0,
+    drawn: 0,
+    lost: 0,
+    setsFor: 0,
+    setsAgainst: 0,
+    points: 0,
+    against: new Map(),
+  };
+}
+
+/**
+ * Handbook rule 20, as the league states it on its own tables page:
+ *
+ *   "...the team which has won the most matches will be placed higher.
+ *   Should this method not be decisive, the league position will be based
+ *   on the results of the games between the relevant teams..."
+ *
+ * So: points, then matches won, then rubbers won in the meetings between
+ * the two teams. A pair still level after all three is left in name order,
+ * which is at least stable — the alternative is a table whose rows move
+ * about between requests.
+ */
+function compareRows(a: TableRow, b: TableRow): number {
+  if (b.points !== a.points) return b.points - a.points;
+  if (b.won !== a.won) return b.won - a.won;
+
+  const aHead = a.against.get(b.team.slug) ?? 0;
+  const bHead = b.against.get(a.team.slug) ?? 0;
+  if (aHead !== bHead) return bHead - aHead;
+
+  return a.team.name.localeCompare(b.team.name);
+}
+
+async function computeStandings(seasonSlug?: string): Promise<Standing[]> {
+  const [fixtures, teams, homeClub] = await Promise.all([
+    getFixtures({ season: seasonSlug, competition: "league" }),
+    getAllTeams(seasonSlug),
+    getHomeClub(),
+  ]);
+
+  if (fixtures.length === 0) return [];
+
+  return buildTable(
+    fixtures,
+    teams.map((team) => ({ name: team.name, slug: team.slug, division: team.division })),
+    new Set(
+      homeClub ? teams.filter((team) => team.clubSlug === homeClub.slug).map((team) => team.slug) : [],
+    ),
+  );
+}
+
+/**
+ * The table itself, as a function of the results and nothing else.
+ *
+ * Separated from the fetching so the scoring and the tie-break can be
+ * tested against known fixtures rather than against whatever happens to be
+ * in Directus — and so that verifying "a result moves the table" does not
+ * mean writing invented results into the league's live data.
+ */
+export function buildTable(
+  fixtures: Fixture[],
+  teams: TeamRef[],
+  homeClubTeams: ReadonlySet<string> = new Set(),
+): Standing[] {
+  /*
+   * Every team in the division appears, whether or not it has played —
+   * a table that lists only the teams with results is not a table, and at
+   * the start of a season it would be empty. The league's own opening
+   * tables list all eight or nine teams on nought points.
+   */
+  const rows = new Map<string, TableRow>();
+  for (const team of teams) rows.set(team.slug, blankRow(team));
+
+  for (const fixture of fixtures) {
+    if (fixture.status !== "played") continue;
+    if (fixture.homeScore === null || fixture.awayScore === null) continue;
+
+    for (const [side, opponent, score, opponentScore] of [
+      [fixture.homeTeam, fixture.awayTeam, fixture.homeScore, fixture.awayScore],
+      [fixture.awayTeam, fixture.homeTeam, fixture.awayScore, fixture.homeScore],
+    ] as const) {
+      // A fixture naming a team that is not in the season's team list —
+      // a withdrawn side, say — still counts for its opponent.
+      const row = rows.get(side.slug) ?? blankRow(side);
+      rows.set(side.slug, row);
+
+      row.played += 1;
+      row.points += score;
+      row.setsFor += score;
+      row.setsAgainst += opponentScore;
+      if (score > opponentScore) row.won += 1;
+      else if (score < opponentScore) row.lost += 1;
+      else row.drawn += 1;
+      row.against.set(opponent.slug, (row.against.get(opponent.slug) ?? 0) + score);
+    }
+  }
+
+  const byDivision = new Map<string, TableRow[]>();
+  for (const row of rows.values()) {
+    const division = row.team.division;
+    if (!division) continue;
+    byDivision.set(division, [...(byDivision.get(division) ?? []), row]);
+  }
+
+  const standings: Standing[] = [];
+  for (const [division, divisionRows] of byDivision) {
+    divisionRows.sort(compareRows);
+    divisionRows.forEach((row, index) => {
+      standings.push({
+        // Stable across requests, and distinct across divisions, without a
+        // stored row to take an id from.
+        id: `${division}-${row.team.slug}`,
+        division: division as Division,
+        position: index + 1,
+        teamName: row.team.name,
+        teamSlug: row.team.slug,
+        isHrc: homeClubTeams.has(row.team.slug),
+        played: row.played,
+        won: row.won,
+        drawn: row.drawn,
+        lost: row.lost,
+        setsFor: row.setsFor,
+        setsAgainst: row.setsAgainst,
+        points: row.points,
+        lastSyncedAt: null,
+      });
+    });
+  }
+
+  // The league's own hierarchy, so the page never opens on Division 2.
+  const order = new Map(DIVISION.map((division, index) => [division as string, index]));
+  standings.sort(
+    (a, b) => (order.get(a.division) ?? 99) - (order.get(b.division) ?? 99) || a.position - b.position,
+  );
+  return standings;
 }
 
 export async function getPlayerStats(seasonSlug?: string): Promise<PlayerStat[]> {

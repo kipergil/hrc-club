@@ -65,7 +65,7 @@ export const keys = {
   venues: ["venues"] as const,
   venue: (slug: string) => ["venue", slug] as const,
   teams: (season?: string) => ["teams", season ?? "current"] as const,
-  team: (slug: string) => ["team", slug] as const,
+  team: (slug: string, season?: string) => ["team", slug, season ?? "current"] as const,
   fixtures: (query: string) => ["fixtures", query] as const,
   fixture: (id: string) => ["fixture", id] as const,
   standings: (season?: string) => ["standings", season ?? "current"] as const,
@@ -96,7 +96,8 @@ export const fetchers = {
   venues: () => apiGet<Venue[]>("/api/venues"),
   venue: (slug: string) => apiGet<Venue>(`/api/venues/${slug}`),
   teams: (season?: string) => apiGet<Team[]>(`/api/teams${season ? `?season=${season}` : ""}`),
-  team: (slug: string) => apiGet<TeamDetail>(`/api/teams/${slug}`),
+  team: (slug: string, season?: string) =>
+    apiGet<TeamDetail>(`/api/teams/${slug}${season ? `?season=${season}` : ""}`),
   fixtures: (query: string) => apiGet<Fixture[]>(`/api/fixtures${query ? `?${query}` : ""}`),
   fixture: (id: string) => apiGet<FixtureDetail>(`/api/fixtures/${id}`),
   standings: (season?: string) => apiGet<Standing[]>(`/api/standings${season ? `?season=${season}` : ""}`),
@@ -134,12 +135,15 @@ export const useVenue = (slug: string): UseQueryResult<Venue> =>
   useQuery({ queryKey: keys.venue(slug), queryFn: () => fetchers.venue(slug) });
 export const useTeams = (season?: string): UseQueryResult<Team[]> =>
   useQuery({ queryKey: keys.teams(season), queryFn: () => fetchers.teams(season) });
-export const useTeam = (slug: string): UseQueryResult<TeamDetail> =>
-  useQuery({ queryKey: keys.team(slug), queryFn: () => fetchers.team(slug) });
+export const useTeam = (slug: string, season?: string): UseQueryResult<TeamDetail> =>
+  useQuery({ queryKey: keys.team(slug, season), queryFn: () => fetchers.team(slug, season) });
 export const useFixtures = (query: string): UseQueryResult<Fixture[]> =>
   useQuery({ queryKey: keys.fixtures(query), queryFn: () => fetchers.fixtures(query) });
 export const useFixture = (id: string): UseQueryResult<FixtureDetail> =>
   useQuery({ queryKey: keys.fixture(id), queryFn: () => fetchers.fixture(id) });
+/** Every season the site holds, newest first — what the year filters offer. */
+export const useSeasons = (): UseQueryResult<Season[]> =>
+  useQuery({ queryKey: keys.seasons, queryFn: fetchers.seasons });
 export const useStandings = (season?: string): UseQueryResult<Standing[]> =>
   useQuery({ queryKey: keys.standings(season), queryFn: () => fetchers.standings(season) });
 export const useAverages = (season?: string): UseQueryResult<PlayerStat[]> =>

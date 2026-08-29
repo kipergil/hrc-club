@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "schema:apply": "tsx src/schema/apply.ts",
+    "schema:drop": "tsx src/schema/drop.ts",
     "permissions:apply": "tsx src/permissions/apply.ts",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/content/seed.ts",
     "import:league": "tsx src/content/import-league.ts",
-    "import:content": "tsx src/content/import-league-content.ts"
+    "import:content": "tsx src/content/import-league-content.ts",
+    "import:fixtures": "tsx src/content/import-fixtures.ts"
   },
   "dependencies": {
     "@directus/sdk": "^18.0.3",
