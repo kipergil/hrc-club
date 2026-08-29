@@ -78,9 +78,19 @@ describe("FixtureList", () => {
 });
 
 describe("StandingsTable", () => {
-  it("marks our own rows with a label, not just a background colour", () => {
+  it("marks the home club's rows with a label, not just a background colour", () => {
+    // The tinted row is `bg-brand-soft` and nothing else, so without the
+    // badge this table signals membership by colour alone. It has already
+    // regressed once, when the site was reframed from one club's to the
+    // league's and the label — then hardcoded to "HRC" — was dropped along
+    // with the rest of the club framing.
     render(<StandingsTable standings={[standing()]} />);
-    expect(screen.getAllByText("HRC").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Your club").length).toBeGreaterThan(0);
+  });
+
+  it("leaves every other row unmarked", () => {
+    render(<StandingsTable standings={[standing({ isHrc: false })]} />);
+    expect(screen.queryByText("Your club")).toBeNull();
   });
 
   it("carries a plain-English explanation above the table", () => {

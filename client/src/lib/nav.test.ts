@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isKnownRoute } from "@shared/routes.js";
 import { ALL_LINKS, NAV, findGroup, findLink } from "./nav";
 
 describe("navigation", () => {
@@ -52,6 +53,28 @@ describe("navigation", () => {
   it("has no duplicate destinations", () => {
     const hrefs = ALL_LINKS.map((link) => link.href);
     expect(new Set(hrefs).size).toBe(hrefs.length);
+  });
+
+  /**
+   * The server decides between "the app will render this once it boots" and
+   * "this is a dead link, answer 404" from a list of path segments. A page
+   * added to the menu but not to that list would be served the 404 page,
+   * with a 404 status, while looking perfectly fine in the navigation.
+   */
+  it("has a server-side route entry for every page in the menu", () => {
+    for (const link of ALL_LINKS) {
+      expect(isKnownRoute(link.href), `${link.href} is in the menu but not in KNOWN_ROUTE_SEGMENTS`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("treats a path with no route as unknown", () => {
+    expect(isKnownRoute("/nope")).toBe(false);
+    expect(isKnownRoute("/wp-admin")).toBe(false);
+    // A section the app does route, but deeper than any prerendered page.
+    expect(isKnownRoute("/results/8f2a-not-prerendered")).toBe(true);
+    expect(isKnownRoute("/")).toBe(true);
   });
 
   it("resolves a path to its group for the breadcrumb trail", () => {

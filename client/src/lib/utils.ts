@@ -50,11 +50,6 @@ export function formatDayName(day: string | null | undefined): string {
   return day.charAt(0).toUpperCase() + day.slice(1);
 }
 
-/** Prices are stored in pence; "£4" reads better than "£4.00" when there is no change. */
-export function formatMoney(pence: number): string {
-  const pounds = pence / 100;
-  return Number.isInteger(pounds) ? `£${pounds}` : `£${pounds.toFixed(2)}`;
-}
 
 export function divisionLabel(division: Division | string | null | undefined): string {
   if (!division) return "";

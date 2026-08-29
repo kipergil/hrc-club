@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Hertford &amp; District Table Tennis League">
+  <!--
+    A bat and ball, drawn for 16px rather than for the file browser.
+
+    Everything here is one of three shapes at full contrast: at the size a
+    tab actually renders, gradients and thin strokes turn to grey mush, and
+    the league's readers are the last people who should be asked to squint
+    at a favicon to find their tab.
+
+    The ground is the brand green at its light-theme value, which holds up
+    on both a light and a dark tab strip, so there is no media query and no
+    second file to keep in step.
+  -->
+  <rect width="32" height="32" rx="7" fill="#14584a" />
+  <!-- The blade, angled as a bat is held. -->
+  <ellipse cx="14.5" cy="14" rx="7" ry="8.4" transform="rotate(-32 14.5 14)" fill="#ffffff" />
+  <!-- The handle. -->
+  <rect x="17.4" y="18.6" width="3.4" height="8.6" rx="1.7" transform="rotate(-32 17.4 18.6)" fill="#ffffff" />
+  <!-- The ball, kept clear of the blade so both read as separate shapes. -->
+  <circle cx="24" cy="8.5" r="4.1" fill="#f0b166" />
+</svg>

@@ -1,12 +1,11 @@
-import { useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { CheckCircle2, Mail, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation } from "wouter";
 import { apiPost } from "@shared/api-client.js";
 import { ENQUIRY_TYPE, ENQUIRY_TYPE_LABELS, type EnquiryType } from "@shared/enums.js";
 import { enquiryInputSchema } from "@shared/schema.js";
 import { PageHeader } from "@/components/layout";
-import { Alert, Button, Card } from "@/components/ui";
-import { useSettings } from "@/lib/queries";
-import { cn } from "@/lib/utils";
+import { Alert, Button, ButtonLink, Card, Field } from "@/components/ui";
 
 type Errors = Partial<Record<string, string>>;
 
@@ -16,18 +15,28 @@ type Errors = Partial<Record<string, string>>;
  * honeypot field, a five-an-hour rate limit on the endpoint, and a
  * moderated queue in Directus rather than an inbox.
  *
- * The form itself is deliberately plain — one column, real labels above
- * every field, no placeholder-as-label, and each error message sitting
- * next to the field it belongs to rather than in a summary at the top.
+ * The form is one column at reading width, with real labels above every
+ * field, no placeholder-as-label, and each error message beside the field
+ * it belongs to rather than in a summary at the top. The column is
+ * centred rather than pinned left: at 1280px the old layout put a 480px
+ * form against the left edge of a 1400px page and left the rest blank,
+ * which reads as a page that failed to load rather than one that is
+ * finished.
  */
 export function ContactPage() {
-  const { data: settings } = useSettings();
   const [pathname] = useLocation();
   const [errors, setErrors] = useState<Errors>({});
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const successRef = useRef<HTMLDivElement>(null);
+  const failureRef = useRef<HTMLDivElement>(null);
+
+  // A failure that scrolls off the top of the form is a failure the reader
+  // does not know about; they press the button again and wonder why.
+  useEffect(() => {
+    if (failure) failureRef.current?.focus();
+  }, [failure]);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,116 +91,78 @@ export function ContactPage() {
 
   if (sent) {
     return (
-      <div>
-        <PageHeader title="Thank you" subtitle="Your message is on its way" />
-        <div ref={successRef} tabIndex={-1}>
-          <Alert title="We've got your message.">
-            <p>
-              Someone from the club will read it and reply, usually within a few days. If it’s
-              urgent, come along on a club night — there is always someone there who can help.
-            </p>
-          </Alert>
+      <div className="mx-auto max-w-readable">
+        <div ref={successRef} tabIndex={-1} className="rounded-panel border border-positive/30 bg-positive-soft p-8 text-center">
+          <CheckCircle2 aria-hidden="true" className="mx-auto size-12 text-positive" />
+          <h1 className="mt-4 text-2xl sm:text-3xl">Thank you — that's sent.</h1>
+          <p className="mx-auto mt-3 max-w-prose text-lg">
+            Someone on the committee will read it and reply, usually within a few days.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <ButtonLink href="/">Back to the home page</ButtonLink>
+            <ButtonLink href="/help" variant="secondary">
+              Read the common questions
+            </ButtonLink>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <PageHeader title="Contact us" subtitle="Send us a message" />
-
-      <p className="max-w-prose text-lg">
-        Whether you want to join, ask about coaching for a child, or just find out whether you’d fit
-        in — write to us here and a real person will reply.
-        {settings?.contactEmail ? (
-          <>
-            {" "}
-            You can also email us directly at{" "}
-            <a href={`mailto:${settings.contactEmail}`} className="text-brand underline">
-              {settings.contactEmail}
-            </a>
-            .
-          </>
-        ) : null}
-      </p>
+    <div className="mx-auto max-w-readable">
+      <PageHeader
+        title="Leave feedback"
+        subtitle="A question, a correction, or something that looks wrong on this site — it all comes to the committee."
+      />
 
       {failure ? (
-        <Alert tone="warning" title="That didn't send.">
-          <p>{failure}</p>
-        </Alert>
+        <div ref={failureRef} tabIndex={-1} className="mb-6">
+          <Alert tone="error" title="That didn't send.">
+            <p>{failure}</p>
+          </Alert>
+        </div>
       ) : null}
 
-      <Card className="max-w-prose">
+      <Card>
         <form onSubmit={onSubmit} noValidate className="space-y-6">
+          <Field label="Your name" hint="So we know who we're replying to." error={errors.name} required>
+            {(props) => <input {...props} name="name" type="text" autoComplete="name" />}
+          </Field>
+
           <Field
-            name="name"
-            label="Your name"
-            hint="So we know who we're replying to."
-            error={errors.name}
-            autoComplete="name"
-          />
-          <Field
-            name="email"
             label="Your email address"
             hint="We'll only use it to reply to you."
             error={errors.email}
-            type="email"
-            autoComplete="email"
-          />
+            required
+          >
+            {(props) => <input {...props} name="email" type="email" autoComplete="email" />}
+          </Field>
+
+          <Field label="Your phone number" hint="Only if you'd rather we rang." error={errors.phone}>
+            {(props) => <input {...props} name="phone" type="tel" autoComplete="tel" />}
+          </Field>
+
+          <Field label="What's it about?" error={errors.enquiryType} required>
+            {(props) => (
+              <select {...props} name="enquiryType" defaultValue="general">
+                {ENQUIRY_TYPE.map((value) => (
+                  <option key={value} value={value}>
+                    {ENQUIRY_TYPE_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+
           <Field
-            name="phone"
-            label="Your phone number"
-            hint="Optional — only if you'd rather we rang."
-            error={errors.phone}
-            type="tel"
-            autoComplete="tel"
-            required={false}
-          />
-
-          <div>
-            <label htmlFor="enquiryType" className="block text-lg font-semibold">
-              What's it about?
-            </label>
-            <select
-              id="enquiryType"
-              name="enquiryType"
-              defaultValue="general"
-              className="mt-2 min-h-touch w-full rounded-card border-2 border-line bg-surface px-3 text-base text-ink"
-            >
-              {ENQUIRY_TYPE.map((value) => (
-                <option key={value} value={value}>
-                  {ENQUIRY_TYPE_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="message" className="block text-lg font-semibold">
-              Your message
-            </label>
-            <p id="message-hint" className="text-ink-muted">
-              Tell us a little about yourself — whether you've played before, and what you're looking
-              for.
-            </p>
-            <textarea
-              id="message"
-              name="message"
-              rows={6}
-              required
-              aria-invalid={errors.message ? true : undefined}
-              aria-describedby={cn("message-hint", errors.message && "message-error")}
-              className={cn(
-                "mt-2 w-full rounded-card border-2 bg-surface px-3 py-2 text-base text-ink",
-                errors.message ? "border-negative" : "border-line",
-              )}
-            />
-            {errors.message ? (
-              <p id="message-error" className="mt-1 font-semibold text-negative">
-                {errors.message}
-              </p>
-            ) : null}
-          </div>
+            label="Your message"
+            hint="As much or as little as you like — there's no wrong way to ask."
+            error={errors.message}
+            required
+          >
+            {(props) => <textarea {...props} name="message" rows={6} className={`${props.className} resize-y`} />}
+          </Field>
 
           {/*
             The honeypot. Hidden from sight and from screen readers, and
@@ -203,58 +174,46 @@ export function ContactPage() {
             <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
           </div>
 
-          <Button type="submit" disabled={submitting}>
-            {submitting ? "Sending…" : "Send your message"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-4 border-t border-line pt-6">
+            <Button type="submit" disabled={submitting}>
+              {submitting ? (
+                <>
+                  {/* A spinner *and* the word, because a spinner alone
+                      leaves a reader guessing whether anything happened. */}
+                  <span
+                    aria-hidden="true"
+                    className="size-5 animate-spin rounded-full border-2 border-brand-ink/30 border-t-brand-ink"
+                  />
+                  Sending…
+                </>
+              ) : (
+                <>
+                  <Send aria-hidden="true" className="size-5" />
+                  Send your message
+                </>
+              )}
+            </Button>
+            <p className="text-ink-muted">We reply to every message.</p>
+          </div>
         </form>
       </Card>
-    </div>
-  );
-}
 
-function Field({
-  name,
-  label,
-  hint,
-  error,
-  type = "text",
-  autoComplete,
-  required = true,
-}: {
-  name: string;
-  label: string;
-  hint: string;
-  error?: string;
-  type?: string;
-  autoComplete?: string;
-  required?: boolean;
-}) {
-  return (
-    <div>
-      <label htmlFor={name} className="block text-lg font-semibold">
-        {label}
-      </label>
-      <p id={`${name}-hint`} className="text-ink-muted">
-        {hint}
-      </p>
-      <input
-        id={name}
-        name={name}
-        type={type}
-        autoComplete={autoComplete}
-        required={required}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={cn(`${name}-hint`, error && `${name}-error`)}
-        className={cn(
-          "mt-2 min-h-touch w-full rounded-card border-2 bg-surface px-3 text-base text-ink",
-          error ? "border-negative" : "border-line",
-        )}
-      />
-      {error ? (
-        <p id={`${name}-error`} className="mt-1 font-semibold text-negative">
-          {error}
+      <div className="mt-8 rounded-panel border border-line bg-surface-sunken p-5">
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <Mail aria-hidden="true" className="size-5 text-ink-muted" />
+          Would rather not use a form?
+        </h2>
+        <p className="mt-1.5 text-ink-muted">
+          Every committee post is listed on the{" "}
+          <Link href="/committee" className="link font-semibold">
+            who's who page
+          </Link>
+          , and many questions are already answered under{" "}
+          <Link href="/help" className="link font-semibold">
+            how do I…?
+          </Link>
         </p>
-      ) : null}
+      </div>
     </div>
   );
 }

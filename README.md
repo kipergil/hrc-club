@@ -15,7 +15,7 @@ npm install
 cp .env.example .env        # DIRECTUS_URL + DIRECTUS_SERVICE_TOKEN
 npm run dev                 # API on :5000
 npx vite                    # client with hot reload, proxying /api
-npm test                    # 32 tests
+npm test                    # 112 tests
 npm run build               # client, then prerender, then server bundle
 ```
 
@@ -23,7 +23,7 @@ npm run build               # client, then prerender, then server bundle
 
 ## What is built
 
-36 routes across the three tiers, following the feature set of the league site this club belongs to:
+35 routes across the three tiers, following the feature set of the league site this club belongs to:
 
 | Area | Pages |
 |---|---|
@@ -33,9 +33,27 @@ npm run build               # client, then prerender, then server bundle
 | **More** | Special notices, newsletters, the roll of honour and hall of fame, forms and documents, the committee, about the league, our links, how do I…?, feedback |
 | **Policies** | Privacy, accessibility statement, safeguarding |
 
-Accessibility is built in rather than retrofitted: 20px base type in `rem` with an A / A+ / A++ control, AAA contrast in light and dark, 48px targets, no hover-dependent behaviour, a labelled **Menu** button on mobile, wide tables reflowing to cards below 640px, colour never the only signal, and print stylesheets. See [`client/src/index.css`](client/src/index.css) and [`tailwind.config.ts`](tailwind.config.ts), where those rules live as tokens.
-
 Not yet built: the league data sync (fixtures and results are entered by hand until then), the members' area, and the axe-core CI gate. See the implementation plan.
+
+## Design
+
+The look is warm paper, ink-first type, and one evergreen used sparingly — as a tint, a hairline or a single filled control, never as a slab.
+
+Accessibility is built in rather than retrofitted, and it lives in the tokens rather than in a checklist: 20px base type in `rem` with an A / A+ / A++ control, AAA contrast in light and dark, 48px targets, no hover-dependent behaviour, a labelled **Menu** button on mobile, wide tables reflowing to cards below 640px, colour never the only signal, and print stylesheets.
+
+| Path | What it is |
+|---|---|
+| [`client/src/index.css`](client/src/index.css) | The palette, in both themes, plus the base type and the link, focus and skeleton treatments |
+| [`tailwind.config.ts`](tailwind.config.ts) | The type scale, spacing, radii and elevation built on those tokens |
+| [`client/src/components/ui.tsx`](client/src/components/ui.tsx) | The whole component vocabulary — buttons, cards, badges, alerts, tables, disclosure, fields, search, filters, empty and loading states |
+| [`scripts/contrast.test.ts`](scripts/contrast.test.ts) | Computes every contrast ratio from the CSS and fails the build if one drops below its requirement |
+
+Two rules are enforced by tests rather than by care, because both have already been broken once:
+
+- **Every contrast ratio is computed, not asserted in a comment.** A redesign is exactly the moment a colour gets nudged for looks while the comment above it still claims 7.4:1.
+- **Colour is never the only signal.** The league table tints the home club's row *and* labels it; the label was dropped once during a reframe and the tint quietly became the only marker.
+
+Palette tokens are stored as RGB channel triplets rather than hex, so Tailwind's opacity modifiers (`border-accent/30`) resolve. Written as hex they do not merely fail to apply — the class is never generated at all, and the border silently falls back to `currentColor`.
 
 ## Documents
 
@@ -45,7 +63,7 @@ Not yet built: the league data sync (fixtures and results are entered by hand un
 |---|---|
 | [docs/club/00-scope-and-architecture.md](docs/club/00-scope-and-architecture.md) | What the club site is and is not, the technology stack, and how the league PRD's static/dynamic/interactive tiers are delivered in a Vite + Express stack |
 | [docs/club/01-content-inventory.md](docs/club/01-content-inventory.md) | Every route, its tier, its data source, its rebuild trigger; the menu structure; the API surface; the content needed before launch |
-| [docs/club/02-directus-data-model.md](docs/club/02-directus-data-model.md) | The 24 Directus collections in full, generated from the live instance, plus the permission model |
+| [docs/club/02-directus-data-model.md](docs/club/02-directus-data-model.md) | The 25 Directus collections in full, generated from the live instance, plus the permission model |
 | [docs/club/03-implementation-plan.md](docs/club/03-implementation-plan.md) | Seven phases over ~11 weeks, with a leaner five-week alternative and the open questions |
 
 ### The league rebuild — inherited context
@@ -76,11 +94,13 @@ npm run import:league     # all ten clubs, their venues, teams and squads
 npm run import:content    # the league's description, committee, documents, links and honours
 ```
 
-**The seeded content is placeholder.** It exists so the layout and the empty states can be judged against something realistic. Replace it in the Directus admin panel before the site goes anywhere near the public — the club's real name, address, fees, committee and history are things only the club can supply.
+**The seeded content is placeholder, and the site knows it.** It exists so the layouts and the empty states can be judged against something realistic. Every seeded body begins with the word `PLACEHOLDER`, and `server/storage.ts` refuses to serve any text that does — an article or event whose body is placeholder is dropped from the API entirely, and a page's body comes back null so the reader is told it has not been written yet.
+
+That mark is therefore load-bearing, not a note to self: keep it at the start of anything not meant for the public, and remove it in the Directus admin panel when the real words go in.
 
 | Path | What it is |
 |---|---|
-| [`directus/src/schema/definitions.ts`](directus/src/schema/definitions.ts) | The 24 collections — the source of truth for the data model |
+| [`directus/src/schema/definitions.ts`](directus/src/schema/definitions.ts) | The 25 collections — the source of truth for the data model |
 | [`directus/src/schema/apply.ts`](directus/src/schema/apply.ts) | Applies them, idempotently, with the prefix guard |
 | [`directus/src/permissions/definitions.ts`](directus/src/permissions/definitions.ts) | The `HRC Club Service` policy — what the server's token may read and write |
 | [`directus/src/content/seed.ts`](directus/src/content/seed.ts) | Placeholder starter content, idempotent |

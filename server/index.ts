@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { createApp } from "./app.js";
 import { env } from "./lib/env.js";
+// Relative, never through the `@shared` alias — see the note in storage.ts.
+import { isKnownRoute } from "../shared/routes.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -39,9 +41,24 @@ async function main(): Promise<void> {
         }
       }
 
-      // Anything else — a match page, an unknown path — is handled by the
-      // app shell, client-side.
-      res.sendFile(path.join(publicDir, "index.html"));
+      // A route the app knows but the build did not prerender — a match
+      // scorecard, say — is handled by the app shell, client-side.
+      if (isKnownRoute(req.path)) {
+        res.sendFile(path.join(publicDir, "index.html"));
+        return;
+      }
+
+      /*
+       * Anything else is a dead link, and is answered as one.
+       *
+       * Serving the app shell here meant serving the *home page's*
+       * prerendered markup with a 200: the reader saw the home page for a
+       * moment before React discovered the mismatch, discarded the
+       * server's HTML and rendered the 404 itself, and a crawler was told
+       * the missing page was fine.
+       */
+      const notFound = path.join(publicDir, "404.html");
+      res.status(404).sendFile(existsSync(notFound) ? notFound : path.join(publicDir, "index.html"));
     });
   }
 

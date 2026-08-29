@@ -70,12 +70,6 @@ export function registerRoutes(app: Express): void {
     }),
   );
 
-  app.get(
-    "/api/membership-options",
-    handler(async (_req, res) => {
-      ok(res, await storage.getMembershipOptions(), CACHE.static);
-    }),
-  );
 
   app.get(
     "/api/committee",
@@ -91,12 +85,6 @@ export function registerRoutes(app: Express): void {
     }),
   );
 
-  app.get(
-    "/api/sponsors",
-    handler(async (_req, res) => {
-      ok(res, await storage.getSponsors(), CACHE.static);
-    }),
-  );
 
   app.get(
     "/api/links",

@@ -280,6 +280,8 @@ export interface ClubDocument {
   description: string | null;
   documentDate: string | null;
   fileId: string | null;
+  /** Where the file still lives, when there is no copy in Directus. */
+  externalUrl: string | null;
 }
 
 export interface Honour {
@@ -308,6 +310,8 @@ export interface MembershipOption {
 export interface CommitteeRole {
   id: string;
   roleTitle: string;
+  /** Who holds the post when they are not a registered player. */
+  holderName: string | null;
   publicEmail: string | null;
   responsibilities: string | null;
   member: MemberSummary | null;
@@ -346,4 +350,12 @@ export interface HomePayload {
   events: ClubEvent[];
   sessions: ClubSession[];
   standings: Standing[];
+  /** Counted from the data, never written down — see `getLeagueCounts`. */
+  counts: {
+    clubs: number;
+    teams: number;
+    divisions: number;
+    /** The earliest year in the roll of honour, or null if there is none. */
+    honoursFrom: number | null;
+  };
 }

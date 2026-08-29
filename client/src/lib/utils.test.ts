@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, formatTime, resultLabel } from "./utils";
+import { formatTime, resultLabel } from "./utils";
 
 describe("formatTime", () => {
   it("writes a club night the way a noticeboard would", () => {
@@ -16,17 +16,6 @@ describe("formatTime", () => {
   it("returns nothing for a missing time rather than a stray dash", () => {
     expect(formatTime(null)).toBe("");
     expect(formatTime(undefined)).toBe("");
-  });
-});
-
-describe("formatMoney", () => {
-  it("drops the pence when there are none", () => {
-    expect(formatMoney(600)).toBe("£6");
-    expect(formatMoney(6000)).toBe("£60");
-  });
-
-  it("keeps them when there are", () => {
-    expect(formatMoney(650)).toBe("£6.50");
   });
 });
 
