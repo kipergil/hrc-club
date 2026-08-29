@@ -9,6 +9,13 @@ import { env } from "./env.js";
  * hands over directly, so these headers never touch it. The matching
  * policy for pages lives in `vercel.json`'s `headers` block, and the two
  * are meant to stay in step: change one, change the other.
+ *
+ * That note used to live in `vercel.json` itself, as a `"//"` key beside
+ * the block it described. Vercel validates that file against a schema that
+ * forbids unknown properties, so the comment did not document the
+ * deployment — it broke it, and every build failed on the day it merged.
+ * Deployment config takes its explanations here, in a file that has
+ * somewhere to put them.
  */
 export function securityHeaders(): RequestHandler {
   return helmet({

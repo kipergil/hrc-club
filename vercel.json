@@ -8,7 +8,6 @@
   ],
   "headers": [
     {
-      "//": "Helmet protects only what Express serves, which on Vercel is /api/* alone — every HTML page is a prerendered static file handed straight to the reader by the CDN. Without this block those pages carry no CSP at all, which is the opposite of what the code implies. The policy below mirrors server/lib/security.ts; the two are meant to stay in step.",
       "source": "/(.*)",
       "headers": [
         {
