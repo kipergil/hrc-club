@@ -1,22 +1,30 @@
-import { Menu, Moon, Printer, Sun, X } from "lucide-react";
+import { ChevronRight, Megaphone, Menu, Moon, Printer, Sun, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { NAV, findGroup, findLink } from "@/lib/nav";
 import { useSettings } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { Alert, Prose } from "@/components/ui";
+import { Prose } from "@/components/ui";
 
+// ---------------------------------------------------------------------------
+// Reader preferences
 // ---------------------------------------------------------------------------
 
 /**
- * A / A+ / A++ in the header, persisted to localStorage.
+ * A / A+ / A++, persisted to localStorage.
  *
  * This exists because older readers frequently do not know browser zoom
  * exists, and a site for them should not assume they do. It scales the root
  * font size, so everything sized in rem — which is everything — grows with
  * it, rather than only the body copy.
+ *
+ * It used to sit in the top-right of every page as three large buttons,
+ * the first of them filled solid brand-green: the loudest element on a
+ * page whose actual subject is a fixture list. It is a preference, set
+ * once, so it now reads as one — a small segmented control, and on a phone
+ * it lives inside the menu rather than competing with the masthead.
  */
-function TextSizeControl() {
+function TextSizeControl({ className }: { className?: string }) {
   const [scale, setScale] = useState("1");
 
   useEffect(() => {
@@ -45,19 +53,22 @@ function TextSizeControl() {
   ];
 
   return (
-    <div className="flex items-center gap-1" role="group" aria-label="Text size">
+    <div
+      role="group"
+      aria-label="Text size"
+      className={cn("inline-flex items-center rounded-card border border-line bg-surface p-0.5", className)}
+    >
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           onClick={() => apply(option.value)}
           aria-pressed={scale === option.value}
-          title={option.description}
           className={cn(
-            "min-h-touch min-w-touch rounded-card border-2 px-3 font-bold",
+            "flex min-h-touch min-w-touch items-center justify-center rounded-[0.55rem] px-3 font-semibold transition-colors",
             scale === option.value
-              ? "border-brand bg-brand text-brand-ink"
-              : "border-line bg-surface text-ink hover:border-brand",
+              ? "bg-brand-soft text-brand"
+              : "text-ink-muted hover:bg-surface-sunken hover:text-ink",
           )}
         >
           <span aria-hidden="true">{option.label}</span>
@@ -68,7 +79,7 @@ function TextSizeControl() {
   );
 }
 
-function ThemeToggle() {
+function ThemeToggle({ className }: { className?: string }) {
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
@@ -100,37 +111,56 @@ function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      className="flex min-h-touch min-w-touch items-center justify-center rounded-card border-2 border-line bg-surface text-ink hover:border-brand"
+      className={cn(
+        "flex min-h-touch min-w-touch items-center justify-center rounded-card border border-line bg-surface text-ink-muted transition-colors hover:border-line-strong hover:text-ink",
+        className,
+      )}
     >
-      {dark ? <Sun aria-hidden="true" className="size-6" /> : <Moon aria-hidden="true" className="size-6" />}
+      {dark ? (
+        <Sun aria-hidden="true" className="size-5" />
+      ) : (
+        <Moon aria-hidden="true" className="size-5" />
+      )}
       <span className="sr-only">{dark ? "Switch to light colours" : "Switch to dark colours"}</span>
     </button>
   );
 }
 
 // ---------------------------------------------------------------------------
+// Navigation
+// ---------------------------------------------------------------------------
 
+/**
+ * The active entry is marked by a rule beneath it rather than a filled
+ * green pill. At nav size the pill was a heavy block of brand colour
+ * sitting directly under the masthead, and with five of them in a row the
+ * header read as a toolbar rather than a set of links.
+ */
 function DesktopNav({ pathname }: { pathname: string }) {
   const activeGroup = findGroup(pathname);
+
   return (
     <nav aria-label="Main" className="hidden lg:block">
-      <ul className="flex gap-1">
-        {NAV.map((group) => (
-          <li key={group.label}>
-            <Link
-              href={group.href}
-              aria-current={activeGroup?.label === group.label ? "page" : undefined}
-              className={cn(
-                "flex min-h-touch items-center rounded-card px-4 text-lg font-semibold no-underline",
-                activeGroup?.label === group.label
-                  ? "bg-brand text-brand-ink"
-                  : "text-ink hover:bg-brand-soft hover:text-brand",
-              )}
-            >
-              {group.label}
-            </Link>
-          </li>
-        ))}
+      <ul className="-mb-px flex gap-1">
+        {NAV.map((group) => {
+          const active = activeGroup?.label === group.label;
+          return (
+            <li key={group.label}>
+              <Link
+                href={group.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex min-h-touch items-center border-b-2 px-4 text-lg font-semibold no-underline transition-colors",
+                  active
+                    ? "border-brand text-brand"
+                    : "border-transparent text-ink hover:border-line-strong hover:text-brand",
+                )}
+              >
+                {group.label}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );
@@ -142,6 +172,11 @@ function DesktopNav({ pathname }: { pathname: string }) {
  * could not be opened by touch at all. Everything inside is a plain link
  * list, so the whole map is visible at once rather than hidden behind
  * nested submenus.
+ *
+ * The display preferences live at the bottom of this panel on a phone.
+ * They were previously four large buttons above the fold, which on a
+ * 390px screen meant the first thing a reader met was a row of controls
+ * for adjusting a page they had not yet seen.
  */
 function MobileNav({ pathname }: { pathname: string }) {
   const [open, setOpen] = useState(false);
@@ -150,6 +185,17 @@ function MobileNav({ pathname }: { pathname: string }) {
     setOpen(false);
   }, [pathname]);
 
+  // Escape closes it, because a panel that covers the page needs a way out
+  // that is not "find the button again".
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   return (
     <div className="lg:hidden">
       <button
@@ -157,34 +203,58 @@ function MobileNav({ pathname }: { pathname: string }) {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-controls="mobile-menu"
-        className="flex min-h-touch items-center gap-2 rounded-card border-2 border-brand bg-surface px-4 text-lg font-bold text-brand"
+        className="flex min-h-touch items-center gap-2 rounded-card border border-line-strong bg-surface px-4 text-lg font-semibold text-ink shadow-raised transition-colors hover:border-brand hover:text-brand"
       >
-        {open ? <X aria-hidden="true" className="size-6" /> : <Menu aria-hidden="true" className="size-6" />}
+        {open ? (
+          <X aria-hidden="true" className="size-6" />
+        ) : (
+          <Menu aria-hidden="true" className="size-6" />
+        )}
         Menu
       </button>
 
       {open ? (
-        <div id="mobile-menu" className="mt-4 rounded-card border border-line bg-surface p-2">
-          {NAV.map((group) => (
-            <section key={group.label} className="p-2">
-              <h2 className="px-2 py-1 text-lg font-bold text-ink-muted">{group.label}</h2>
-              <ul>
-                {group.links.map((link) => (
-                  <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      className="block min-h-touch rounded-card px-2 py-3 no-underline hover:bg-brand-soft"
-                    >
-                      <span className="block text-lg font-semibold text-brand underline underline-offset-4">
-                        {link.title}
-                      </span>
-                      <span className="block text-ink-muted">{link.subtitle}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+        <div
+          id="mobile-menu"
+          className="absolute inset-x-0 z-40 mt-3 animate-fade-in-up border-y border-line bg-surface shadow-lifted"
+        >
+          <div className="max-h-[70vh] overflow-y-auto px-4 py-2">
+            {NAV.map((group) => (
+              <section key={group.label} className="border-b border-line py-3 last:border-b-0">
+                <h2 className="px-2 py-1 font-semibold uppercase tracking-wide text-ink-muted">
+                  {group.label}
+                </h2>
+                <ul>
+                  {group.links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        aria-current={link.href === pathname ? "page" : undefined}
+                        className={cn(
+                          "flex min-h-touch items-center justify-between gap-3 rounded-card px-2 py-2.5 no-underline transition-colors hover:bg-brand-soft",
+                          link.href === pathname && "bg-brand-soft",
+                        )}
+                      >
+                        <span>
+                          <span className="block text-lg font-semibold text-brand">{link.title}</span>
+                          <span className="block text-ink-muted">{link.subtitle}</span>
+                        </span>
+                        <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-ink-muted" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface-sunken px-4 py-3">
+            <span className="font-semibold text-ink">Display</span>
+            <div className="flex items-center gap-2">
+              <TextSizeControl />
+              <ThemeToggle />
+            </div>
+          </div>
         </div>
       ) : null}
     </div>
@@ -192,31 +262,45 @@ function MobileNav({ pathname }: { pathname: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Header and footer
+// ---------------------------------------------------------------------------
 
 function Header({ pathname }: { pathname: string }) {
   const { data: settings } = useSettings();
 
   return (
-    <header className="border-b-4 border-brand bg-surface no-print">
-      <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-4 px-4 py-4">
-        <Link href="/" className="no-underline">
-          <span className="block text-2xl font-bold text-brand">
-            {settings?.clubName ?? "HRC Table Tennis Club"}
-          </span>
-          {settings?.strapline ? (
-            <span className="block text-ink-muted">{settings.strapline}</span>
-          ) : null}
-        </Link>
+    <header className="relative z-40 border-b border-line bg-surface no-print">
+      <div className="mx-auto max-w-page px-4">
+        <div className="flex items-center justify-between gap-4 py-4">
+          <Link href="/" className="group min-w-0 no-underline">
+            {/*
+              The short name on a phone, the full name from 640px up.
+              Truncating the full one instead rendered the masthead as
+              "Hertford …" on a 390px screen — a site whose own name is
+              cut off before the first word of it that identifies anything.
+            */}
+            <span className="block text-xl font-semibold tracking-tight text-ink transition-colors group-hover:text-brand sm:hidden">
+              {settings?.shortName ?? settings?.clubName ?? "Herts TTL"}
+            </span>
+            <span className="hidden text-2xl font-semibold tracking-tight text-ink transition-colors group-hover:text-brand sm:block">
+              {settings?.clubName ?? "Hertford & District Table Tennis League"}
+            </span>
+            {settings?.strapline ? (
+              <span className="mt-0.5 hidden truncate text-ink-muted sm:block">
+                {settings.strapline}
+              </span>
+            ) : null}
+          </Link>
 
-        <div className="flex items-center gap-2">
-          <TextSizeControl />
-          <ThemeToggle />
+          <div className="flex shrink-0 items-center gap-2">
+            {/* On a phone these live in the menu instead. */}
+            <TextSizeControl className="hidden lg:inline-flex" />
+            <ThemeToggle className="hidden lg:flex" />
+            <MobileNav pathname={pathname} />
+          </div>
         </div>
 
-        <div className="w-full lg:w-auto">
-          <DesktopNav pathname={pathname} />
-          <MobileNav pathname={pathname} />
-        </div>
+        <DesktopNav pathname={pathname} />
       </div>
     </header>
   );
@@ -226,17 +310,22 @@ function Footer() {
   const { data: settings } = useSettings();
   const year = new Date().getFullYear();
 
+  // "Home" is a single-link group in the main nav, which as a footer column
+  // was one heading above one link repeating it. The sitemap here shows the
+  // four groups that actually have somewhere to go.
+  const columns = NAV.filter((group) => group.links.length > 1);
+
   return (
-    <footer className="mt-16 border-t-4 border-brand bg-surface no-print">
-      <div className="mx-auto max-w-page px-4 py-10">
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-5">
-          {NAV.map((group) => (
+    <footer className="mt-20 border-t border-line bg-surface no-print">
+      <div className="mx-auto max-w-page px-4 py-12">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {columns.map((group) => (
             <nav key={group.label} aria-label={group.label}>
-              <h2 className="text-lg font-bold text-ink">{group.label}</h2>
-              <ul className="mt-2 space-y-1">
+              <h2 className="font-semibold uppercase tracking-wide text-ink-muted">{group.label}</h2>
+              <ul className="mt-3 space-y-2">
                 {group.links.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href} className="text-brand underline underline-offset-4">
+                    <Link href={link.href} className="link">
                       {link.title}
                     </Link>
                   </li>
@@ -246,37 +335,161 @@ function Footer() {
           ))}
         </div>
 
-        <div className="mt-10 border-t border-line pt-6 text-ink-muted">
+        <div className="mt-10 flex flex-col gap-3 border-t border-line pt-6 text-ink-muted sm:flex-row sm:items-center sm:justify-between">
           <p>
-            © {year} {settings?.clubName ?? "HRC Table Tennis Club"}
+            © {year} {settings?.clubName ?? "Hertford & District Table Tennis League"}
             {settings?.foundedYear ? ` · Founded ${settings.foundedYear}` : null}
           </p>
-          {settings?.contactEmail ? (
-            <p className="mt-1">
-              <a href={`mailto:${settings.contactEmail}`} className="text-brand underline">
-                {settings.contactEmail}
-              </a>
-            </p>
-          ) : null}
-          <p className="mt-3">
-            <Link href="/help" className="text-brand underline underline-offset-4">
-              Help with this page
-            </Link>
-            {settings?.leagueUrl ? (
-              <>
-                {" · "}
-                <a href={settings.leagueUrl} className="text-brand underline underline-offset-4">
-                  Hertford &amp; District Table Tennis League
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <li>
+              <Link href="/accessibility" className="link">
+                Accessibility
+              </Link>
+            </li>
+            <li>
+              <Link href="/privacy" className="link">
+                Privacy
+              </Link>
+            </li>
+            <li>
+              <Link href="/help" className="link">
+                Help with this page
+              </Link>
+            </li>
+            {settings?.contactEmail ? (
+              <li>
+                <a href={`mailto:${settings.contactEmail}`} className="link">
+                  {settings.contactEmail}
                 </a>
-              </>
+              </li>
             ) : null}
-          </p>
+          </ul>
         </div>
       </div>
     </footer>
   );
 }
 
+// ---------------------------------------------------------------------------
+// The league notice
+// ---------------------------------------------------------------------------
+
+/**
+ * A stable key for one particular announcement.
+ *
+ * Dismissal has to be per-announcement, not per-site: a reader who closes
+ * the AGM notice should not thereby switch off the notice telling them
+ * next week's fixtures have moved. Hashing the text means a new
+ * announcement is a new key, and reappears.
+ */
+function announcementKey(text: string): string {
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (hash * 31 + text.charCodeAt(index)) | 0;
+  }
+  return `hrc-notice-${hash}`;
+}
+
+/**
+ * The league's standing notice.
+ *
+ * This was the site's single worst piece of UX. It rendered at full length
+ * on *every* page — five lines of AGM detail and a seasonal welcome —
+ * above the breadcrumbs, the page title and the content. On a 1280px
+ * screen it filled the first viewport; on a phone it filled two. Someone
+ * looking up a fixture met the AGM date first, on every page, every time,
+ * with no way to put it away.
+ *
+ * It is now one line with the notice's first sentence, expandable in place
+ * for the rest, and dismissible for good. It stays visually distinct — it
+ * is the one thing on the site the committee can shout with — but it costs
+ * a strip rather than a screen.
+ */
+function LeagueNotice({ announcement }: { announcement: string }) {
+  const storageKey = announcementKey(announcement);
+  const [dismissed, setDismissed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    try {
+      setDismissed(localStorage.getItem(storageKey) === "dismissed");
+    } catch {
+      // Site data blocked; the notice simply stays put, which is the safe
+      // side to fail on for something the committee wants read.
+    }
+  }, [storageKey]);
+
+  if (dismissed) return null;
+
+  // The first paragraph is the headline; anything after it is detail.
+  const [headline, ...rest] = announcement.split(/\n{2,}/).filter(Boolean);
+  const hasMore = rest.length > 0;
+
+  function dismiss() {
+    setDismissed(true);
+    try {
+      localStorage.setItem(storageKey, "dismissed");
+    } catch {
+      // Dismissing for this page view only is still better than not at all.
+    }
+  }
+
+  return (
+    <div className="border-b border-accent/25 bg-accent-soft no-print">
+      <div className="mx-auto flex max-w-page items-start gap-3 px-4 py-3">
+        <Megaphone aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-accent" />
+
+        <div className="min-w-0 flex-1">
+          {/*
+            The label runs into the notice rather than sitting on its own
+            line. This strip appears above every page on the site, so
+            thirty-odd pixels of heading is thirty-odd pixels taken off
+            every page.
+          */}
+          <div className="max-w-readable text-ink">
+            {expanded ? (
+              <>
+                <p className="font-semibold text-accent">League notice</p>
+                <Prose markdown={announcement} className="mt-0.5 max-w-readable" />
+              </>
+            ) : (
+              <p>
+                <span className="whitespace-nowrap font-semibold text-accent">League notice</span>
+                <span aria-hidden="true" className="mx-2 text-accent/50">
+                  ·
+                </span>
+                {headline}
+              </p>
+            )}
+          </div>
+
+          {hasMore ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              aria-expanded={expanded}
+              className="inline-flex min-h-touch items-center font-semibold text-accent underline underline-offset-4"
+            >
+              {expanded ? "Show less" : "Read the full notice"}
+            </button>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          onClick={dismiss}
+          className="flex size-11 shrink-0 items-center justify-center rounded-card text-accent transition-colors hover:bg-accent/10"
+        >
+          <X aria-hidden="true" className="size-5" />
+          <span className="sr-only">Dismiss this notice</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page furniture
 // ---------------------------------------------------------------------------
 
 function Breadcrumbs({ pathname }: { pathname: string }) {
@@ -285,24 +498,24 @@ function Breadcrumbs({ pathname }: { pathname: string }) {
   const link = findLink(pathname);
 
   return (
-    <nav aria-label="Breadcrumb" className="mb-4 no-print">
-      <ol className="flex flex-wrap items-center gap-2 text-ink-muted">
+    <nav aria-label="Breadcrumb" className="mb-5 no-print">
+      <ol className="flex flex-wrap items-center gap-1.5 text-ink-muted">
         <li>
-          <Link href="/" className="text-brand underline underline-offset-4">
+          <Link href="/" className="link">
             Home
           </Link>
         </li>
         {group && group.label !== "Home" ? (
-          <li className="flex items-center gap-2">
-            <span aria-hidden="true">›</span>
-            <Link href={group.href} className="text-brand underline underline-offset-4">
+          <li className="flex items-center gap-1.5">
+            <ChevronRight aria-hidden="true" className="size-4" />
+            <Link href={group.href} className="link">
               {group.label}
             </Link>
           </li>
         ) : null}
         {link && link.href !== group?.href ? (
-          <li className="flex items-center gap-2">
-            <span aria-hidden="true">›</span>
+          <li className="flex items-center gap-1.5">
+            <ChevronRight aria-hidden="true" className="size-4" />
             <span aria-current="page">{link.title}</span>
           </li>
         ) : null}
@@ -315,21 +528,31 @@ function Breadcrumbs({ pathname }: { pathname: string }) {
  * Every page title carries its plain-English subtitle beneath it. The
  * subtitle is a required prop for the same reason `TableNote` is: the rule
  * only holds if it is impossible to skip.
+ *
+ * `actions` sit beside the title on a wide screen rather than beneath it,
+ * so a print button no longer pushes the page's first sentence down.
  */
 export function PageHeader({
   title,
   subtitle,
+  actions,
   children,
 }: {
   title: string;
   subtitle: string;
+  actions?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <div className="mb-8">
-      <h1 className="text-3xl">{title}</h1>
-      <p className="mt-1 max-w-prose text-lg text-ink-muted">{subtitle}</p>
-      {children ? <div className="mt-4">{children}</div> : null}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl">{title}</h1>
+          <p className="mt-1.5 max-w-readable text-lg text-ink-muted">{subtitle}</p>
+        </div>
+        {actions ? <div className="flex shrink-0 flex-wrap gap-2 no-print">{actions}</div> : null}
+      </div>
+      {children ? <div className="mt-5">{children}</div> : null}
     </div>
   );
 }
@@ -340,7 +563,7 @@ export function PrintButton({ label = "Print this page" }: { label?: string }) {
     <button
       type="button"
       onClick={() => window.print()}
-      className="inline-flex min-h-touch items-center gap-2 rounded-card border-2 border-line bg-surface px-4 font-semibold text-ink hover:border-brand no-print"
+      className="inline-flex min-h-touch items-center gap-2 rounded-card border border-line-strong bg-surface px-4 font-semibold text-ink shadow-raised transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand no-print"
     >
       <Printer aria-hidden="true" className="size-5" />
       {label}
@@ -360,28 +583,11 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <Header pathname={pathname} />
 
-      {settings?.announcement ? (
-        <div className="mx-auto w-full max-w-page px-4 pt-6">
-          <Alert tone="warning" title="League notice">
-            <Prose markdown={settings.announcement} />
-          </Alert>
-        </div>
-      ) : null}
+      {settings?.announcement ? <LeagueNotice announcement={settings.announcement} /> : null}
 
       <main id="main" className="mx-auto w-full max-w-page flex-1 px-4 py-8">
         <Breadcrumbs pathname={pathname} />
         {children}
-
-        {pathname !== "/" ? (
-          <p className="mt-12 no-print">
-            <Link
-              href="/"
-              className="inline-flex min-h-touch items-center rounded-card border-2 border-brand px-5 font-semibold text-brand no-underline hover:bg-brand-soft"
-            >
-              ← Back to home
-            </Link>
-          </p>
-        ) : null}
       </main>
 
       <Footer />

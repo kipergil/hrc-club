@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import type { Fixture, PlayerStat, Standing } from "@shared/types.js";
 import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
-import { Badge, Card, Empty, TableNote, TableScroller, Td, Th } from "@/components/ui";
+import { Badge, Card, Empty, TableNote, TableScroller, Td, Th, Tr } from "@/components/ui";
 import { cn, divisionLabel, formatDateShort, formatTime, resultLabel } from "@/lib/utils";
 
 /**
@@ -29,7 +29,7 @@ function ResultBadge({ fixture }: { fixture: Fixture }) {
 function ScoreText({ fixture }: { fixture: Fixture }) {
   if (fixture.hrcScore === null || fixture.opponentScore === null) return <span>—</span>;
   return (
-    <span className="tabular font-bold">
+    <span className="tabular text-lg font-semibold">
       {fixture.hrcScore}–{fixture.opponentScore}
     </span>
   );
@@ -72,11 +72,11 @@ export function FixtureList({
           </thead>
           <tbody>
             {fixtures.map((fixture) => (
-              <tr key={fixture.id}>
+              <Tr key={fixture.id}>
                 <Td className="whitespace-nowrap">{formatDateShort(fixture.playedOn)}</Td>
                 {showTeam ? (
-                  <Td className="whitespace-nowrap">
-                    <Link href={`/teams/${fixture.teamSlug}`} className="text-brand underline">
+                  <Td className="whitespace-nowrap font-semibold">
+                    <Link href={`/teams/${fixture.teamSlug}`} className="link">
                       {fixture.teamName}
                     </Link>
                   </Td>
@@ -89,12 +89,12 @@ export function FixtureList({
                     </span>
                   ) : null}
                 </Td>
-                <Td>
+                <Td className="text-ink-muted">
                   <VenueWord fixture={fixture} />
                 </Td>
                 {showResult ? (
                   <Td>
-                    <Link href={`/results/${fixture.id}`} className="text-brand underline">
+                    <Link href={`/results/${fixture.id}`} className="link">
                       <ScoreText fixture={fixture} />
                     </Link>
                   </Td>
@@ -103,10 +103,10 @@ export function FixtureList({
                   {showResult ? (
                     <ResultBadge fixture={fixture} />
                   ) : (
-                    (formatTime(fixture.startTime) || "—")
+                    <span className="tabular">{formatTime(fixture.startTime) || "—"}</span>
                   )}
                 </Td>
-              </tr>
+              </Tr>
             ))}
           </tbody>
         </TableScroller>
@@ -116,9 +116,10 @@ export function FixtureList({
         {fixtures.map((fixture) => (
           <li key={fixture.id}>
             <Card>
-              <p className="font-bold">{formatDateShort(fixture.playedOn)}</p>
+              <p className="font-semibold text-ink-muted">{formatDateShort(fixture.playedOn)}</p>
               <p className="mt-1 text-lg">
-                {showTeam ? `${fixture.teamName} ` : ""}v {fixture.opponentName}
+                {showTeam ? <span className="font-semibold">{fixture.teamName} </span> : null}v{" "}
+                {fixture.opponentName}
               </p>
               <p className="mt-1 text-ink-muted">
                 <VenueWord fixture={fixture} />
@@ -130,7 +131,7 @@ export function FixtureList({
               {showResult ? (
                 <p className="mt-3 flex items-center gap-3">
                   <ResultBadge fixture={fixture} />
-                  <Link href={`/results/${fixture.id}`} className="text-brand underline">
+                  <Link href={`/results/${fixture.id}`} className="link">
                     <ScoreText fixture={fixture} />
                   </Link>
                 </p>
@@ -159,16 +160,20 @@ export function StandingsTable({ standings }: { standings: Standing[] }) {
 
   return (
     <>
+      {/*
+        This used to end "Our own teams are marked HRC" — written when the
+        site belonged to one club. On the league's own site there is no
+        "our", and every team in the table has an equal claim to it.
+      */}
       <TableNote>
-        This shows how many matches each team has played and how many points they have. Most points
-        at the top. Our own teams are marked “HRC”.
+        How many matches each team has played and how many points they have. Most points at the top.
       </TableNote>
 
       <div className="hidden sm:block">
         <TableScroller>
           <thead>
             <tr>
-              <Th className="w-12">Pos</Th>
+              <Th className="w-14 text-right">Pos</Th>
               <Th>Team</Th>
               <Th className="text-right">Played</Th>
               <Th className="text-right">Won</Th>
@@ -179,13 +184,20 @@ export function StandingsTable({ standings }: { standings: Standing[] }) {
           </thead>
           <tbody>
             {standings.map((row) => (
-              <tr key={row.id} className={cn(row.isHrc && "bg-brand-soft")}>
-                <Td className="tabular">{row.position}</Td>
+              <Tr key={row.id} highlight={row.isHrc}>
+                <Td className="tabular text-right text-ink-muted">{row.position}</Td>
                 <Td className="font-semibold">
                   {row.teamName}
+                  {/*
+                    The tint is never the only thing marking this row.
+                    `isHrc` flags a team belonging to the club whose site
+                    this is — nobody, on the league's own site, which is
+                    why this is easy to drop by accident and why there is
+                    a test for it.
+                  */}
                   {row.isHrc ? (
                     <span className="ml-2">
-                      <Badge tone="positive">HRC</Badge>
+                      <Badge tone="brand">Your club</Badge>
                     </span>
                   ) : null}
                 </Td>
@@ -193,8 +205,8 @@ export function StandingsTable({ standings }: { standings: Standing[] }) {
                 <Td className="tabular text-right">{row.won}</Td>
                 <Td className="tabular text-right">{row.drawn}</Td>
                 <Td className="tabular text-right">{row.lost}</Td>
-                <Td className="tabular text-right font-bold">{row.points}</Td>
-              </tr>
+                <Td className="tabular text-right text-lg font-semibold">{row.points}</Td>
+              </Tr>
             ))}
           </tbody>
         </TableScroller>
@@ -204,14 +216,20 @@ export function StandingsTable({ standings }: { standings: Standing[] }) {
         {standings.map((row) => (
           <li key={row.id}>
             <Card className={cn(row.isHrc && "border-brand bg-brand-soft")}>
-              <p className="text-lg font-bold">
-                {row.position}. {row.teamName}{" "}
-                {row.isHrc ? <Badge tone="positive">HRC</Badge> : null}
-              </p>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-lg font-semibold">
+                  <span className="tabular text-ink-muted">{row.position}.</span> {row.teamName}
+                </p>
+                <p className="shrink-0 text-lg font-semibold tabular">{row.points} pts</p>
+              </div>
+              {row.isHrc ? (
+                <p className="mt-1.5">
+                  <Badge tone="brand">Your club</Badge>
+                </p>
+              ) : null}
               <p className="mt-1 tabular text-ink-muted">
                 Played {row.played} · Won {row.won} · Drawn {row.drawn} · Lost {row.lost}
               </p>
-              <p className="mt-1 text-lg font-bold tabular">{row.points} points</p>
             </Card>
           </li>
         ))}
@@ -252,6 +270,27 @@ export function StandingsByDivision({ standings }: { standings: Standing[] }) {
 // Averages and handicaps
 // ---------------------------------------------------------------------------
 
+/**
+ * A win percentage, shown as a number and as a bar.
+ *
+ * The bar is `aria-hidden` and the number is not, so the figure is read
+ * once. It is there because a column of percentages is hard to compare at
+ * a glance and a column of bars is not — and it costs nothing to anyone
+ * reading with a screen reader or on paper.
+ */
+function WinRate({ percentage }: { percentage: number | null }) {
+  if (percentage === null) return <span className="text-ink-muted">—</span>;
+  const rounded = Math.round(percentage);
+  return (
+    <span className="flex items-center justify-end gap-2">
+      <span className="tabular font-semibold">{rounded}%</span>
+      <span aria-hidden="true" className="hidden h-2 w-16 overflow-hidden rounded-full bg-surface-sunken lg:block">
+        <span className="block h-full rounded-full bg-brand" style={{ width: `${rounded}%` }} />
+      </span>
+    </span>
+  );
+}
+
 export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
   if (stats.length === 0) {
     return (
@@ -265,9 +304,9 @@ export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
   return (
     <>
       <TableNote>
-        This shows how many matches each player has played and how many they won. “Eligible” means
-        the player has played at least half the club’s matches — the league only counts a player for
-        the averages placings once they have.
+        How many matches each player has played and how many they won. “Eligible” means the player
+        has played at least half their team’s matches — the league only counts a player for the
+        averages placings once they have.
       </TableNote>
 
       <div className="hidden sm:block">
@@ -285,22 +324,22 @@ export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
           </thead>
           <tbody>
             {stats.map((row) => (
-              <tr key={row.id}>
+              <Tr key={row.id}>
                 <Td className="font-semibold">
                   {row.memberSlug ? (
-                    <Link href={`/players/${row.memberSlug}`} className="text-brand underline">
+                    <Link href={`/players/${row.memberSlug}`} className="link">
                       {row.memberName}
                     </Link>
                   ) : (
                     row.memberName
                   )}
                 </Td>
-                <Td>{row.teamName ?? "—"}</Td>
+                <Td className="text-ink-muted">{row.teamName ?? "—"}</Td>
                 <Td className="tabular text-right">{row.played}</Td>
                 <Td className="tabular text-right">{row.won}</Td>
                 <Td className="tabular text-right">{row.lost}</Td>
-                <Td className="tabular text-right font-bold">
-                  {row.winPercentage === null ? "—" : `${Math.round(row.winPercentage)}%`}
+                <Td className="text-right">
+                  <WinRate percentage={row.winPercentage} />
                 </Td>
                 <Td>
                   {row.meetsParticipationThreshold ? (
@@ -309,7 +348,7 @@ export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
                     <Badge>Not yet eligible</Badge>
                   )}
                 </Td>
-              </tr>
+              </Tr>
             ))}
           </tbody>
         </TableScroller>
@@ -319,9 +358,9 @@ export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
         {stats.map((row) => (
           <li key={row.id}>
             <Card>
-              <p className="text-lg font-bold">
+              <p className="text-lg font-semibold">
                 {row.memberSlug ? (
-                  <Link href={`/players/${row.memberSlug}`} className="text-brand underline">
+                  <Link href={`/players/${row.memberSlug}`} className="link">
                     {row.memberName}
                   </Link>
                 ) : (
@@ -379,19 +418,19 @@ export function HandicapTable({ stats }: { stats: PlayerStat[] }) {
           </thead>
           <tbody>
             {rated.map((row) => (
-              <tr key={row.id}>
+              <Tr key={row.id}>
                 <Td className="font-semibold">
                   {row.memberSlug ? (
-                    <Link href={`/players/${row.memberSlug}`} className="text-brand underline">
+                    <Link href={`/players/${row.memberSlug}`} className="link">
                       {row.memberName}
                     </Link>
                   ) : (
                     row.memberName
                   )}
                 </Td>
-                <Td>{row.teamName ?? "—"}</Td>
-                <Td className="tabular text-right font-bold">{row.handicap}</Td>
-              </tr>
+                <Td className="text-ink-muted">{row.teamName ?? "—"}</Td>
+                <Td className="tabular text-right text-lg font-semibold">{row.handicap}</Td>
+              </Tr>
             ))}
           </tbody>
         </TableScroller>
@@ -401,9 +440,11 @@ export function HandicapTable({ stats }: { stats: PlayerStat[] }) {
         {rated.map((row) => (
           <li key={row.id}>
             <Card>
-              <p className="text-lg font-bold">{row.memberName}</p>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-lg font-semibold">{row.memberName}</p>
+                <p className="shrink-0 text-lg font-semibold tabular">{row.handicap}</p>
+              </div>
               <p className="text-ink-muted">{row.teamName ?? "No team recorded"}</p>
-              <p className="mt-1 text-lg tabular">Handicap {row.handicap}</p>
             </Card>
           </li>
         ))}

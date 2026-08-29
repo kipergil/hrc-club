@@ -16,14 +16,12 @@ import type {
   Honour,
   MemberProfile,
   MemberSummary,
-  MembershipOption,
   NewsItem,
   Page,
   PlayerStat,
   Rubber,
   Season,
   SiteSettings,
-  Sponsor,
   Standing,
   Team,
   TeamDetail,
@@ -55,6 +53,34 @@ const PUBLISHED = { status: { _eq: "published" } } as const;
 
 function str(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/**
+ * `npm run seed` writes realistic-looking starter content so that layouts
+ * and empty states can be judged against something with the right shape:
+ * an address, a match report, a welcome notice, a safeguarding page. Every
+ * one of those bodies opens with the word PLACEHOLDER, and none of it is
+ * true.
+ *
+ * The seed's own README says to replace it before the site goes anywhere
+ * near the public. That instruction was followed for the pages someone
+ * happened to look at, and not for the rest — so the league's home page
+ * carried "Welcome to the new club website" and a match report invented
+ * out of nothing, presented exactly as real news.
+ *
+ * Marking it is only useful if something acts on the mark, so this is the
+ * boundary that does: placeholder text never leaves the API. Editors still
+ * see it in Directus, which is where it earns its keep.
+ */
+const PLACEHOLDER = /^\s*PLACEHOLDER\b/i;
+
+export function isPlaceholder(value: unknown): boolean {
+  return typeof value === "string" && PLACEHOLDER.test(value);
+}
+
+/** Free text that is dropped rather than published when it is placeholder. */
+function publicText(value: unknown): string | null {
+  return isPlaceholder(value) ? null : str(value);
 }
 
 function num(value: unknown): number | null {
@@ -99,14 +125,14 @@ function toVenue(row: Row): Venue {
     id: row.id,
     name: row.name,
     slug: row.slug,
-    addressLine1: str(row.address_line_1),
+    addressLine1: publicText(row.address_line_1),
     addressLine2: str(row.address_line_2),
     town: str(row.town),
     postcode: str(row.postcode),
     mapUrl: str(row.map_url),
-    directions: str(row.directions),
-    parkingNotes: str(row.parking_notes),
-    accessibilityNotes: str(row.accessibility_notes),
+    directions: publicText(row.directions),
+    parkingNotes: publicText(row.parking_notes),
+    accessibilityNotes: publicText(row.accessibility_notes),
     tableCount: num(row.table_count),
     isHomeVenue: Boolean(row.is_home_venue),
     photoId: fileId(row.photo),
@@ -301,7 +327,11 @@ function toPage(row: Row): Page {
     title: row.title,
     subtitle: str(row.subtitle),
     slug: row.slug,
-    body: str(row.body),
+    // The page still exists, with its title and its place in the menu —
+    // it simply has nothing written in it yet, which is what the reader is
+    // told. A safeguarding page whose text says it "must be written by the
+    // club's safeguarding officer" is worse than an honest blank.
+    body: publicText(row.body),
     heroImageId: fileId(row.hero_image),
     seoDescription: str(row.seo_description),
     publishedAt: str(row.published_at),
@@ -318,6 +348,14 @@ function toDocument(row: Row): ClubDocument {
     description: str(row.description),
     documentDate: str(row.document_date),
     fileId: fileId(row.file),
+    /*
+     * The import copies each form into Directus so it outlives the old
+     * site, but falls back to a link for any it could not fetch. That
+     * fallback was written to the database and then never served, so a
+     * document with no local copy rendered as a title with nothing to
+     * click.
+     */
+    externalUrl: str(row.external_url),
   };
 }
 
@@ -755,7 +793,7 @@ export async function getNews(category?: string, limit = 50): Promise<NewsItem[]
       limit,
     }),
   )) as Row[];
-  return rows.map(toNews);
+  return rows.filter((row) => !isPlaceholder(row.body)).map(toNews);
 }
 
 export async function getNewsItem(slug: string): Promise<NewsItem | null> {
@@ -767,7 +805,7 @@ export async function getNewsItem(slug: string): Promise<NewsItem | null> {
       limit: 1,
     }),
   )) as Row[];
-  return rows[0] ? toNews(rows[0]) : null;
+  return rows[0] && !isPlaceholder(rows[0].body) ? toNews(rows[0]) : null;
 }
 
 export async function getEvents(includePast = false): Promise<ClubEvent[]> {
@@ -783,7 +821,7 @@ export async function getEvents(includePast = false): Promise<ClubEvent[]> {
       limit: -1,
     }),
   )) as Row[];
-  return rows.map(toEvent);
+  return rows.filter((row) => !isPlaceholder(row.description)).map(toEvent);
 }
 
 export async function getEvent(slug: string): Promise<ClubEvent | null> {
@@ -795,7 +833,7 @@ export async function getEvent(slug: string): Promise<ClubEvent | null> {
       limit: 1,
     }),
   )) as Row[];
-  return rows[0] ? toEvent(rows[0]) : null;
+  return rows[0] && !isPlaceholder(rows[0].description) ? toEvent(rows[0]) : null;
 }
 
 const MEMBER_PUBLIC_FIELDS = [
@@ -966,24 +1004,6 @@ export async function getHonours(): Promise<Honour[]> {
   return rows.map(toHonour);
 }
 
-export async function getMembershipOptions(): Promise<MembershipOption[]> {
-  const client = await directus();
-  const rows = (await client.request(
-    readItems("hrc_membership_options", {
-      fields: ["*"],
-      filter: { is_active: { _eq: true } },
-      sort: ["sort", "price_pence"],
-      limit: -1,
-    }),
-  )) as Row[];
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    pricePence: int(row.price_pence),
-    period: row.period ?? "season",
-    includes: str(row.includes),
-  }));
-}
 
 export async function getCommitteeRoles(): Promise<CommitteeRole[]> {
   const client = await directus();
@@ -1000,6 +1020,10 @@ export async function getCommitteeRoles(): Promise<CommitteeRole[]> {
     return {
       id: row.id,
       roleTitle: row.role_title,
+      // A linked member is the better source — it carries a slug, so the
+      // name can link to their player page. `holder_name` is the fallback
+      // for a committee member who does not play.
+      holderName: member ? null : str(row.holder_name),
       publicEmail: str(row.public_email),
       responsibilities: str(row.responsibilities),
       member: member ? toMemberSummary(member) : null,
@@ -1007,25 +1031,6 @@ export async function getCommitteeRoles(): Promise<CommitteeRole[]> {
   });
 }
 
-export async function getSponsors(): Promise<Sponsor[]> {
-  const client = await directus();
-  const rows = (await client.request(
-    readItems("hrc_sponsors", {
-      fields: ["*"],
-      filter: { is_active: { _eq: true } },
-      sort: ["sort", "name"],
-      limit: -1,
-    }),
-  )) as Row[];
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    url: str(row.url),
-    tier: row.tier ?? "supporting",
-    description: str(row.description),
-    logoId: fileId(row.logo),
-  }));
-}
 
 export async function getLinks(): Promise<ExternalLink[]> {
   const client = await directus();
@@ -1086,15 +1091,62 @@ export async function createEnquiry(input: EnquiryInput): Promise<{ id: string }
  * Directus on a cold serverless function is the opposite of that.
  */
 export async function getHome(): Promise<HomePayload> {
-  const [settings, nextFixtures, latestResults, news, events, sessions, standings] = await Promise.all([
-    getSettings(),
-    getFixtures({ status: "scheduled", limit: 5 }),
-    getFixtures({ status: "played", limit: 5 }),
-    getNews(undefined, 4),
-    getEvents(),
-    getSessions(),
-    getStandings(),
+  const [settings, nextFixtures, latestResults, news, events, sessions, standings, counts] =
+    await Promise.all([
+      getSettings(),
+      getFixtures({ status: "scheduled", limit: 5 }),
+      getFixtures({ status: "played", limit: 5 }),
+      getNews(undefined, 4),
+      getEvents(),
+      getSessions(),
+      getStandings(),
+      getLeagueCounts(),
+    ]);
+
+  return {
+    settings,
+    nextFixtures,
+    latestResults,
+    news,
+    events: events.slice(0, 3),
+    sessions,
+    standings,
+    counts,
+  };
+}
+
+/**
+ * The four numbers the home page opens on — clubs, teams, divisions, and
+ * how far back the honours run.
+ *
+ * They are counted rather than written down. The league's own home page
+ * states its size in a sentence ("10 clubs in the league, providing 26
+ * teams spread over the 3 divisions"), which was accurate on the day it
+ * was typed and is one new team away from being wrong — the site this
+ * replaces announced three teams above a list of four.
+ *
+ * Each query asks for `id` alone, so this is four narrow reads rather than
+ * four full collections.
+ */
+async function getLeagueCounts(): Promise<HomePayload["counts"]> {
+  const client = await directus();
+
+  const [clubs, teams, honours] = await Promise.all([
+    client.request(readItems("hrc_clubs", { fields: ["id"], limit: -1 })) as Promise<Row[]>,
+    client.request(readItems("hrc_teams", { fields: ["id", "division"], limit: -1 })) as Promise<Row[]>,
+    client.request(
+      readItems("hrc_honours", { fields: ["season_label"], sort: ["season_label"], limit: 1 }),
+    ) as Promise<Row[]>,
   ]);
 
-  return { settings, nextFixtures, latestResults, news, events: events.slice(0, 3), sessions, standings };
+  // Season labels are either a year ("1950") or a season ("2025-26"); the
+  // first four digits are the year either way.
+  const earliest = Number(String(honours[0]?.season_label ?? "").slice(0, 4));
+
+  return {
+    clubs: clubs.length,
+    teams: teams.length,
+    divisions: new Set(teams.map((row) => row.division).filter(Boolean)).size,
+    honoursFrom: Number.isFinite(earliest) && earliest > 1900 ? earliest : null,
+  };
 }

@@ -17,13 +17,11 @@ import type {
   Honour,
   MemberProfile,
   MemberSummary,
-  MembershipOption,
   NewsItem,
   Page,
   PlayerStat,
   Season,
   SiteSettings,
-  Sponsor,
   Standing,
   Team,
   TeamDetail,
@@ -82,9 +80,7 @@ export const keys = {
   album: (slug: string) => ["album", slug] as const,
   documents: ["documents"] as const,
   honours: ["honours"] as const,
-  membershipOptions: ["membership-options"] as const,
   committee: ["committee"] as const,
-  sponsors: ["sponsors"] as const,
   links: ["links"] as const,
   faqs: ["faqs"] as const,
 };
@@ -115,9 +111,7 @@ export const fetchers = {
   album: (slug: string) => apiGet<GalleryAlbumDetail>(`/api/gallery/${slug}`),
   documents: () => apiGet<ClubDocument[]>("/api/documents"),
   honours: () => apiGet<Honour[]>("/api/honours"),
-  membershipOptions: () => apiGet<MembershipOption[]>("/api/membership-options"),
   committee: () => apiGet<CommitteeRole[]>("/api/committee"),
-  sponsors: () => apiGet<Sponsor[]>("/api/sponsors"),
   links: () => apiGet<ExternalLink[]>("/api/links"),
   faqs: () => apiGet<Faq[]>("/api/faqs"),
 };
@@ -170,12 +164,8 @@ export const useDocuments = (): UseQueryResult<ClubDocument[]> =>
   useQuery({ queryKey: keys.documents, queryFn: fetchers.documents });
 export const useHonours = (): UseQueryResult<Honour[]> =>
   useQuery({ queryKey: keys.honours, queryFn: fetchers.honours });
-export const useMembershipOptions = (): UseQueryResult<MembershipOption[]> =>
-  useQuery({ queryKey: keys.membershipOptions, queryFn: fetchers.membershipOptions });
 export const useCommittee = (): UseQueryResult<CommitteeRole[]> =>
   useQuery({ queryKey: keys.committee, queryFn: fetchers.committee });
-export const useSponsors = (): UseQueryResult<Sponsor[]> =>
-  useQuery({ queryKey: keys.sponsors, queryFn: fetchers.sponsors });
 export const useLinks = (): UseQueryResult<ExternalLink[]> =>
   useQuery({ queryKey: keys.links, queryFn: fetchers.links });
 export const useFaqs = (): UseQueryResult<Faq[]> =>

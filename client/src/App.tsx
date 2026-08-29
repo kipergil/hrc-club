@@ -36,7 +36,6 @@ import {
   HelpPage,
   HonoursPage,
   LinksPage,
-  SponsorsPage,
 } from "@/pages/about";
 import { ContactPage } from "@/pages/contact";
 
@@ -85,7 +84,6 @@ export default function App() {
         <Route path="/honours" component={HonoursPage} />
         <Route path="/documents" component={DocumentsPage} />
         <Route path="/links" component={LinksPage} />
-        <Route path="/sponsors" component={SponsorsPage} />
         <Route path="/help" component={HelpPage} />
         <Route path="/contact" component={ContactPage} />
 

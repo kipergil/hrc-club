@@ -144,20 +144,24 @@ async function main(): Promise<void> {
 
   // -- Committee ------------------------------------------------------------
 
-  const committeeRows = home.committee.map((member, index) => ({
+  /*
+   * The role and the person go in separate fields.
+   *
+   * They used to be concatenated into `role_title` ("Chairperson — Jo
+   * Swain") because there was nowhere else to put the name. That left the
+   * `member` relation null, and the committee page reads a null member as
+   * a vacancy — so every filled post on the page carried the holder's name
+   * and the words "Vacant — could this be you?" underneath it.
+   */
+  const committee = home.committee.map((member, index) => ({
     role_title: member.role ?? "Committee member",
-    responsibilities: member.role ? null : "Serves on the committee.",
+    holder_name: member.name,
+    responsibilities: null,
     // The league publishes names but no addresses; feedback goes through its
     // own form, so nothing here invents an email.
     public_email: null,
     is_active: true,
     sort: index,
-  }));
-  // Names are kept alongside the role, since the league lists people rather
-  // than offices and a page of bare job titles would be less use.
-  const committee = home.committee.map((member, index) => ({
-    ...committeeRows[index]!,
-    role_title: member.role ? `${member.role} — ${member.name}` : member.name,
   }));
   console.log(`  = committee: ${await replaceAll(client, "hrc_committee_roles", committee)} members`);
 

@@ -1,8 +1,9 @@
+import { ExternalLink, MapPin, Users } from "lucide-react";
 import { Link } from "wouter";
 import type { Club } from "@shared/types.js";
 import { DIVISION, DIVISION_LABELS } from "@shared/enums.js";
 import { PageHeader, PrintButton } from "@/components/layout";
-import { Badge, Card, Empty, ErrorNote, Loading, Prose, TableNote } from "@/components/ui";
+import { Badge, Card, Empty, ErrorNote, Loading, Prose, Stat, TableNote } from "@/components/ui";
 import { useClub, useClubs } from "@/lib/queries";
 import { divisionLabel, formatDayName } from "@/lib/utils";
 
@@ -15,7 +16,7 @@ import { divisionLabel, formatDayName } from "@/lib/utils";
 export function ClubsPage() {
   const { data: clubs, isLoading, isError } = useClubs();
 
-  if (isLoading) return <Loading what="the clubs" />;
+  if (isLoading) return <Loading what="the clubs" variant="cards" />;
   if (isError) return <ErrorNote what="clubs" />;
 
   if (!clubs || clubs.length === 0) {
@@ -27,76 +28,67 @@ export function ClubsPage() {
     );
   }
 
-  // Ours first, then everyone else alphabetically — a visitor looking for
-  // their own club scans the list, but a member looking for ours should not
-  // have to.
-  const home = clubs.filter((club) => club.isHomeClub);
-  const rest = clubs.filter((club) => !club.isHomeClub);
+  const teamCount = clubs.reduce((total, club) => total + club.teamCount, 0);
+  const playerCount = clubs.reduce((total, club) => total + club.playerCount, 0);
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Clubs" subtitle="Every club in the league, and where they play">
-        <PrintButton label="Print the club list" />
+      <PageHeader
+        title="Clubs"
+        subtitle="Every club in the league — where they play, which divisions their teams are in, and who turns out for them."
+        actions={<PrintButton label="Print the club list" />}
+      >
+        <dl className="grid grid-cols-3 gap-3 sm:max-w-lg">
+          <Stat value={clubs.length} label="clubs" />
+          <Stat value={teamCount} label="teams" />
+          <Stat value={playerCount} label="players" />
+        </dl>
       </PageHeader>
 
-      <TableNote>
-        Ten clubs play in the Hertford &amp; District League. Each one’s page shows where they play,
-        which divisions their teams are in, and who turns out for them.
-      </TableNote>
-
-      {home.length > 0 ? (
-        <section aria-labelledby="ours-heading">
-          <h2 id="ours-heading" className="mb-3 text-2xl">
-            Our club
-          </h2>
-          <ul className="grid gap-4 sm:grid-cols-2">
-            {home.map((club) => (
-              <li key={club.id}>
-                <ClubCard club={club} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <section aria-labelledby="others-heading">
-        <h2 id="others-heading" className="mb-3 text-2xl">
-          {home.length > 0 ? "The other clubs" : "Clubs"}
-        </h2>
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {rest.map((club) => (
-            <li key={club.id}>
-              <ClubCard club={club} />
-            </li>
-          ))}
-        </ul>
-      </section>
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {clubs.map((club) => (
+          <li key={club.id}>
+            <ClubCard club={club} />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
 function ClubCard({ club }: { club: Club }) {
   return (
-    <Card className="h-full">
-      <h3 className="text-xl">
-        <Link href={`/clubs/${club.slug}`} className="text-brand underline underline-offset-4">
+    <Card className="flex h-full flex-col">
+      <h2 className="text-xl">
+        <Link href={`/clubs/${club.slug}`} className="link">
           {club.name}
         </Link>
-      </h3>
-      {club.venue ? (
-        <p className="mt-1 text-ink-muted">
-          {club.venue.name}
-          {club.venue.town ? `, ${club.venue.town}` : null}
-        </p>
-      ) : (
-        <p className="mt-1 text-ink-muted">No venue recorded</p>
-      )}
-      <p className="mt-3">
-        {club.teamCount} {club.teamCount === 1 ? "team" : "teams"} · {club.playerCount}{" "}
-        {club.playerCount === 1 ? "player" : "players"}
+      </h2>
+
+      <p className="mt-1.5 flex items-start gap-2 text-ink-muted">
+        <MapPin aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+        <span>
+          {club.venue ? (
+            <>
+              {club.venue.name}
+              {club.venue.town ? `, ${club.venue.town}` : null}
+            </>
+          ) : (
+            "No venue recorded"
+          )}
+        </span>
       </p>
+
+      <p className="mt-1 flex items-start gap-2 text-ink-muted">
+        <Users aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+        <span className="tabular">
+          {club.teamCount} {club.teamCount === 1 ? "team" : "teams"} · {club.playerCount}{" "}
+          {club.playerCount === 1 ? "player" : "players"}
+        </span>
+      </p>
+
       {club.divisions.length > 0 ? (
-        <p className="mt-2 flex flex-wrap gap-2">
+        <p className="mt-auto flex flex-wrap gap-1.5 pt-3">
           {DIVISION.filter((division) => club.divisions.includes(division)).map((division) => (
             <Badge key={division}>{DIVISION_LABELS[division]}</Badge>
           ))}
@@ -111,7 +103,7 @@ function ClubCard({ club }: { club: Club }) {
 export function ClubPage({ slug }: { slug: string }) {
   const { data: club, isLoading, isError } = useClub(slug);
 
-  if (isLoading) return <Loading what="this club" />;
+  if (isLoading) return <Loading what="this club" variant="page" />;
   if (isError || !club) return <ErrorNote what="club" />;
 
   const venue = club.venue;
@@ -125,9 +117,8 @@ export function ClubPage({ slug }: { slug: string }) {
             ? `Plays at ${venue.name}${venue.town ? `, ${venue.town}` : ""}`
             : "A club in the Hertford & District League"
         }
-      >
-        {club.isHomeClub ? <Badge tone="positive">This is our club</Badge> : null}
-      </PageHeader>
+        actions={<PrintButton label="Print this club's details" />}
+      />
 
       {club.description ? <Prose markdown={club.description} /> : null}
 
@@ -136,27 +127,40 @@ export function ClubPage({ slug }: { slug: string }) {
           <h2 id="where-heading" className="mb-3 text-2xl">
             Where they play
           </h2>
-          <Card>
-            <p className="text-lg font-semibold">{venue.name}</p>
-            <address className="mt-2 not-italic">
-              {[venue.addressLine1, venue.addressLine2, venue.town, venue.postcode]
-                .filter(Boolean)
-                .map((line) => (
-                  <span key={line} className="block">
-                    {line}
-                  </span>
-                ))}
-            </address>
-            <p className="mt-3 flex flex-wrap gap-4">
-              {venue.mapUrl ? (
-                <a href={venue.mapUrl} className="text-brand underline underline-offset-4" rel="noreferrer">
-                  Open in maps
-                </a>
-              ) : null}
-              <Link href={`/play/venue/${venue.slug}`} className="text-brand underline underline-offset-4">
-                Directions, parking and access
-              </Link>
-            </p>
+          <Card className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <span
+              aria-hidden="true"
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-card bg-brand-soft text-brand"
+            >
+              <MapPin className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-lg font-semibold">{venue.name}</p>
+              <address className="mt-1 not-italic text-ink-muted">
+                {[venue.addressLine1, venue.addressLine2, venue.town, venue.postcode]
+                  .filter(Boolean)
+                  .map((line) => (
+                    <span key={line} className="block">
+                      {line}
+                    </span>
+                  ))}
+              </address>
+              <p className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+                <Link href={`/play/venue/${venue.slug}`} className="link font-semibold">
+                  Directions, parking and access
+                </Link>
+                {venue.mapUrl ? (
+                  <a
+                    href={venue.mapUrl}
+                    className="link inline-flex items-center gap-1.5 font-semibold"
+                    rel="noreferrer"
+                  >
+                    Open in maps
+                    <ExternalLink aria-hidden="true" className="size-5" />
+                  </a>
+                ) : null}
+              </p>
+            </div>
           </Card>
         </section>
       ) : null}
@@ -172,24 +176,30 @@ export function ClubPage({ slug }: { slug: string }) {
             {club.teams.map((team) => (
               <li key={team.id}>
                 <Card className="h-full">
+                  {/*
+                    Every team links to its own page. These used to be
+                    linked only for the site's "home club" — a flag that
+                    made sense when this was one club's site and has been
+                    false for every club since it became the league's, so
+                    the effect was twenty-six teams rendered as plain text
+                    beside twenty-six pages nobody could reach.
+                  */}
                   <h3 className="text-xl">
-                    {club.isHomeClub ? (
-                      <Link href={`/teams/${team.slug}`} className="text-brand underline underline-offset-4">
-                        {team.name}
-                      </Link>
-                    ) : (
-                      team.name
-                    )}
+                    <Link href={`/teams/${team.slug}`} className="link">
+                      {team.name}
+                    </Link>
                   </h3>
-                  <p className="mt-1">
+                  <p className="mt-1.5">
                     <Badge>{divisionLabel(team.division)}</Badge>
                   </p>
                   {team.homeNight ? (
-                    <p className="mt-2">
-                      At home on <strong>{formatDayName(team.homeNight)}s</strong>.
+                    <p className="mt-2 text-ink-muted">
+                      At home on <strong className="text-ink">{formatDayName(team.homeNight)}s</strong>.
                     </p>
                   ) : null}
-                  {team.captain ? <p className="mt-1">Captain: {team.captain.fullName}</p> : null}
+                  {team.captain ? (
+                    <p className="mt-1 text-ink-muted">Captain: {team.captain.fullName}</p>
+                  ) : null}
                 </Card>
               </li>
             ))}
@@ -213,19 +223,12 @@ export function ClubPage({ slug }: { slug: string }) {
               .map((squad) => (
                 <div key={squad.teamSlug}>
                   <h3 className="text-xl">{squad.teamName}</h3>
-                  <ul className="mt-2 flex flex-wrap gap-x-6 gap-y-1">
+                  <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5">
                     {squad.players.map((player) => (
                       <li key={player.id}>
-                        {club.isHomeClub ? (
-                          <Link
-                            href={`/players/${player.slug}`}
-                            className="text-brand underline underline-offset-4"
-                          >
-                            {player.displayName ?? player.fullName}
-                          </Link>
-                        ) : (
-                          (player.displayName ?? player.fullName)
-                        )}
+                        <Link href={`/players/${player.slug}`} className="link">
+                          {player.displayName ?? player.fullName}
+                        </Link>
                       </li>
                     ))}
                   </ul>
@@ -234,12 +237,6 @@ export function ClubPage({ slug }: { slug: string }) {
           </div>
         )}
       </section>
-
-      <p>
-        <Link href="/clubs" className="text-brand underline underline-offset-4">
-          ← All clubs
-        </Link>
-      </p>
     </div>
   );
 }

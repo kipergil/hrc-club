@@ -748,6 +748,19 @@ export const committeeRolesCollection: CollectionDefinition = {
   fields: [
     idField(),
     textField("role_title", { required: true, note: 'e.g. "Chair", "Match secretary", "Safeguarding officer".' }),
+    /*
+     * Who currently holds the post, for the common case where they are not
+     * a registered player and so have no `hrc_members` row to point at.
+     *
+     * Without it the league import had nowhere to put a name and folded it
+     * into the title — "Chairperson — Jo Swain" — which left `member` null,
+     * so the committee page rendered every filled post as "Vacant — could
+     * this be you?" directly beneath the name of the person holding it.
+     */
+    textField("holder_name", {
+      nullable: true,
+      note: "The person in the post, when they are not a registered player. If `member` is set, that wins.",
+    }),
     textField("public_email", {
       nullable: true,
       note: "Role-based address, safe to publish. Personal addresses live on hrc_members and are never served.",

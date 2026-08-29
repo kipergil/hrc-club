@@ -55,6 +55,18 @@ async function collectRoutes(): Promise<RouteSpec[]> {
       await client.prefetchQuery({ queryKey: keys.home, queryFn: () => storage.getHome() });
     }),
 
+    /*
+     * The 404 page, prerendered like any other.
+     *
+     * `/404` matches no route in `App.tsx`, so wouter falls through to
+     * `NotFoundPage` — which is exactly the markup wanted here. Without
+     * it, an unknown URL was served the *home page's* prerendered HTML
+     * with a 200: the reader saw the home page for an instant before React
+     * found the mismatch, threw the server's markup away and rendered the
+     * 404 client-side, and a crawler was told the dead link was fine.
+     */
+    route("/404"),
+
     // Tier A — editorial content.
     route("/about", async (client) => {
       await client.prefetchQuery({ queryKey: keys.page("about"), queryFn: () => storage.getPage("about") });
@@ -90,9 +102,6 @@ async function collectRoutes(): Promise<RouteSpec[]> {
     }),
     route("/links", async (client) => {
       await client.prefetchQuery({ queryKey: keys.links, queryFn: () => storage.getLinks() });
-    }),
-    route("/sponsors", async (client) => {
-      await client.prefetchQuery({ queryKey: keys.sponsors, queryFn: () => storage.getSponsors() });
     }),
     route("/help", async (client) => {
       await client.prefetchQuery({ queryKey: keys.faqs, queryFn: () => storage.getFaqs() });
@@ -246,10 +255,17 @@ async function collectRoutes(): Promise<RouteSpec[]> {
   return routes;
 }
 
+/**
+ * The path this route's HTML is written to.
+ *
+ * `/404` is the exception: it becomes `404.html` at the root rather than
+ * `404/index.html`, because the server reaches for it by name when nothing
+ * else matches, and static hosts look for it there by convention too.
+ */
 function outputPath(routePath: string): string {
-  return routePath === "/"
-    ? path.join(OUT_DIR, "index.html")
-    : path.join(OUT_DIR, routePath.replace(/^\//, ""), "index.html");
+  if (routePath === "/") return path.join(OUT_DIR, "index.html");
+  if (routePath === "/404") return path.join(OUT_DIR, "404.html");
+  return path.join(OUT_DIR, routePath.replace(/^\//, ""), "index.html");
 }
 
 /**

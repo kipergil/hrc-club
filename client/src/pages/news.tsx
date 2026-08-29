@@ -27,27 +27,27 @@ function NewsCard({
 }) {
   const image = fileUrl(item.heroImageId, { width: 640, height: 360, fit: "cover" });
   return (
-    <Card className="h-full">
+    <Card as="article" className="flex h-full flex-col">
       {image ? (
         <img
           src={image}
           alt=""
           width={320}
           height={180}
-          className="mb-3 aspect-video w-full rounded-card object-cover"
+          className="mb-4 aspect-video w-full rounded-card object-cover"
         />
       ) : null}
-      <h2 className="text-xl">
-        <Link href={`/news/${item.slug}`} className="text-brand underline underline-offset-4">
-          {item.title}
-        </Link>
-      </h2>
-      <p className="mt-1 flex flex-wrap items-center gap-2 text-ink-muted">
+      <p className="flex flex-wrap items-center gap-2 text-ink-muted">
         <span>{formatDateShort(item.publishedAt)}</span>
         <Badge>{CATEGORY_LABEL[item.category] ?? item.category}</Badge>
         {item.isPinned ? <Badge tone="accent">Pinned</Badge> : null}
       </p>
-      {item.summary ? <p className="mt-2">{item.summary}</p> : null}
+      <h2 className="mt-1.5 text-xl">
+        <Link href={`/news/${item.slug}`} className="link">
+          {item.title}
+        </Link>
+      </h2>
+      {item.summary ? <p className="mt-2 text-ink-muted">{item.summary}</p> : null}
     </Card>
   );
 }
@@ -64,10 +64,10 @@ export function NewsPage() {
 
   return (
     <div>
-      <PageHeader title="News and notices" subtitle="What's happening at the club" />
+      <PageHeader title="News and notices" subtitle="Announcements from the committee" />
 
       {posts.length === 0 ? (
-        <Empty>Nothing has been posted yet. Club news will appear here.</Empty>
+        <Empty>Nothing has been posted yet. League notices will appear here.</Empty>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2">
           {posts.map((item) => (
@@ -89,7 +89,7 @@ export function NewslettersPage() {
 
   return (
     <div>
-      <PageHeader title="Newsletters" subtitle="Every newsletter we've sent" />
+      <PageHeader title="Newsletters" subtitle="Every newsletter the league has sent" />
 
       {!items || items.length === 0 ? (
         <Empty>No newsletters have been published yet.</Empty>
@@ -99,7 +99,7 @@ export function NewslettersPage() {
             <li key={item.id}>
               <Card>
                 <h2 className="text-xl">
-                  <Link href={`/news/${item.slug}`} className="text-brand underline underline-offset-4">
+                  <Link href={`/news/${item.slug}`} className="link">
                     {item.title}
                   </Link>
                 </h2>
@@ -109,7 +109,7 @@ export function NewslettersPage() {
                   <p className="mt-3">
                     <a
                       href={fileUrl(item.attachmentId)!}
-                      className="text-brand underline underline-offset-4"
+                      className="link"
                     >
                       Download the newsletter
                     </a>
@@ -157,7 +157,7 @@ export function NewsItemPage({ slug }: { slug: string }) {
 
       {item.attachmentId ? (
         <p className="mt-6">
-          <a href={fileUrl(item.attachmentId)!} className="text-brand underline underline-offset-4">
+          <a href={fileUrl(item.attachmentId)!} className="link">
             Download the attachment
           </a>
         </p>
@@ -165,7 +165,7 @@ export function NewsItemPage({ slug }: { slug: string }) {
 
       {item.fixtureId ? (
         <p className="mt-6">
-          <Link href={`/results/${item.fixtureId}`} className="text-brand underline underline-offset-4">
+          <Link href={`/results/${item.fixtureId}`} className="link">
             See the scorecard for this match
           </Link>
         </p>
@@ -184,17 +184,17 @@ export function EventsPage() {
 
   return (
     <div>
-      <PageHeader title="What's on" subtitle="AGM, presentation night and socials" />
+      <PageHeader title="What's on" subtitle="The AGM, presentation night and other league dates" />
 
       {!events || events.length === 0 ? (
-        <Empty>Nothing is in the diary at the moment. Club events will appear here.</Empty>
+        <Empty>Nothing is in the diary at the moment. League events will appear here.</Empty>
       ) : (
         <ul className="space-y-3">
           {events.map((event) => (
             <li key={event.id}>
               <Card>
                 <h2 className="text-xl">
-                  <Link href={`/events/${event.slug}`} className="text-brand underline underline-offset-4">
+                  <Link href={`/events/${event.slug}`} className="link">
                     {event.title}
                   </Link>
                 </h2>
@@ -246,7 +246,7 @@ export function EventPage({ slug }: { slug: string }) {
 
       {event.entryUrl ? (
         <p>
-          <a href={event.entryUrl} className="text-brand underline underline-offset-4">
+          <a href={event.entryUrl} className="link">
             Enter or book a place
           </a>
         </p>
@@ -288,7 +288,7 @@ export function GalleryPage() {
                   <h2 className="text-xl">
                     <Link
                       href={`/gallery/${album.slug}`}
-                      className="text-brand underline underline-offset-4"
+                      className="link"
                     >
                       {album.title}
                     </Link>
@@ -317,7 +317,7 @@ export function AlbumPage({ slug }: { slug: string }) {
     <div>
       <PageHeader
         title={album.title}
-        subtitle={album.takenOn ? formatDateLong(album.takenOn) : "Club photos"}
+        subtitle={album.takenOn ? formatDateLong(album.takenOn) : "League photos"}
       />
 
       {album.description ? (
