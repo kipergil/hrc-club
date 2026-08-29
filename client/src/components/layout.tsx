@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { NAV, findGroup, findLink } from "@/lib/nav";
 import { useSettings } from "@/lib/queries";
+import { useRouteTransition } from "@/lib/scroll";
 import { cn } from "@/lib/utils";
 import { Prose } from "@/components/ui";
 
@@ -575,6 +576,10 @@ export function Layout({ children }: { children: ReactNode }) {
   const [pathname] = useLocation();
   const { data: settings } = useSettings();
 
+  // Puts the reader at the top of a new page, back where they were on a
+  // back or forward, and focus on the main region either way.
+  useRouteTransition();
+
   return (
     <div className="flex min-h-screen flex-col">
       <a href="#main" className="skip-link">
@@ -585,7 +590,17 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {settings?.announcement ? <LeagueNotice announcement={settings.announcement} /> : null}
 
-      <main id="main" className="mx-auto w-full max-w-page flex-1 px-4 py-8">
+      {/*
+        `tabIndex={-1}` makes this focusable by script without putting it
+        in the tab order, which is what lets both the skip link and a route
+        change land the reader here.
+
+        The focus ring is left alone. The site's rule is that focus
+        indicators are never removed, and the global style keys off
+        `:focus-visible` — so a mouse click shows nothing, while a keyboard
+        user gets told where they have been put.
+      */}
+      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-page flex-1 px-4 py-8">
         <Breadcrumbs pathname={pathname} />
         {children}
       </main>
