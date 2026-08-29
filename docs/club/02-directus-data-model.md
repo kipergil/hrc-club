@@ -2,7 +2,7 @@
 
 **Status:** applied
 **Instance:** the shared Directus 11 instance 
-**Folder:** `hrc_club` — 24 collections, 334 fields
+**Folder:** `hrc_club` — 25 collections
 **Source of truth:** [`directus/src/schema/definitions.ts`](../../directus/src/schema/definitions.ts)
 
 The field tables in §5 are generated from the live instance, so this document and the database cannot drift apart silently.
@@ -14,6 +14,8 @@ The field tables in §5 are generated from the live instance, so this document a
 **One prefix, one folder, create-only tooling.** This Directus instance is shared with BucketBoard, PinGather, LocalRater and the health network — 55 collections before this project added anything, including generic names like `pages`, `tags`, `categories` and `comments`. Every collection here is prefixed `hrc_` and filed under the `hrc_club` folder, and `apply.ts` refuses to run if a definition strays outside that prefix or points a relation at another project's table. The scripts only ever create; nothing they did not create is updated or deleted.
 
 **`directus_users` is not extended.** pintogather bolts a dozen custom fields onto `directus_users` for its own identity model. This project deliberately does not, because that collection is shared with every other project on the instance and extending it would be exactly the sort of cross-project reach the prefix rule exists to prevent. Member identity lives on `hrc_members`, with `clerk_user_id` as the link to the external identity provider.
+
+**The site covers the whole league, not one club.** `hrc_clubs` holds all ten, with `is_home_club` marking ours. That flag is what "our teams" and "our players" filter on, so an opponent is a real page with an address and a squad rather than a name in a fixture list — which is what makes "where are we playing on Thursday, and is there parking" answerable. Venues are referenced rather than owned, because two clubs share Stanstead Abbotts Parish Hall.
 
 **Own what the club owns; mirror what the league owns.** Competitive data — fixtures, results, standings, averages — belongs to the league. Those collections are shaped for *upsert from a sync*, with a `league_*_ref` matching key and a `last_synced_at` stamp. Editorial data — reports, news, photos, honours — belongs to the club, and the sync never writes those columns, so a match report survives every future re-sync.
 
@@ -27,6 +29,7 @@ The field tables in §5 are generated from the live instance, so this document a
 
 | Group | Collections |
 |---|---|
+| **The league** | `hrc_clubs` — every club in the league, HRC included |
 | **Reference** | `hrc_seasons`, `hrc_venues`, `hrc_members` |
 | **Teams** | `hrc_teams`, `hrc_squads` |
 | **Mirrored from the league** | `hrc_fixtures`, `hrc_rubbers`, `hrc_standings`, `hrc_player_stats` |
@@ -94,6 +97,26 @@ Generated from the live instance. `**required**` marks a field the admin panel w
 
 <!-- BEGIN GENERATED SCHEMA -->
 
+### `hrc_clubs`
+
+Every club in the league, HRC included. The site covers the whole league, so an opponent is a real page with a venue and squads rather than a name in a fixture list — which is also what makes 'where are we playing on Thursday' answerable.
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` **required** | string | As the league names it, e.g. "Water Lane", "St. Andrews". |
+| `slug` **required** | string | URL segment for /clubs/:slug. |
+| `short_name` | string |  |
+| `league_ref` | string | The club's identifier in the league's own URLs (Clubz.asp?Club=...), which is what the importer matches on. |
+| `is_home_club` | boolean | Marks the club whose site this is. Exactly one should have it — it is what the home page, the timetable and 'our teams' read. Defaults to `false`. |
+| `description` | text | Anything worth saying about the club beyond its address. |
+| `website` | string |  |
+| `sort` | integer |  |
+| `last_synced_at` | timestamp | When the league import last wrote to this club. |
+| `venue` | m2o → `hrc_venues` | Where the club plays. Two clubs can share a hall, which is why the venue is referenced rather than owned. |
+| `logo` | m2o → `directus_files` |  |
+| `members` | o2m → `hrc_members` | Reverse list |
+| `teams` | o2m → `hrc_teams` | Reverse list |
+
 ### `hrc_seasons`
 
 A playing season, e.g. 2026-27. Almost everything else is scoped to one; `is_current` is what the site reads to decide which.
@@ -138,6 +161,7 @@ Halls the club plays in — its own home venue and any away venue worth giving d
 | `fixtures` | o2m → `hrc_fixtures` | Reverse list |
 | `events` | o2m → `hrc_events` | Reverse list |
 | `sessions` | o2m → `hrc_sessions` | Reverse list |
+| `clubs` | o2m → `hrc_clubs` | Reverse list |
 
 ### `hrc_members`
 
@@ -159,6 +183,7 @@ A club member. Contact fields are private by default and never included in the p
 | `league_player_ref` | string | Identifier for this player in the league's system, used to attach synced averages and handicaps. |
 | `clerk_user_id` | string | External identity from Clerk, set when a member first signs in. Deliberately here rather than as a custom field on directus_users — this instance's directus_users is shared with other projects and must not be extended by this one. |
 | `photo` | m2o → `directus_files` | Head-and-shoulders photo. Only published when show_on_site is ticked. |
+| `club` | m2o → `hrc_clubs` | Which club the player is registered with. The site holds every league player, so this is what separates our own members from the rest. |
 | `captained_teams` | o2m → `hrc_teams` | Reverse list |
 | `squad_places` | o2m → `hrc_squads` | Reverse list |
 | `rubbers` | o2m → `hrc_rubbers` | Reverse list |
@@ -188,6 +213,7 @@ An HRC team in a given season — HRC A, HRC B, HRC C. One row per team per seas
 | `captain` | m2o → `hrc_members` | Captain for this season. SET NULL so removing a member does not delete the team. |
 | `home_venue` | m2o → `hrc_venues` |  |
 | `team_photo` | m2o → `directus_files` |  |
+| `club` **required** | m2o → `hrc_clubs` | Nullable in the database only because the column was added to a table that already had rows; every team the importer writes has one. |
 | `squad` | o2m → `hrc_squads` | Reverse list |
 | `fixtures` | o2m → `hrc_fixtures` | Reverse list |
 | `player_stats` | o2m → `hrc_player_stats` | Reverse list |

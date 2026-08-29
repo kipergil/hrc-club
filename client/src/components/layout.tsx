@@ -362,7 +362,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {settings?.announcement ? (
         <div className="mx-auto w-full max-w-page px-4 pt-6">
-          <Alert tone="warning" title="Club notice">
+          <Alert tone="warning" title="League notice">
             <Prose markdown={settings.announcement} />
           </Alert>
         </div>

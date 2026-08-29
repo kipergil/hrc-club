@@ -20,13 +20,33 @@ describe("navigation", () => {
     }
   });
 
+  /**
+   * The PRD's binding constraint is "new look, same map": every page keeps
+   * the name players already use on the league's own site. These are those
+   * names, and a rename here is a rename of something people have
+   * bookmarked.
+   */
   it("keeps the names players already use", () => {
     const titles = ALL_LINKS.map((link) => link.title);
-    expect(titles).toContain("League tables");
-    expect(titles).toContain("Fixture calendar");
-    expect(titles).toContain("Match history");
-    expect(titles).toContain("Averages");
-    expect(titles).toContain("Handicaps");
+    for (const name of [
+      "League tables",
+      "Fixture calendar",
+      "Match history",
+      "Averages",
+      "Handicaps",
+      "Cup news",
+      "Club details",
+      "Special notices",
+      "Newsletters",
+      "Roll of honour",
+      "Our links",
+    ]) {
+      expect(titles).toContain(name);
+    }
+  });
+
+  it("uses the league's own five top-level groupings", () => {
+    expect(NAV.map((group) => group.label)).toEqual(["Home", "Fixtures", "Tables", "Clubs", "More"]);
   });
 
   it("has no duplicate destinations", () => {
@@ -35,9 +55,9 @@ describe("navigation", () => {
   });
 
   it("resolves a path to its group for the breadcrumb trail", () => {
-    expect(findGroup("/tables")?.label).toBe("Teams");
-    expect(findGroup("/news/some-article")?.label).toBe("News");
-    expect(findGroup("/play/venue/main-hall")?.label).toBe("Play");
+    expect(findGroup("/tables")?.label).toBe("Tables");
+    expect(findGroup("/news/some-article")?.label).toBe("More");
+    expect(findGroup("/clubs/water-lane")?.label).toBe("Clubs");
     expect(findLink("/tables")?.title).toBe("League tables");
   });
 });

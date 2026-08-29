@@ -1,6 +1,10 @@
 # hrc-club
 
-Website for **HRC**, one of the ten clubs in the Hertford & District Table Tennis League, fielding four teams — HRC A and B in the Premier Division, HRC C in Division One and HRC D in Division Two. The club plays at Bushby Hall, Wormley.
+A rebuild of **hertsttl.org.uk**, the website of the Hertford & District Table Tennis League — formed in 1936, ten clubs, 26 teams, three divisions.
+
+Everything on it is imported from the league's own site: the clubs with their halls and squads, the committee, the forms and documents, the outward links, and the honours — 725 results going back to 1950, which the site audit calls "the single most valuable and least replaceable asset on the site".
+
+The repository is named `hrc-club` because it began as a site for one club, HRC. The `hrc_` prefix on the Directus collections is from the same moment and has stayed: it namespaces this project on a Directus instance shared with several others, which is worth more than a tidy name.
 
 This repository holds the site, the Directus data model as code, and the planning documents behind both.
 
@@ -23,10 +27,10 @@ npm run build               # client, then prerender, then server bundle
 
 | Area | Pages |
 |---|---|
-| **Play** | When we play (the timetable — the most important page on the site), venue detail with directions, parking and access, join us with fees, coaching, juniors |
-| **Teams** | Our teams, team detail with squad and match history, fixture calendar grouped by league week, results, match detail with the rubber-by-rubber card, league tables, averages, handicaps, cup matches, players and player profiles |
-| **News** | News and notices, articles, newsletters, events, photo albums |
-| **About** | About, history, who's who, roll of honour, documents, links, sponsors, how do I…?, contact form |
+| **Fixtures** | Fixture calendar grouped by league week, match history, match detail with the rubber-by-rubber card, cup news |
+| **Tables** | League tables by division, averages with the eligibility rule explained, handicaps |
+| **Clubs** | All ten clubs with their halls, teams and squads; every team by division; every registered player |
+| **More** | Special notices, newsletters, the roll of honour and hall of fame, forms and documents, the committee, about the league, our links, how do I…?, feedback |
 | **Policies** | Privacy, accessibility statement, safeguarding |
 
 Accessibility is built in rather than retrofitted: 20px base type in `rem` with an A / A+ / A++ control, AAA contrast in light and dark, 48px targets, no hover-dependent behaviour, a labelled **Menu** button on mobile, wide tables reflowing to cards below 640px, colour never the only signal, and print stylesheets. See [`client/src/index.css`](client/src/index.css) and [`tailwind.config.ts`](tailwind.config.ts), where those rules live as tokens.
@@ -67,7 +71,9 @@ cp .env.example .env      # fill in ADMIN_EMAIL / ADMIN_PASSWORD
 npm install
 npm run schema:apply      # idempotent; creates what is missing, changes nothing else
 npm run permissions:apply # creates the service role and prints its token once
-npm run seed              # placeholder content, so the site renders as a site
+npm run seed              # placeholder editorial content (pages, FAQs, links)
+npm run import:league     # all ten clubs, their venues, teams and squads
+npm run import:content    # the league's description, committee, documents, links and honours
 ```
 
 **The seeded content is placeholder.** It exists so the layout and the empty states can be judged against something realistic. Replace it in the Directus admin panel before the site goes anywhere near the public — the club's real name, address, fees, committee and history are things only the club can supply.

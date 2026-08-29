@@ -8,7 +8,8 @@
     "permissions:apply": "tsx src/permissions/apply.ts",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/content/seed.ts",
-    "import:club": "tsx src/content/import-club.ts"
+    "import:league": "tsx src/content/import-league.ts",
+    "import:content": "tsx src/content/import-league-content.ts"
   },
   "dependencies": {
     "@directus/sdk": "^18.0.3",

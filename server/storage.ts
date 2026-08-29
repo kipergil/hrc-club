@@ -1,5 +1,7 @@
 import { readItems, readSingleton, createItem } from "@directus/sdk";
 import type {
+  Club,
+  ClubDetail,
   ClubDocument,
   ClubEvent,
   ClubSession,
@@ -28,6 +30,7 @@ import type {
   Venue,
 } from "../shared/types.js";
 import type { EnquiryInput } from "../shared/schema.js";
+import type { Division } from "../shared/enums.js";
 import { directus } from "./lib/directus.js";
 
 /*
@@ -126,6 +129,7 @@ function toTeam(row: Row): Team {
   const season = rel(row.season);
   const captain = rel(row.captain);
   const venue = rel(row.home_venue);
+  const club = rel(row.club);
   return {
     id: row.id,
     name: row.name,
@@ -138,6 +142,8 @@ function toTeam(row: Row): Team {
     captain: captain ? toMemberSummary(captain) : null,
     homeVenue: venue ? toVenue(venue) : null,
     seasonLabel: season?.label ?? "",
+    clubName: club?.name ?? null,
+    clubSlug: club?.slug ?? null,
   };
 }
 
@@ -279,6 +285,7 @@ function toHonour(row: Row): Honour {
     title: row.title,
     honourType: row.honour_type ?? "team",
     competition: row.competition ?? null,
+    competitionName: str(row.competition_name),
     seasonLabel: row.season_label ?? "",
     recipientName: str(row.recipient_name) ?? member?.full_name ?? null,
     notes: str(row.notes),
@@ -385,6 +392,107 @@ async function seasonIdFor(label?: string): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
+let homeClubCache: { id: string; slug: string } | null = null;
+
+/**
+ * The club whose site this is. Cached for the life of the process: it
+ * changes when somebody ticks a different box in Directus, which is not
+ * something worth a database round trip on every request.
+ */
+async function getHomeClub(): Promise<{ id: string; slug: string } | null> {
+  if (homeClubCache) return homeClubCache;
+  const client = await directus();
+  const rows = (await client.request(
+    readItems("hrc_clubs", { fields: ["id", "slug"], filter: { is_home_club: { _eq: true } }, limit: 1 }),
+  )) as Row[];
+  if (!rows[0]) return null;
+  homeClubCache = { id: rows[0].id, slug: rows[0].slug };
+  return homeClubCache;
+}
+
+const CLUB_FIELDS = [
+  "*",
+  { venue: ["*"] },
+  { teams: ["id", "division"] },
+  { members: ["id"] },
+] as const;
+
+function toClub(row: Row): Club {
+  const venue = rel(row.venue);
+  const teams = Array.isArray(row.teams) ? row.teams : [];
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    shortName: str(row.short_name),
+    isHomeClub: Boolean(row.is_home_club),
+    description: str(row.description),
+    website: str(row.website),
+    logoId: fileId(row.logo),
+    venue: venue ? toVenue(venue) : null,
+    teamCount: teams.length,
+    playerCount: Array.isArray(row.members) ? row.members.length : 0,
+    divisions: [...new Set(teams.map((t: Row) => t.division).filter(Boolean))] as Division[],
+  };
+}
+
+export async function getClubs(): Promise<Club[]> {
+  const client = await directus();
+  const rows = (await client.request(
+    readItems("hrc_clubs", {
+      fields: CLUB_FIELDS as unknown as string[],
+      sort: ["sort", "name"],
+      limit: -1,
+    }),
+  )) as Row[];
+  return rows.map(toClub);
+}
+
+export async function getClub(slug: string): Promise<ClubDetail | null> {
+  const client = await directus();
+  const rows = (await client.request(
+    readItems("hrc_clubs", {
+      fields: CLUB_FIELDS as unknown as string[],
+      filter: { slug: { _eq: slug } },
+      limit: 1,
+    }),
+  )) as Row[];
+  if (!rows[0]) return null;
+
+  const teamRows = (await client.request(
+    readItems("hrc_teams", {
+      fields: TEAM_FIELDS as unknown as string[],
+      filter: { club: { _eq: rows[0].id } },
+      sort: ["sort", "name"],
+      limit: -1,
+    }),
+  )) as Row[];
+
+  const squadRows = (await client.request(
+    readItems("hrc_squads", {
+      fields: [
+        "id",
+        "sort",
+        { team: ["name", "slug", "sort"] },
+        { member: MEMBER_PUBLIC_FIELDS as unknown as string[] },
+      ],
+      filter: { team: { club: { _eq: rows[0].id } } },
+      sort: ["team.sort", "sort"],
+      limit: -1,
+    }),
+  )) as Row[];
+
+  const squads = teamRows.map((team) => ({
+    teamName: team.name,
+    teamSlug: team.slug,
+    players: squadRows
+      .filter((place) => rel(place.team)?.slug === team.slug)
+      .map((place) => toMemberSummary(rel(place.member) ?? {})),
+  }));
+
+  return { ...toClub(rows[0]), teams: teamRows.map(toTeam), squads };
+}
+
 export async function getPages(): Promise<Page[]> {
   const client = await directus();
   const rows = (await client.request(
@@ -436,18 +544,27 @@ export async function getVenue(slug: string): Promise<Venue | null> {
 
 const TEAM_FIELDS = [
   "*",
+  { club: ["id", "name", "slug"] },
   { season: ["id", "label", "slug"] },
   { captain: ["id", "full_name", "display_name", "slug", "photo", "is_coach", "is_committee"] },
   { home_venue: ["*"] },
 ] as const;
 
-export async function getTeams(seasonSlug?: string): Promise<Team[]> {
+export async function getTeams(seasonSlug?: string, clubSlug?: string): Promise<Team[]> {
   const client = await directus();
   const seasonId = await seasonIdFor(seasonSlug);
+
+  // Unqualified, "teams" means our own — the site holds all 26 in the
+  // league, and a visitor asking for our teams does not want the other 22.
+  const club = clubSlug ? { slug: clubSlug } : await getHomeClub();
+  const filter: Record<string, unknown>[] = [];
+  if (seasonId) filter.push({ season: { _eq: seasonId } });
+  if (club) filter.push(clubSlug ? { club: { slug: { _eq: clubSlug } } } : { club: { _eq: (club as { id: string }).id } });
+
   const rows = (await client.request(
     readItems("hrc_teams", {
       fields: TEAM_FIELDS as unknown as string[],
-      filter: seasonId ? { season: { _eq: seasonId } } : {},
+      filter: filter.length ? { _and: filter } : {},
       sort: ["sort", "name"],
       limit: -1,
     }),
@@ -696,10 +813,15 @@ const MEMBER_PUBLIC_FIELDS = [
 
 export async function getMembers(): Promise<MemberSummary[]> {
   const client = await directus();
+  const homeClub = await getHomeClub();
+  const filter: Record<string, unknown>[] = [{ show_on_site: { _eq: true } }];
+  // Our players, not the league's 165.
+  if (homeClub) filter.push({ club: { _eq: homeClub.id } });
+
   const rows = (await client.request(
     readItems("hrc_members", {
       fields: MEMBER_PUBLIC_FIELDS as unknown as string[],
-      filter: { show_on_site: { _eq: true } },
+      filter: { _and: filter },
       sort: ["full_name"],
       limit: -1,
     }),

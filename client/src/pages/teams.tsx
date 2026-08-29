@@ -4,16 +4,21 @@ import { FixtureList } from "@/components/data";
 import { Badge, Card, Empty, ErrorNote, Loading, Prose } from "@/components/ui";
 import { usePlayer, usePlayers, useTeam, useTeams } from "@/lib/queries";
 import { divisionLabel, fileUrl, formatDayName, formatTime } from "@/lib/utils";
+import { DIVISION } from "@shared/enums.js";
 
 export function TeamsPage() {
   const { data: teams, isLoading, isError } = useTeams();
 
-  if (isLoading) return <Loading what="our teams" />;
+  if (isLoading) return <Loading what="the teams" />;
   if (isError) return <ErrorNote what="teams" />;
 
+  // Grouped by division and in the league's own order, because "which
+  // division is that team in" is the question this page exists to answer.
+  const divisions = DIVISION.filter((division) => (teams ?? []).some((t) => t.division === division));
+
   return (
-    <div>
-      <PageHeader title="Our teams" subtitle="Every HRC team, and who plays for them" />
+    <div className="space-y-10">
+      <PageHeader title="Teams" subtitle="Every team in the league, by division" />
 
       {!teams || teams.length === 0 ? (
         <Empty>
@@ -21,8 +26,11 @@ export function TeamsPage() {
           confirms the divisions in September.
         </Empty>
       ) : (
+        divisions.map((division) => (
+        <section key={division} aria-label={divisionLabel(division)}>
+        <h2 className="mb-3 text-2xl">{divisionLabel(division)}</h2>
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {teams.map((team) => (
+          {teams.filter((team) => team.division === division).map((team) => (
             <li key={team.id}>
               <Card className="h-full">
                 <h2 className="text-2xl">
@@ -30,9 +38,13 @@ export function TeamsPage() {
                     {team.name}
                   </Link>
                 </h2>
-                <p className="mt-1">
-                  <Badge>{divisionLabel(team.division)}</Badge>
-                </p>
+                {team.clubSlug ? (
+                  <p className="mt-1">
+                    <Link href={`/clubs/${team.clubSlug}`} className="text-brand underline underline-offset-4">
+                      {team.clubName}
+                    </Link>
+                  </p>
+                ) : null}
                 {team.homeNight ? (
                   <p className="mt-3">
                     Plays at home on <strong>{formatDayName(team.homeNight)}s</strong>
@@ -54,6 +66,8 @@ export function TeamsPage() {
             </li>
           ))}
         </ul>
+        </section>
+        ))
       )}
     </div>
   );
@@ -202,7 +216,7 @@ export function PlayersPage() {
 
   return (
     <div>
-      <PageHeader title="Players" subtitle="Everyone who turns out for the club" />
+      <PageHeader title="Players" subtitle="Everyone registered with a club this season" />
 
       {!players || players.length === 0 ? (
         <Empty>
@@ -211,8 +225,8 @@ export function PlayersPage() {
             in yet" than "the club has no players", and saying so is fairer
             to both the reader and the members.
           */}
-          No player profiles are published at the moment. We only list a player once they’ve told us
-          they’re happy to appear.
+          No players are listed at the moment. Players appear here once their club has registered
+          them with the league.
         </Empty>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

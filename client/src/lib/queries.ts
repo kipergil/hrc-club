@@ -1,6 +1,8 @@
 import { QueryClient, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { apiGet } from "@shared/api-client.js";
 import type {
+  Club,
+  ClubDetail,
   ClubDocument,
   ClubEvent,
   ClubSession,
@@ -58,6 +60,8 @@ export const keys = {
   home: ["home"] as const,
   settings: ["settings"] as const,
   seasons: ["seasons"] as const,
+  clubs: ["clubs"] as const,
+  club: (slug: string) => ["club", slug] as const,
   page: (slug: string) => ["page", slug] as const,
   sessions: ["sessions"] as const,
   venues: ["venues"] as const,
@@ -89,6 +93,8 @@ export const fetchers = {
   home: () => apiGet<HomePayload>("/api/home"),
   settings: () => apiGet<SiteSettings>("/api/settings"),
   seasons: () => apiGet<Season[]>("/api/seasons"),
+  clubs: () => apiGet<Club[]>("/api/clubs"),
+  club: (slug: string) => apiGet<ClubDetail>(`/api/clubs/${slug}`),
   page: (slug: string) => apiGet<Page>(`/api/pages/${slug}`),
   sessions: () => apiGet<ClubSession[]>("/api/sessions"),
   venues: () => apiGet<Venue[]>("/api/venues"),
@@ -120,6 +126,10 @@ export const useHome = (): UseQueryResult<HomePayload> =>
   useQuery({ queryKey: keys.home, queryFn: fetchers.home });
 export const useSettings = (): UseQueryResult<SiteSettings> =>
   useQuery({ queryKey: keys.settings, queryFn: fetchers.settings });
+export const useClubs = (): UseQueryResult<Club[]> =>
+  useQuery({ queryKey: keys.clubs, queryFn: fetchers.clubs });
+export const useClub = (slug: string): UseQueryResult<ClubDetail> =>
+  useQuery({ queryKey: keys.club(slug), queryFn: () => fetchers.club(slug) });
 export const usePage = (slug: string): UseQueryResult<Page> =>
   useQuery({ queryKey: keys.page(slug), queryFn: () => fetchers.page(slug) });
 export const useSessions = (): UseQueryResult<ClubSession[]> =>

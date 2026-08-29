@@ -62,12 +62,6 @@ async function collectRoutes(): Promise<RouteSpec[]> {
     route("/about/history", async (client) => {
       await client.prefetchQuery({ queryKey: keys.page("history"), queryFn: () => storage.getPage("history") });
     }),
-    route("/coaching", async (client) => {
-      await client.prefetchQuery({ queryKey: keys.page("coaching"), queryFn: () => storage.getPage("coaching") });
-    }),
-    route("/juniors", async (client) => {
-      await client.prefetchQuery({ queryKey: keys.page("juniors"), queryFn: () => storage.getPage("juniors") });
-    }),
     route("/privacy", async (client) => {
       await client.prefetchQuery({ queryKey: keys.page("privacy"), queryFn: () => storage.getPage("privacy") });
     }),
@@ -84,21 +78,6 @@ async function collectRoutes(): Promise<RouteSpec[]> {
       });
     }),
 
-    route("/play", async (client) => {
-      await Promise.all([
-        client.prefetchQuery({ queryKey: keys.sessions, queryFn: () => storage.getSessions() }),
-        client.prefetchQuery({ queryKey: keys.venues, queryFn: () => storage.getVenues() }),
-      ]);
-    }),
-    route("/join", async (client) => {
-      await Promise.all([
-        client.prefetchQuery({
-          queryKey: keys.membershipOptions,
-          queryFn: () => storage.getMembershipOptions(),
-        }),
-        client.prefetchQuery({ queryKey: keys.page("join"), queryFn: () => storage.getPage("join") }),
-      ]);
-    }),
 
     route("/committee", async (client) => {
       await client.prefetchQuery({ queryKey: keys.committee, queryFn: () => storage.getCommitteeRoles() });
@@ -121,6 +100,9 @@ async function collectRoutes(): Promise<RouteSpec[]> {
     route("/contact"),
 
     // Tier B — league data and club news.
+    route("/clubs", async (client) => {
+      await client.prefetchQuery({ queryKey: keys.clubs, queryFn: () => storage.getClubs() });
+    }),
     route("/teams", async (client) => {
       await client.prefetchQuery({ queryKey: keys.teams(), queryFn: () => storage.getTeams() });
     }),
@@ -174,7 +156,8 @@ async function collectRoutes(): Promise<RouteSpec[]> {
   // Detail pages are enumerated from the data rather than listed by hand,
   // so a new article or a new team is prerendered by the next build without
   // anyone remembering to add it here.
-  const [teams, players, news, events, albums, venues] = await Promise.all([
+  const [clubs, teams, players, news, events, albums, venues] = await Promise.all([
+    storage.getClubs(),
     storage.getTeams(),
     storage.getMembers(),
     storage.getNews(),
@@ -182,6 +165,17 @@ async function collectRoutes(): Promise<RouteSpec[]> {
     storage.getGalleryAlbums(),
     storage.getVenues(),
   ]);
+
+  for (const club of clubs) {
+    routes.push(
+      route(`/clubs/${club.slug}`, async (client) => {
+        await client.prefetchQuery({
+          queryKey: keys.club(club.slug),
+          queryFn: () => storage.getClub(club.slug),
+        });
+      }),
+    );
+  }
 
   for (const team of teams) {
     routes.push(

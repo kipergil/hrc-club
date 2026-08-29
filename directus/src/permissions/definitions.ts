@@ -9,6 +9,7 @@ import type { PermissionRule, PolicyDefinition } from "./types.js";
  */
 const READ_ONLY_COLLECTIONS = [
   "hrc_site_settings",
+  "hrc_clubs",
   "hrc_pages",
   "hrc_news",
   "hrc_events",
@@ -54,6 +55,10 @@ const MEMBER_PUBLIC_FIELDS = [
   "show_on_site",
   "is_coach",
   "is_committee",
+  // Readable because the site now holds every player in the league, and
+  // "our players" is a filter on this column — Directus refuses to filter
+  // on a field the policy cannot read.
+  "club",
   "clerk_user_id",
   "date_created",
   "date_updated",

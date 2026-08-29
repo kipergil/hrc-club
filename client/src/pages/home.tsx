@@ -1,9 +1,8 @@
 import { Link } from "wouter";
-import { SESSION_TYPE_LABELS } from "@shared/enums.js";
 import { FixtureList } from "@/components/data";
-import { Card, CardLink, Empty, ErrorNote, Loading, Prose } from "@/components/ui";
+import { Card, CardLink, ErrorNote, Loading, Prose } from "@/components/ui";
 import { useHome } from "@/lib/queries";
-import { formatDateShort, formatDayName, formatTime } from "@/lib/utils";
+import { formatDateShort } from "@/lib/utils";
 
 /**
  * Six large tappable cards for the six things people actually come here
@@ -17,11 +16,10 @@ import { formatDateShort, formatDayName, formatTime } from "@/lib/utils";
 export default function HomePage() {
   const { data, isLoading, isError } = useHome();
 
-  if (isLoading) return <Loading what="the club's news and fixtures" />;
+  if (isLoading) return <Loading what="the league's news and fixtures" />;
   if (isError || !data) return <ErrorNote what="home page" />;
 
-  const { settings, nextFixtures, latestResults, news, events, sessions } = data;
-  const nextSession = sessions[0];
+  const { settings, nextFixtures, latestResults, news, events } = data;
 
   return (
     <div className="space-y-12">
@@ -43,19 +41,9 @@ export default function HomePage() {
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <CardLink
-            href="/play"
-            title="When we play"
-            description="Club nights, times, the hall and what it costs."
-            meta={
-              nextSession
-                ? `Next: ${formatDayName(nextSession.dayOfWeek)}s, ${formatTime(nextSession.startTime)}`
-                : undefined
-            }
-          />
-          <CardLink
             href="/fixtures"
             title="This week's matches"
-            description="Every match our teams still have to play."
+            description="Every match still to play, across all three divisions."
             meta={
               nextFixtures[0]
                 ? `${formatDateShort(nextFixtures[0].playedOn)} · ${nextFixtures[0].teamName} v ${nextFixtures[0].opponentName}`
@@ -65,7 +53,7 @@ export default function HomePage() {
           <CardLink
             href="/results"
             title="Latest results"
-            description="How our teams have got on, match by match."
+            description="Every match played, with the scorecards."
             meta={
               latestResults[0]
                 ? `${latestResults[0].teamName} ${latestResults[0].hrcScore ?? "?"}–${latestResults[0].opponentScore ?? "?"} ${latestResults[0].opponentName}`
@@ -75,7 +63,12 @@ export default function HomePage() {
           <CardLink
             href="/tables"
             title="League tables"
-            description="Where our teams stand in their divisions."
+            description="Who is top of the Premier Division, Division One and Division Two."
+          />
+          <CardLink
+            href="/clubs"
+            title="Club details"
+            description="All ten clubs — where they play, their teams and their players."
           />
           <CardLink
             href="/news"
@@ -84,9 +77,9 @@ export default function HomePage() {
             meta={news[0]?.title}
           />
           <CardLink
-            href="/join"
-            title="Join us"
-            description="New players are welcome, whatever your standard."
+            href="/honours"
+            title="Roll of honour"
+            description="Champions and cup winners, back to 1950."
           />
         </div>
       </section>
@@ -127,7 +120,7 @@ export default function HomePage() {
       {news.length > 0 ? (
         <section aria-labelledby="news-heading">
           <h2 id="news-heading" className="mb-3 text-2xl">
-            Club news
+            Special notices
           </h2>
           <ul className="grid gap-4 sm:grid-cols-2">
             {news.map((item) => (
@@ -169,39 +162,6 @@ export default function HomePage() {
         </section>
       ) : null}
 
-      {sessions.length > 0 ? (
-        <section aria-labelledby="sessions-heading">
-          <h2 id="sessions-heading" className="mb-3 text-2xl">
-            When we play
-          </h2>
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sessions.map((session) => (
-              <li key={session.id}>
-                <Card>
-                  <h3 className="text-xl">{session.name}</h3>
-                  <p className="mt-1 text-lg">
-                    {formatDayName(session.dayOfWeek)}s, {formatTime(session.startTime)}
-                    {session.endTime ? ` – ${formatTime(session.endTime)}` : null}
-                  </p>
-                  <p className="mt-1 text-ink-muted">
-                    {SESSION_TYPE_LABELS[session.sessionType] ?? session.sessionType}
-                  </p>
-                  {session.venue ? <p className="mt-1">{session.venue.name}</p> : null}
-                </Card>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3">
-            <Link href="/play" className="text-brand underline underline-offset-4">
-              Full timetable, directions and what it costs
-            </Link>
-          </p>
-        </section>
-      ) : (
-        <Empty action={<Link href="/contact" className="text-brand underline">Ask us when we play</Link>}>
-          The club timetable has not been published yet.
-        </Empty>
-      )}
     </div>
   );
 }

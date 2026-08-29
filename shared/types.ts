@@ -110,6 +110,26 @@ export interface MemberProfile extends MemberSummary {
   honours: Honour[];
 }
 
+export interface Club {
+  id: string;
+  name: string;
+  slug: string;
+  shortName: string | null;
+  isHomeClub: boolean;
+  description: string | null;
+  website: string | null;
+  logoId: string | null;
+  venue: Venue | null;
+  teamCount: number;
+  playerCount: number;
+  divisions: Division[];
+}
+
+export interface ClubDetail extends Club {
+  teams: Team[];
+  squads: Array<{ teamName: string; teamSlug: string; players: MemberSummary[] }>;
+}
+
 export interface Team {
   id: string;
   name: string;
@@ -122,6 +142,8 @@ export interface Team {
   captain: MemberSummary | null;
   homeVenue: Venue | null;
   seasonLabel: string;
+  clubName: string | null;
+  clubSlug: string | null;
 }
 
 export interface SquadPlace {
@@ -265,6 +287,8 @@ export interface Honour {
   title: string;
   honourType: string;
   competition: Competition | null;
+  /** The competition as the league writes it — see the field's note in the schema. */
+  competitionName: string | null;
   seasonLabel: string;
   recipientName: string | null;
   notes: string | null;
