@@ -35,6 +35,11 @@ export const NAV: readonly [NavGroup, NavGroup, NavGroup, NavGroup, NavGroup] = 
     href: "/fixtures",
     links: [
       { href: "/fixtures", title: "Fixture calendar", subtitle: "Every match still to play" },
+      {
+        href: "/fixtures/calendar",
+        title: "Season calendar",
+        subtitle: "Every team's whole season on one grid",
+      },
       { href: "/results", title: "Match history", subtitle: "Every match played this season" },
       { href: "/cups", title: "Cup news", subtitle: "The four cups and how they stand" },
     ],

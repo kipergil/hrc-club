@@ -4,6 +4,11 @@
 **Compared against:** `hertsttl.org.uk/Home.htm` and every page it links to, crawled 29 August 2026
 **Applies to:** `kipergil/hrc-club`
 
+> **Update, 30 August 2026.** Items 1 and 3 of §9 are done — the fifteen-season
+> table archive is imported and the division calendar grid is built. §10 records
+> what changed and what the next pass is. The body below is left as it was
+> written, as the record of what was found.
+
 ---
 
 ## 1. Method
@@ -286,3 +291,64 @@ is the most visible defect on the site.
    sets the schedule for that.
 8. **Competition entry forms** (§6.2, §6.3) — lowest traffic, and one of the two is broken on
    the original.
+
+---
+
+## 10. Done since — 30 August 2026
+
+### 10.1 The league table archive (§4.2, and more than was asked)
+
+The archive turned out to be far larger than "last season". `Tables{year}.htm` exists for every
+year from 2011 to 2025, each linking back to the one before it: **fifteen seasons of closing
+tables, 276 rows.** All of it is now imported (`npm run directus:import:archive`), and the season
+filter offers sixteen seasons rather than one.
+
+Three things came out of the import that were not visible from the outside:
+
+- **Two seasons were never finished.** 2019-20 was abandoned in March 2020 — the page says so
+  only through a background image stamped "abandoned", and the giveaway in the data is that
+  the divisions played between nine and fourteen matches. 2020-21 was cancelled outright and
+  has prose but no tables. Both are imported rather than skipped, because leaving them out
+  would make the archive read as continuous. `hrc_seasons.completion` records which, and the
+  table says "Season abandoned part-way through" above it.
+- **The archive records played and points, and nothing else.** No win/loss breakdown exists
+  for any of the fifteen seasons. `Standing.won/drawn/lost/setsFor/setsAgainst` are now
+  nullable rather than defaulting to zero, and `StandingsTable` drops a column that is unknown
+  the whole way down — otherwise the site would have stated, in a column of its own, that the
+  2025-26 Premier champions won no matches. A current season computed from real results keeps
+  the full record; a genuine zero at the start of a season keeps its column.
+- **43 team names have no team record here**, and that is correct rather than a matching bug.
+  Clubs fold (Allenburys, Hoddesdon, County Hall, Lytton, Watton-at-Stone) and teams get
+  renamed ("Grundy Park 1" → "Grundy Park A", "Water Lane Phoenix A" → "Water Lane A"). Those
+  rows keep their name as text and link nowhere. Matching is exact on purpose: guessing would
+  file one club's history under another's.
+
+### 10.2 The division calendar grid (§5.1)
+
+`/fixtures/calendar` — teams down the side, weeks across the top, split into two grids by
+calendar year as the league splits it. Sticky team column, so scrolling out to March still
+shows whose row you are on.
+
+Home and away are words — "v Kidston" and "at Kidston" — not the original's italics. The
+original explains its italics in a line at the top of the page, which fails both for anyone who
+cannot see them and for anyone who did not read the line. A bye reads "No match", and an empty
+week is the thing the grid exists to show.
+
+### 10.3 A side-effect worth recording
+
+Sixteen seasons of chips wrapped onto two rows and pushed the table itself below the fold — the
+filter ended up larger than the thing it filtered. `SeasonPicker` now shows the six most recent
+and puts the rest behind one button, keeping the selected season visible whichever it is.
+
+### 10.4 Next
+
+The list in §9 stands, minus items 1 and 3. The order now is:
+
+1. **The averages archive** — `Averages{year}.htm` exists for 2020-2025, six seasons, grouped
+   by division with under-50 %-of-matches players greyed out. Two things make it more than a
+   repeat of 10.1: the greying is per-row markup rather than text, so the participation flag
+   has to be read from the colour attribute; and `hrc_player_stats.member` is required, so
+   importing six seasons of past players forces a decision about what `/players` means — this
+   season's squads, or everyone who has played. `Handicaps{year}.htm` follows the same shape.
+2. Cup fixtures and Cup News as a page about the cups (§5.2).
+3. Outstanding matches, averages by division, the handicaps club filter (§5.4–5.6).

@@ -14,6 +14,7 @@ import {
   usePagination,
 } from "@/components/ui";
 import { cn, divisionLabel, formatDateShort, formatTime, resultLabel } from "@/lib/utils";
+import type { CalendarCell, CalendarSegment } from "@/lib/calendar";
 
 /**
  * Every wide table on this site ships twice: as a real `<table>` from 640px
@@ -285,6 +286,17 @@ export function StandingsTable({
     );
   }
 
+  /*
+   * The league's archived tables publish team, played and points — no
+   * more. Rather than print a column of dashes for the fifteen seasons
+   * that have no win/loss breakdown, the columns that are unknown the
+   * whole way down are left out, and the note says which table this is.
+   * `some` rather than `every` so a single team yet to play does not
+   * collapse the column for the rest of the division.
+   */
+  const hasRecord = standings.some((row) => row.won !== null);
+  const incomplete = standings.find((row) => row.seasonIncomplete !== null)?.seasonIncomplete;
+
   return (
     <>
       {/*
@@ -294,7 +306,18 @@ export function StandingsTable({
       */}
       <TableNote>
         How many matches each team has played and how many points they have. Most points at the top.
+        {hasRecord ? null : " This is the league's own closing table, which records played and points only."}
       </TableNote>
+
+      {incomplete ? (
+        <p className="mb-4">
+          <Badge tone="neutral">
+            {incomplete === "cancelled"
+              ? "Season cancelled — never played"
+              : "Season abandoned part-way through"}
+          </Badge>
+        </p>
+      ) : null}
 
       <div className="hidden sm:block">
         <TableScroller>
@@ -303,9 +326,13 @@ export function StandingsTable({
               <Th className="w-14 text-right">Pos</Th>
               <Th>Team</Th>
               <Th className="text-right">Played</Th>
-              <Th className="text-right">Won</Th>
-              <Th className="text-right">Drawn</Th>
-              <Th className="text-right">Lost</Th>
+              {hasRecord ? (
+                <>
+                  <Th className="text-right">Won</Th>
+                  <Th className="text-right">Drawn</Th>
+                  <Th className="text-right">Lost</Th>
+                </>
+              ) : null}
               <Th className="text-right">Points</Th>
             </tr>
           </thead>
@@ -344,9 +371,13 @@ export function StandingsTable({
                   ) : null}
                 </Td>
                 <Td className="tabular text-right">{row.played}</Td>
-                <Td className="tabular text-right">{row.won}</Td>
-                <Td className="tabular text-right">{row.drawn}</Td>
-                <Td className="tabular text-right">{row.lost}</Td>
+                {hasRecord ? (
+                  <>
+                    <Td className="tabular text-right">{row.won ?? "—"}</Td>
+                    <Td className="tabular text-right">{row.drawn ?? "—"}</Td>
+                    <Td className="tabular text-right">{row.lost ?? "—"}</Td>
+                  </>
+                ) : null}
                 <Td className="tabular text-right text-lg font-semibold">{row.points}</Td>
               </Tr>
             ))}
@@ -380,7 +411,9 @@ export function StandingsTable({
                 </p>
               ) : null}
               <p className="mt-1 tabular text-ink-muted">
-                Played {row.played} · Won {row.won} · Drawn {row.drawn} · Lost {row.lost}
+                {hasRecord
+                  ? `Played ${row.played} · Won ${row.won ?? "—"} · Drawn ${row.drawn ?? "—"} · Lost ${row.lost ?? "—"}`
+                  : `Played ${row.played}`}
               </p>
             </Card>
           </li>
@@ -620,5 +653,129 @@ export function HandicapTable({ stats }: { stats: PlayerStat[] }) {
 
       <Pagination state={paged} noun="players" />
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The season grid
+// ---------------------------------------------------------------------------
+
+/**
+ * One team's week in the grid.
+ *
+ * The league's own calendar distinguishes home from away by italicising
+ * the away fixtures, with a line at the top of the page explaining that it
+ * does. That is styling carrying meaning on its own, which fails for
+ * anyone who cannot see it and for anyone who did not read the line — so
+ * here the words say it: "v Kidston" at home, "at Kidston" away. The tint
+ * is a second cue, never the only one.
+ */
+function CalendarCellContent({ cell }: { cell: CalendarCell }) {
+  if (cell.entries.length === 0) {
+    return <span className="text-ink-muted">No match</span>;
+  }
+
+  return (
+    <>
+      {cell.entries.map(({ fixture, isHome, opponent }) => {
+        const label = (
+          <>
+            <span className="text-ink-muted">{isHome ? "v" : "at"}</span> {opponent.name}
+          </>
+        );
+        return (
+          <span key={fixture.id} className="block">
+            {fixture.status === "played" ? (
+              <Link href={`/results/${fixture.id}`} className="link">
+                {label}
+              </Link>
+            ) : (
+              label
+            )}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * The season at a glance — teams down the side, weeks across the top.
+ *
+ * This is the league's `Calendarz.asp?Div=…`, which the chronological
+ * fixture list does not replace. A list answers "what is on this week"; a
+ * captain arranging a rearrangement is asking "when are we free, and when
+ * do we play them", and reading that off a list means scanning sixteen
+ * weeks for two mentions of one team.
+ *
+ * Wide by nature, so the table scrolls sideways inside its own container
+ * and the team column is sticky: scroll to March and you can still see
+ * whose row you are on. There is no card fallback for narrow screens —
+ * unlike a league table, a grid *is* the information here, and a
+ * per-team list of fixtures already exists on the team's own page.
+ */
+export function SeasonGrid({ segments }: { segments: CalendarSegment[] }) {
+  if (segments.length === 0) {
+    return (
+      <Empty>
+        There is no fixture programme for this division yet. It usually appears in August, before
+        the season starts.
+      </Empty>
+    );
+  }
+
+  return (
+    <div className="space-y-10">
+      {segments.map((segment) => (
+        <section key={segment.year} aria-label={`Fixtures in ${segment.year}`}>
+          <h3 className="mb-3 text-xl">{segment.year}</h3>
+          <div className="overflow-x-auto rounded-card border border-line bg-surface shadow-card print-plain">
+            <table className="border-collapse text-left">
+              <thead>
+                <tr>
+                  <th
+                    scope="col"
+                    className="sticky left-0 z-10 border-b border-r border-line bg-surface-sunken px-4 py-3 font-semibold text-ink"
+                  >
+                    Team
+                  </th>
+                  {segment.weeks.map((week) => (
+                    <th
+                      scope="col"
+                      key={week}
+                      className="whitespace-nowrap border-b border-line bg-surface-sunken px-4 py-3 font-semibold text-ink"
+                    >
+                      {formatDateShort(week)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {segment.rows.map((row) => (
+                  <tr key={row.team.slug} className="hover:bg-surface-sunken">
+                    <th
+                      scope="row"
+                      className="sticky left-0 z-10 whitespace-nowrap border-b border-r border-line bg-surface px-4 py-3 text-left font-semibold"
+                    >
+                      <Link href={`/teams/${row.team.slug}`} className="link">
+                        {row.team.name}
+                      </Link>
+                    </th>
+                    {row.cells.map((cell, index) => (
+                      <td
+                        key={segment.weeks[index]}
+                        className="whitespace-nowrap border-b border-line px-4 py-3 align-top"
+                      >
+                        <CalendarCellContent cell={cell} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }

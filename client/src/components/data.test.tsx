@@ -52,9 +52,22 @@ function standing(overrides: Partial<Standing> = {}): Standing {
     setsFor: 18,
     setsAgainst: 12,
     points: 4,
+    seasonIncomplete: null,
     lastSyncedAt: null,
     ...overrides,
   };
+}
+
+/** A row as the league's archived tables have it: played and points only. */
+function archivedStanding(overrides: Partial<Standing> = {}): Standing {
+  return standing({
+    won: null,
+    drawn: null,
+    lost: null,
+    setsFor: null,
+    setsAgainst: null,
+    ...overrides,
+  });
 }
 
 /**
@@ -163,5 +176,49 @@ describe("StandingsTable", () => {
     render(<StandingsTable standings={[standing()]} />);
     expect(screen.getByRole("table")).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Points" })).toBeDefined();
+  });
+
+  it("never prints a zero for a win the archive does not record", () => {
+    /*
+     * The league's closing tables, back to 2011-12, carry team, played and
+     * points and nothing else. Defaulting the rest to zero would have this
+     * table state that the champions won no matches — a claim the source
+     * never made. The column comes out instead.
+     */
+    render(<StandingsTable standings={[archivedStanding({ played: 14, points: 118 })]} />);
+    expect(screen.queryByRole("columnheader", { name: "Won" })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Lost" })).toBeNull();
+    expect(screen.getByRole("columnheader", { name: "Played" })).toBeDefined();
+    expect(screen.getByRole("columnheader", { name: "Points" })).toBeDefined();
+  });
+
+  it("says so, in words, when the table is the league's own closing one", () => {
+    render(<StandingsTable standings={[archivedStanding()]} />);
+    expect(screen.getByText(/played and points only/)).toBeDefined();
+  });
+
+  it("keeps the full record when the season's results are held here", () => {
+    render(<StandingsTable standings={[standing()]} />);
+    expect(screen.getByRole("columnheader", { name: "Won" })).toBeDefined();
+    expect(screen.queryByText(/played and points only/)).toBeNull();
+  });
+
+  it("keeps the win column when only some teams have yet to play", () => {
+    // A division at the start of a season has rows with a real zero in it.
+    // Those are known zeroes, and dropping the column for them would lose
+    // the very thing the table is for.
+    render(<StandingsTable standings={[standing({ won: 0 }), standing({ id: "s2", won: 2 })]} />);
+    expect(screen.getByRole("columnheader", { name: "Won" })).toBeDefined();
+  });
+
+  it("marks a season the league never finished", () => {
+    render(<StandingsTable standings={[archivedStanding({ seasonIncomplete: "abandoned" })]} />);
+    expect(screen.getByText(/abandoned part-way through/i)).toBeDefined();
+  });
+
+  it("leaves an ordinary season unmarked", () => {
+    render(<StandingsTable standings={[standing()]} />);
+    expect(screen.queryByText(/abandoned/i)).toBeNull();
+    expect(screen.queryByText(/cancelled/i)).toBeNull();
   });
 });

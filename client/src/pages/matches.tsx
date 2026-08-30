@@ -1,13 +1,19 @@
 import { Link } from "wouter";
-import { COMPETITION_LABELS } from "@shared/enums.js";
 import { PageHeader, PrintButton } from "@/components/layout";
-import { AveragesTable, FixtureList, HandicapTable, StandingsByDivision } from "@/components/data";
+import {
+  AveragesTable,
+  FixtureList,
+  HandicapTable,
+  SeasonGrid,
+  StandingsByDivision,
+} from "@/components/data";
 import {
   Badge,
   Card,
   Disclosure,
   Empty,
   ErrorNote,
+  FilterChips,
   Loading,
   Pagination,
   Prose,
@@ -20,7 +26,11 @@ import {
 } from "@/components/ui";
 import { useAverages, useFixture, useFixtures, useSeasons, useSettings, useStandings } from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
-import { cn, formatDateLong, formatTime, resultLabel } from "@/lib/utils";
+import { cn, divisionLabel, formatDateLong, formatTime, resultLabel } from "@/lib/utils";
+import { buildCalendar } from "@/lib/calendar";
+import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
+import type { Division } from "@shared/enums.js";
+import { useMemo, useState } from "react";
 
 /**
  * A small note under every page that shows synced league data, saying where
@@ -42,6 +52,91 @@ function SyncNote({ lastSyncedAt }: { lastSyncedAt: string | null | undefined })
       , where captains enter them.
       {lastSyncedAt ? ` Last updated ${formatDateLong(lastSyncedAt)}.` : null}
     </p>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * The season grid, division by division — the league's `Calendarz.asp`.
+ *
+ * A separate page rather than a toggle on `/fixtures` because it is a
+ * thing people link to and print: "here is our season" is the message, and
+ * an address that says which division and which year is worth having.
+ *
+ * One division at a time, as the league does it. Three divisions of eight
+ * or nine teams across thirty-two weeks in a single grid would be a table
+ * nobody could read on any screen.
+ */
+export function CalendarPage() {
+  const [season, setSeason] = useSeasonParam();
+  const { data: seasons } = useSeasons();
+  const {
+    data: fixtures,
+    isLoading,
+    isError,
+  } = useFixtures(`competition=league${season ? `&season=${season}` : ""}`);
+
+  const [division, setDivision] = useState<Division>("premier");
+
+  // Which divisions the season actually ran. The league fielded two from
+  // 2016-17 to 2018-19, and a chip for an empty division is a dead end.
+  const divisions = useMemo(
+    () =>
+      DIVISION.filter((value) =>
+        (fixtures ?? []).some(
+          (fixture) =>
+            fixture.homeTeam?.division === value || fixture.awayTeam?.division === value,
+        ),
+      ),
+    [fixtures],
+  );
+
+  const shown = divisions.includes(division) ? division : divisions[0];
+
+  const segments = useMemo(
+    () =>
+      buildCalendar(
+        (fixtures ?? []).filter(
+          (fixture) =>
+            fixture.homeTeam?.division === shown || fixture.awayTeam?.division === shown,
+        ),
+      ),
+    [fixtures, shown],
+  );
+
+  if (isLoading) return <Loading what="the fixture calendar" variant="table" />;
+  if (isError) return <ErrorNote what="fixture calendar" />;
+
+  return (
+    <div>
+      <PageHeader
+        title="Season calendar"
+        subtitle="Every team's whole season, week by week"
+        actions={<PrintButton label="Print this calendar" />}
+      >
+        <div className="space-y-4">
+          <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
+          {divisions.length > 1 ? (
+            <FilterChips
+              label="Division"
+              value={shown ?? "premier"}
+              onChange={setDivision}
+              options={divisions.map((value) => ({ value, label: divisionLabel(value) }))}
+            />
+          ) : null}
+        </div>
+      </PageHeader>
+
+      <p className="mb-6 max-w-readable text-ink-muted">
+        Each row is a team and each column a week. “v” is a home match and “at” is away; an empty
+        week is one with no match in it.
+      </p>
+
+      <SeasonGrid segments={segments} />
+
+      <SyncNote lastSyncedAt={fixtures?.[0]?.lastSyncedAt} />
+    </div>
   );
 }
 

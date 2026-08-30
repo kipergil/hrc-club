@@ -21,6 +21,8 @@ import {
   NAV_GROUP_LABELS,
   NEWS_CATEGORY,
   PAGE_STATUS,
+  SEASON_COMPLETION,
+  SEASON_COMPLETION_LABELS,
   SESSION_TYPE,
   SESSION_TYPE_LABELS,
   SPONSOR_TIER,
@@ -92,6 +94,11 @@ export const seasonsCollection: CollectionDefinition = {
       false,
       "Exactly one season should have this set. The home page, fixtures, tables and averages all read it.",
     ),
+    selectField("completion", SEASON_COMPLETION, {
+      labels: SEASON_COMPLETION_LABELS,
+      defaultValue: "completed",
+      note: "Whether the season ran to a finish. 2019-20 was abandoned in March 2020 and 2020-21 was cancelled; a table from either is a snapshot, not a result, and the site says so.",
+    }),
     textField("league_season_ref", {
       nullable: true,
       note: "Identifier for the same season in the league's own system, for the fixture/result sync.",
@@ -465,11 +472,20 @@ export const standingsCollection: CollectionDefinition = {
     }),
     booleanField("is_hrc", false, "Marks HRC's own rows so the table can highlight them — with a text label, never colour alone."),
     integerField("played", { defaultValue: 0 }),
-    integerField("won", { defaultValue: 0 }),
-    integerField("drawn", { defaultValue: 0 }),
-    integerField("lost", { defaultValue: 0 }),
-    integerField("sets_for", { defaultValue: 0 }),
-    integerField("sets_against", { defaultValue: 0 }),
+    /*
+     * Nullable, with no default, unlike `played` and `points`.
+     *
+     * The league's archived tables carry three columns — team, played,
+     * points — and nothing else. Defaulting these to zero would have the
+     * site state, in a column of its own, that the 2025-26 Premier
+     * champions won no matches. An imported row leaves them null and the
+     * table drops the column.
+     */
+    integerField("won", { nullable: true }),
+    integerField("drawn", { nullable: true }),
+    integerField("lost", { nullable: true }),
+    integerField("sets_for", { nullable: true }),
+    integerField("sets_against", { nullable: true }),
     integerField("points", { defaultValue: 0 }),
     timestampField("last_synced_at"),
     dateCreatedField(),

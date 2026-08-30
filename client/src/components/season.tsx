@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import type { Season } from "@shared/types.js";
 import { FilterChips } from "@/components/ui";
@@ -54,20 +54,53 @@ export function SeasonPicker({
   onChange: (season: string | undefined) => void;
   label?: string;
 }) {
+  const [showAll, setShowAll] = useState(false);
+
   // One season is not a choice, and a filter offering it is just furniture.
   if (!seasons || seasons.length < 2) return null;
 
   const current = seasons.find((season) => season.isCurrent);
+  const selected = value ?? current?.slug ?? seasons[0]!.slug;
+
+  /*
+   * This was written for the four or five seasons the site held, and the
+   * league's archive turned out to go back to 2011-12. Sixteen chips wrap
+   * onto two rows and push the table itself below the fold — the filter
+   * ends up larger than the thing it filters.
+   *
+   * So: the recent seasons stay one tap away, and the rest are one tap
+   * behind a button. `RECENT` is six because "this season" and "last
+   * season" are what nearly every visit wants, and a couple either side
+   * covers the rest without a second row.
+   */
+  const RECENT = 6;
+  const collapsed = seasons.length > RECENT + 2 && !showAll;
+  // A season chosen from the archive stays visible while it is selected —
+  // otherwise picking 2013-14 makes the chip you just pressed disappear.
+  const shown = collapsed
+    ? seasons.filter((season, index) => index < RECENT || season.slug === selected)
+    : seasons;
 
   return (
-    <FilterChips
-      label={label}
-      value={value ?? current?.slug ?? seasons[0]!.slug}
-      onChange={(next) => onChange(next === current?.slug ? undefined : next)}
-      options={seasons.map((season) => ({
-        value: season.slug,
-        label: season.isCurrent ? `${season.label} (current)` : season.label,
-      }))}
-    />
+    <div className="space-y-2">
+      <FilterChips
+        label={label}
+        value={selected}
+        onChange={(next) => onChange(next === current?.slug ? undefined : next)}
+        options={shown.map((season) => ({
+          value: season.slug,
+          label: season.isCurrent ? `${season.label} (current)` : season.label,
+        }))}
+      />
+      {collapsed ? (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="link no-print min-h-touch font-semibold"
+        >
+          Show all {seasons.length} seasons, back to {seasons[seasons.length - 1]!.label}
+        </button>
+      ) : null}
+    </div>
   );
 }

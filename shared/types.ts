@@ -236,12 +236,29 @@ export interface Standing {
   teamSlug: string | null;
   isHrc: boolean;
   played: number;
-  won: number;
-  drawn: number;
-  lost: number;
-  setsFor: number;
-  setsAgainst: number;
+  /*
+   * Null where the table is an archived one.
+   *
+   * The league's own closing tables, back to 2011-12, publish three
+   * columns: team, played, points. Nothing records how those points were
+   * split into wins and losses, and defaulting the difference to zero
+   * would print "0 wins" beside a team that won the division on 118
+   * points. Null is the honest answer, and `StandingsTable` drops a column
+   * that is null the whole way down rather than showing a column of
+   * dashes.
+   */
+  won: number | null;
+  drawn: number | null;
+  lost: number | null;
+  setsFor: number | null;
+  setsAgainst: number | null;
   points: number;
+  /**
+   * Set when the league did not complete the season — 2019-20 was
+   * abandoned in March 2020, 2020-21 cancelled outright. A snapshot taken
+   * when play stopped is not a final table and should not be read as one.
+   */
+  seasonIncomplete: "abandoned" | "cancelled" | null;
   lastSyncedAt: string | null;
 }
 

@@ -257,14 +257,23 @@ function toStanding(row: Row): Standing {
     teamSlug: rel(row.team)?.slug ?? null,
     isHrc: Boolean(row.is_hrc),
     played: int(row.played),
-    won: int(row.won),
-    drawn: int(row.drawn),
-    lost: int(row.lost),
-    setsFor: int(row.sets_for),
-    setsAgainst: int(row.sets_against),
+    // `num`, not `int`: an archived table has no wins column, and zero is
+    // a claim about the season rather than an absence of one.
+    won: num(row.won),
+    drawn: num(row.drawn),
+    lost: num(row.lost),
+    setsFor: num(row.sets_for),
+    setsAgainst: num(row.sets_against),
     points: int(row.points),
+    seasonIncomplete: seasonIncompleteOf(rel(row.season)),
     lastSyncedAt: str(row.last_synced_at),
   };
+}
+
+/** `completed` is the ordinary case and says nothing worth showing. */
+function seasonIncompleteOf(season: Row | null): Standing["seasonIncomplete"] {
+  const completion = season?.completion;
+  return completion === "abandoned" || completion === "cancelled" ? completion : null;
 }
 
 function toPlayerStat(row: Row): PlayerStat {
@@ -872,7 +881,7 @@ async function getStoredStandings(seasonSlug?: string): Promise<Standing[]> {
 
   const rows = (await client.request(
     readItems("hrc_standings", {
-      fields: ["*", { team: ["name", "slug"] }],
+      fields: ["*", { team: ["name", "slug"] }, { season: ["completion"] }],
       filter: filter.length ? { _and: filter } : {},
       sort: ["division", "position"],
       limit: -1,
@@ -1022,6 +1031,9 @@ export function buildTable(
         setsFor: row.setsFor,
         setsAgainst: row.setsAgainst,
         points: row.points,
+        // A computed table is built from this season's own results, so
+        // whatever the season turns out to be, it is being played.
+        seasonIncomplete: null,
         lastSyncedAt: null,
       });
     });

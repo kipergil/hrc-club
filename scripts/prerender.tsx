@@ -121,6 +121,15 @@ async function collectRoutes(): Promise<RouteSpec[]> {
         queryFn: () => storage.getFixtures({ status: "scheduled" }),
       });
     }),
+    route("/fixtures/calendar", async (client) => {
+      // The grid needs the whole league programme, played and unplayed
+      // alike — a season calendar that stops at today is a diary, not a
+      // calendar.
+      await client.prefetchQuery({
+        queryKey: keys.fixtures("competition=league"),
+        queryFn: () => storage.getFixtures({ competition: "league" }),
+      });
+    }),
     route("/results", async (client) => {
       await client.prefetchQuery({
         queryKey: keys.fixtures("status=played"),
