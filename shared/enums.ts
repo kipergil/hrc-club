@@ -107,6 +107,25 @@ export const COMPETITION_LABELS: Record<Competition, string> = {
   friendly: "Friendly",
 };
 
+/**
+ * Whether a season ran to a finish.
+ *
+ * Two of the fifteen in the archive did not. 2019-20 was abandoned in
+ * March 2020 with the divisions between nine and fourteen matches in, and
+ * 2020-21 was cancelled before a ball was hit. Both belong in the record —
+ * leaving them out would make the archive read as continuous — but a table
+ * frozen part-way through a season is not a final table, and the site has
+ * to be able to say which it is showing.
+ */
+export const SEASON_COMPLETION = ["completed", "abandoned", "cancelled"] as const;
+export type SeasonCompletion = (typeof SEASON_COMPLETION)[number];
+
+export const SEASON_COMPLETION_LABELS: Record<SeasonCompletion, string> = {
+  completed: "Played to a finish",
+  abandoned: "Abandoned part-way through",
+  cancelled: "Cancelled — never played",
+};
+
 export const FIXTURE_STATUS = ["scheduled", "played", "postponed", "cancelled", "void"] as const;
 export type FixtureStatus = (typeof FIXTURE_STATUS)[number];
 

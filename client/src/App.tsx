@@ -14,6 +14,7 @@ import { PlayerPage, PlayersPage, TeamPage, TeamsPage } from "@/pages/teams";
 import { ClubPage, ClubsPage } from "@/pages/clubs";
 import {
   AveragesPage,
+  CalendarPage,
   CupsPage,
   FixturesPage,
   HandicapsPage,
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/teams" component={TeamsPage} />
         <Route path="/teams/:slug">{(params) => <TeamPage slug={params.slug} />}</Route>
         <Route path="/fixtures" component={FixturesPage} />
+        <Route path="/fixtures/calendar" component={CalendarPage} />
         <Route path="/results" component={ResultsPage} />
         <Route path="/results/:id">{(params) => <MatchPage id={params.id} />}</Route>
         <Route path="/tables" component={TablesPage} />

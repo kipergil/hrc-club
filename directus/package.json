@@ -11,7 +11,8 @@
     "seed": "tsx src/content/seed.ts",
     "import:league": "tsx src/content/import-league.ts",
     "import:content": "tsx src/content/import-league-content.ts",
-    "import:fixtures": "tsx src/content/import-fixtures.ts"
+    "import:fixtures": "tsx src/content/import-fixtures.ts",
+    "import:archive": "tsx src/content/import-archive.ts"
   },
   "dependencies": {
     "@directus/sdk": "^18.0.3",
