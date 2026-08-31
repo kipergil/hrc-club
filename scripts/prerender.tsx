@@ -112,6 +112,11 @@ async function collectRoutes(): Promise<RouteSpec[]> {
     route("/clubs", async (client) => {
       await client.prefetchQuery({ queryKey: keys.clubs, queryFn: () => storage.getClubs() });
     }),
+    route("/venues", async (client) => {
+      // The same clubs payload the club list uses — every venue reaches
+      // this page through the club that plays there.
+      await client.prefetchQuery({ queryKey: keys.clubs, queryFn: () => storage.getClubs() });
+    }),
     route("/teams", async (client) => {
       await client.prefetchQuery({ queryKey: keys.teams(), queryFn: () => storage.getTeams() });
     }),

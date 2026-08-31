@@ -16,16 +16,35 @@ import { env } from "./env.js";
  * deployment — it broke it, and every build failed on the day it merged.
  * Deployment config takes its explanations here, in a file that has
  * somewhere to put them.
+ *
+ * The shared directives are exported so `scripts/vercel-config.test.ts`
+ * can hold them against the copy in `vercel.json` and fail when the two
+ * drift. "Meant to stay in step" was true and unchecked until the venue
+ * maps needed a tile host added to both — which is the same shape as the
+ * bug that took the deployment down: config that is wrong in a way no
+ * test looks at.
+ *
+ * Images and documents are proxied from Directus through this same origin
+ * (/api/files/:id), so the policy does not need to name the Directus host
+ * at all — one fewer thing to update when it moves.
  */
+export const CSP_DIRECTIVES = {
+  defaultSrc: ["'self'"],
+  // OpenStreetMap's tile server is the venue maps' basemap, and the only
+  // third-party origin the site loads anything from. Tiles are images, so
+  // this is all the access the map needs: `script-src` stays at 'self'
+  // because Leaflet is bundled rather than pulled from a CDN, and
+  // `connect-src` stays at 'self' because tiles arrive as <img>, not as
+  // fetches.
+  imgSrc: ["'self'", "data:", "https://tile.openstreetmap.org"],
+} as const;
+
 export function securityHeaders(): RequestHandler {
   return helmet({
-    // Images and documents are proxied from Directus through this same
-    // origin (/api/files/:id), so the policy does not need to name the
-    // Directus host at all — one fewer thing to update when it moves.
     contentSecurityPolicy: {
       directives: {
-        defaultSrc: ["'self'"],
-        imgSrc: ["'self'", "data:"],
+        defaultSrc: [...CSP_DIRECTIVES.defaultSrc],
+        imgSrc: [...CSP_DIRECTIVES.imgSrc],
         // `'unsafe-inline'` for styles only, and not by preference: React's
         // `style` prop and Radix's animation variables both set style
         // *attributes*, and CSP hashes do not apply to attributes — only a

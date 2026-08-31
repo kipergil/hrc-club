@@ -2,6 +2,8 @@ import { ExternalLink, MapPin } from "lucide-react";
 import { Link } from "wouter";
 import { PageHeader } from "@/components/layout";
 import { Card, ErrorNote, Loading, Prose } from "@/components/ui";
+import { GoogleMapsLink, VenueMap } from "@/components/map";
+import { isGoogleMapsUrl } from "@/lib/maps";
 import { useVenue } from "@/lib/queries";
 
 /**
@@ -48,7 +50,7 @@ export function VenuePage({ slug }: { slug: string }) {
               {venue.tableCount} {venue.tableCount === 1 ? "table" : "tables"}.
             </p>
           ) : null}
-          {venue.mapUrl ? (
+          {venue.mapUrl && !isGoogleMapsUrl(venue.mapUrl) ? (
             <p className="mt-3">
               <a
                 href={venue.mapUrl}
@@ -60,8 +62,22 @@ export function VenuePage({ slug }: { slug: string }) {
               </a>
             </p>
           ) : null}
+          <p className="mt-4">
+            <GoogleMapsLink venue={venue} />
+          </p>
         </div>
       </Card>
+
+      {/*
+        The hall on a map, under its address rather than in place of it.
+        This is the page somebody opens in a car park, so the address and
+        the directions stay readable with no tiles at all.
+      */}
+      <VenueMap
+        pins={[{ venue }]}
+        className="h-72"
+        label={`Map showing ${venue.name}`}
+      />
 
       {venue.directions ? (
         <section>

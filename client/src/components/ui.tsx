@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 // Buttons
 // ---------------------------------------------------------------------------
 
-type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
+export type ButtonVariant = "primary" | "secondary" | "quiet" | "danger";
 type ButtonSize = "md" | "sm";
 
 /*
@@ -29,17 +29,17 @@ type ButtonSize = "md" | "sm";
  * on a touch screen there is no hover, so the press state is the only
  * feedback a tap ever gets.
  */
-const buttonBase =
+export const buttonBase =
   "inline-flex min-h-touch select-none items-center justify-center gap-2 rounded-card font-semibold no-underline " +
   "transition-[background-color,border-color,color,box-shadow,transform] duration-150 " +
   "active:translate-y-px disabled:pointer-events-none disabled:opacity-55";
 
-const buttonSizes: Record<ButtonSize, string> = {
+export const buttonSizes: Record<ButtonSize, string> = {
   md: "px-5 py-3 text-base",
   sm: "px-4 py-2 text-base",
 };
 
-const buttonVariants: Record<ButtonVariant, string> = {
+export const buttonVariants: Record<ButtonVariant, string> = {
   primary: "bg-brand text-brand-ink shadow-raised hover:bg-brand-strong hover:shadow-card",
   secondary:
     "border border-line-strong bg-surface text-ink shadow-raised hover:border-brand hover:bg-brand-soft hover:text-brand",

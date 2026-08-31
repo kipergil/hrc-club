@@ -12,7 +12,8 @@
     "import:league": "tsx src/content/import-league.ts",
     "import:content": "tsx src/content/import-league-content.ts",
     "import:fixtures": "tsx src/content/import-fixtures.ts",
-    "import:archive": "tsx src/content/import-archive.ts"
+    "import:archive": "tsx src/content/import-archive.ts",
+    "geocode:venues": "tsx src/content/geocode-venues.ts"
   },
   "dependencies": {
     "@directus/sdk": "^18.0.3",
