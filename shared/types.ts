@@ -69,6 +69,12 @@ export interface Venue {
   town: string | null;
   postcode: string | null;
   mapUrl: string | null;
+  /**
+   * Null until the venue has been geocoded, and the map treats that as a
+   * venue to list without a pin rather than as a reason to fail.
+   */
+  latitude: number | null;
+  longitude: number | null;
   directions: string | null;
   parkingNotes: string | null;
   accessibilityNotes: string | null;

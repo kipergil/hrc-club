@@ -4,6 +4,8 @@ import type { Club } from "@shared/types.js";
 import { DIVISION, DIVISION_LABELS } from "@shared/enums.js";
 import { PageHeader, PrintButton } from "@/components/layout";
 import { Badge, Card, Empty, ErrorNote, Loading, Prose, Stat, TableNote } from "@/components/ui";
+import { GoogleMapsLink, VenueMap } from "@/components/map";
+import { isGoogleMapsUrl } from "@/lib/maps";
 import { useClub, useClubs } from "@/lib/queries";
 import { divisionLabel, formatDayName } from "@/lib/utils";
 
@@ -149,7 +151,15 @@ export function ClubPage({ slug }: { slug: string }) {
                 <Link href={`/play/venue/${venue.slug}`} className="link font-semibold">
                   Directions, parking and access
                 </Link>
-                {venue.mapUrl ? (
+                {/*
+                  The league's own `map_url`, but only where it goes
+                  somewhere the Google Maps button below does not. Every
+                  one currently stored is a Google search on the venue's
+                  name, so this renders for none of them today — and the
+                  field stays useful for a club that would rather send
+                  people to a hall's own directions page.
+                */}
+                {venue.mapUrl && !isGoogleMapsUrl(venue.mapUrl) ? (
                   <a
                     href={venue.mapUrl}
                     className="link inline-flex items-center gap-1.5 font-semibold"
@@ -160,8 +170,22 @@ export function ClubPage({ slug }: { slug: string }) {
                   </a>
                 ) : null}
               </p>
+              <p className="mt-4">
+                <GoogleMapsLink venue={venue} />
+              </p>
             </div>
           </Card>
+
+          {/*
+            Under the address, not instead of it. The card above is the
+            answer to "where is this"; the map is what makes it obvious
+            whether that is somewhere you already know.
+          */}
+          <VenueMap
+            pins={[{ venue, detail: club.name }]}
+            className="mt-4 h-72"
+            label={`Map showing ${venue.name}`}
+          />
         </section>
       ) : null}
 

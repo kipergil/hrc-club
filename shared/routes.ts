@@ -40,6 +40,7 @@ export const KNOWN_ROUTE_SEGMENTS: readonly string[] = [
   "safeguarding",
   "tables",
   "teams",
+  "venues",
 ];
 
 /** Is this path one the app has a route for? */

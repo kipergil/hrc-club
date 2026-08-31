@@ -63,7 +63,7 @@ If the league rebuild lands on Nuxt as planned, the two sites will differ in fra
 
 - **No Stripe.** Membership fees are collected at the hall, as they are now. A payment integration is a data-protection and reconciliation burden a volunteer committee should take on only if it asks to.
 - **No mobile app.** pintogather has one; a club of this size does not need one. The site is a PWA instead.
-- **No Google Maps.** A static map image and a link to the venue's map page costs nothing, needs no API key, and loads on a slow phone.
+- **No Google Maps *API*.** Venue maps are Leaflet with OpenStreetMap tiles, bundled and served from this origin — no key to keep alive, no third-party script, and nothing that breaks when a billing account lapses. Every venue also carries an **Open in Google Maps** link, which is what most people actually want for directions and costs nothing but a URL. What stays ruled out is the embed and the API: a keyed script on every page that renders a hall on a map. Coordinates are geocoded once by `npm run directus:geocode:venues` and stored, so no page waits on a lookup. *(Updated 30 August 2026, when the venue map was built; the original note said "a static map image", which turned out to need a keyed API too.)*
 
 ## 4. Rendering architecture — static, dynamic and interactive
 

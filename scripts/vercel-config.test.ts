@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { CSP_DIRECTIVES } from "../server/lib/security.js";
 
 /**
  * `vercel.json` is validated against a schema at deploy time, and the
@@ -69,5 +70,32 @@ describe("vercel.json", () => {
 
     expect(csp).toContain("script-src 'self'");
     expect(csp).not.toContain("script-src 'self' 'unsafe-inline'");
+  });
+
+  it("keeps the page policy in step with the one helmet applies to the API", () => {
+    /*
+     * Two copies of the same policy exist because they cover different
+     * traffic: helmet's covers what Express serves, which on Vercel is
+     * `/api/*`, and this file's covers every prerendered page. They are
+     * meant to match, and until the venue maps needed a tile host added
+     * to both, nothing checked that they did.
+     */
+    const headers = config.headers as Array<{
+      source: string;
+      headers: Array<{ key: string; value: string }>;
+    }>;
+    const csp = headers
+      .find((entry) => entry.source === "/(.*)")!
+      .headers.find((header) => header.key === "Content-Security-Policy")!.value;
+
+    const imgSrc = csp
+      .split(";")
+      .map((directive) => directive.trim())
+      .find((directive) => directive.startsWith("img-src "));
+
+    expect(imgSrc, "vercel.json has no img-src directive").toBeTruthy();
+
+    const listed = imgSrc!.slice("img-src ".length).split(/\s+/).sort();
+    expect(listed).toEqual([...CSP_DIRECTIVES.imgSrc].sort());
   });
 });

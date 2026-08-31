@@ -58,6 +58,7 @@ export const NAV: readonly [NavGroup, NavGroup, NavGroup, NavGroup, NavGroup] = 
     href: "/clubs",
     links: [
       { href: "/clubs", title: "Club details", subtitle: "All ten clubs, their halls and their teams" },
+      { href: "/venues", title: "Where the league plays", subtitle: "Every hall on one map" },
       { href: "/teams", title: "Teams", subtitle: "Every team in the league, by division" },
       { href: "/players", title: "Players", subtitle: "Everyone registered this season" },
     ],

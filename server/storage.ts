@@ -132,6 +132,10 @@ function toVenue(row: Row): Venue {
     town: str(row.town),
     postcode: str(row.postcode),
     mapUrl: str(row.map_url),
+    // Resolved once by `npm run directus:geocode:venues` and stored, so a
+    // map never waits on a geocoding service from someone's phone.
+    latitude: num(row.latitude),
+    longitude: num(row.longitude),
     directions: publicText(row.directions),
     parkingNotes: publicText(row.parking_notes),
     accessibilityNotes: publicText(row.accessibility_notes),

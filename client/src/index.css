@@ -201,6 +201,110 @@
 }
 
 @layer components {
+  /*
+   * Leaflet, dressed in this site's tokens.
+   *
+   * The library ships its own blue-and-white chrome, which on a page of
+   * warm paper and evergreen reads as a widget somebody dropped in. These
+   * override only the parts that are visible: the pin, the popup, the
+   * zoom buttons and the attribution. Everything structural — the tile
+   * grid, the panes, the drag handling — is left exactly as Leaflet
+   * writes it.
+   */
+  .hrc-map .leaflet-container {
+    @apply bg-surface-sunken font-sans text-ink;
+  }
+
+  /*
+   * Dark theme: dim the tiles, do not invert them.
+   *
+   * There is no dark basemap here — OSM publishes one style — so a bright
+   * map sits in a dark page and glares. The usual fix is
+   * `invert(1) hue-rotate(180deg)`, which produces a convincing dark map
+   * and destroys the labels: place names come out as light text on light
+   * halos and stop being readable, which is the one thing a map of nine
+   * halls has to get right.
+   *
+   * A small brightness reduction takes the glare off and leaves every
+   * label's contrast against its own background exactly where the
+   * cartographer put it.
+   */
+  :root[data-theme="dark"] .hrc-map .leaflet-tile-pane {
+    filter: brightness(0.82) saturate(0.9);
+  }
+
+  .hrc-pin svg {
+    fill: rgb(var(--c-brand));
+    filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35));
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .hrc-map .leaflet-tile-pane {
+      filter: brightness(0.82) saturate(0.9);
+    }
+  }
+
+  .hrc-pin-hole {
+    fill: rgb(var(--c-surface));
+  }
+
+  /* Leaflet gives a focused marker an outline of its own; this makes it
+     the site's focus ring instead, so it matches every other control. */
+  .hrc-map .leaflet-marker-icon:focus-visible {
+    @apply outline-none;
+  }
+
+  .hrc-map .leaflet-marker-icon:focus-visible .hrc-pin svg {
+    outline: 3px solid rgb(var(--c-focus));
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  .hrc-map .leaflet-popup-content-wrapper,
+  .hrc-map .leaflet-popup-tip {
+    @apply bg-surface text-ink shadow-lifted;
+  }
+
+  .hrc-map .leaflet-popup-content-wrapper {
+    @apply rounded-card border border-line;
+  }
+
+  .hrc-map .leaflet-popup-content {
+    @apply m-0 flex flex-col gap-1 px-4 py-3;
+  }
+
+  .hrc-map .leaflet-popup-content a {
+    @apply link font-semibold;
+  }
+
+  .hrc-popup-detail,
+  .hrc-popup-address {
+    @apply text-ink-muted;
+  }
+
+  /* 32px square is Leaflet's own size and below our 48px target, so the
+     buttons are enlarged rather than restyled. */
+  .hrc-map .leaflet-touch .leaflet-bar a,
+  .hrc-map .leaflet-bar a {
+    @apply size-11 border-line bg-surface text-lg leading-[2.75rem] text-ink;
+  }
+
+  .hrc-map .leaflet-bar a:hover {
+    @apply bg-surface-sunken text-ink;
+  }
+
+  .hrc-map .leaflet-bar {
+    @apply overflow-hidden rounded-card border border-line shadow-card;
+  }
+
+  .hrc-map .leaflet-control-attribution {
+    @apply bg-surface/90 text-ink-muted;
+  }
+
+  .hrc-map .leaflet-control-attribution a {
+    @apply text-ink-muted underline;
+  }
+
   /* Skip link — visible the moment it is focused, invisible otherwise. */
   .skip-link {
     @apply absolute left-4 -top-20 z-50 rounded-lg bg-brand px-4 py-3 font-semibold text-brand-ink shadow-lifted focus:top-4;

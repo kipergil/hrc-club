@@ -12,6 +12,7 @@ import {
 import { VenuePage } from "@/pages/play";
 import { PlayerPage, PlayersPage, TeamPage, TeamsPage } from "@/pages/teams";
 import { ClubPage, ClubsPage } from "@/pages/clubs";
+import { VenuesPage } from "@/pages/venues";
 import {
   AveragesPage,
   CalendarPage,
@@ -56,6 +57,7 @@ export default function App() {
 
         {/* Teams and competition */}
         <Route path="/clubs" component={ClubsPage} />
+        <Route path="/venues" component={VenuesPage} />
         <Route path="/clubs/:slug">{(params) => <ClubPage slug={params.slug} />}</Route>
         <Route path="/teams" component={TeamsPage} />
         <Route path="/teams/:slug">{(params) => <TeamPage slug={params.slug} />}</Route>
