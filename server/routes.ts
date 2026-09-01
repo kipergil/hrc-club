@@ -399,6 +399,32 @@ export function registerRoutes(app: Express): void {
         return;
       }
 
+      /*
+       * Refused before anything is stored. This used to sit after the
+       * upload, so a deployment with no API key filed a fresh orphaned
+       * image in Directus every time somebody pressed the button — a
+       * slow leak nothing would ever have reported.
+       */
+      if (!aiConfigured()) {
+        res.status(503).json({
+          message:
+            "No Anthropic API key is configured, so cards cannot be read automatically. You can still enter this one by hand.",
+        });
+        return;
+      }
+
+      /*
+       * Filed before it is read, not after. A card the model then fails
+       * on is exactly the one worth looking at later, and storing only
+       * the successes would keep the evidence for the cases that need it
+       * least.
+       */
+      const imageId = await storage.storeScorecardImage({
+        data: image,
+        mediaType,
+        filename: `card-${context.fixture.homeTeam.slug || "home"}-v-${context.fixture.awayTeam.slug || "away"}.${mediaType.split("/")[1]}`,
+      });
+
       try {
         const parsed = await parseScorecardImage(
           { data: image, mediaType },
@@ -420,6 +446,7 @@ export function registerRoutes(app: Express): void {
         // looked at afterwards rather than only complained about.
         await storage.recordScorecardUpload({
           fixtureId,
+          imageId,
           status: "parsed",
           parsed: parsed.card,
           warnings: draft.warnings,
@@ -438,7 +465,7 @@ export function registerRoutes(app: Express): void {
         }
         const message =
           error instanceof Error ? error.message : "The card could not be read.";
-        await storage.recordScorecardUpload({ fixtureId, status: "failed", error: message });
+        await storage.recordScorecardUpload({ fixtureId, imageId, status: "failed", error: message });
         res.status(422).json({ message });
       }
     }),

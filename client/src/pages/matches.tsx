@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { PageHeader, PrintButton } from "@/components/layout";
 import {
-  AveragesTable,
+  AveragesByDivision,
   FixtureList,
   HandicapTable,
   SeasonGrid,
@@ -24,7 +24,7 @@ import {
   Tr,
   usePagination,
 } from "@/components/ui";
-import { useAverages, useFixture, useFixtures, useSeasons, useSettings, useStandings } from "@/lib/queries";
+import { useAverages, useFixture, useFixtures, useSeasons, useStandings } from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
 import { cn, divisionLabel, formatDateLong, formatTime, resultLabel } from "@/lib/utils";
 import { buildCalendar } from "@/lib/calendar";
@@ -34,23 +34,21 @@ import type { Division } from "@shared/enums.js";
 import { useMemo, useState } from "react";
 
 /**
- * A small note under every page that shows synced league data, saying where
- * it came from and when it last arrived. Being able to see that a table is
- * an hour old is the difference between trusting it and not.
+ * The note under every page that carries competitive data, saying where
+ * it came from and when.
+ *
+ * It used to say results "come from the league's own records, where
+ * captains enter them", which was true when this site only mirrored the
+ * league. Cards are now entered here — that is what `/admin/scorecards`
+ * is — so the sentence had become a polite untruth on every page it
+ * appeared under. Being able to see where a number came from is the
+ * difference between trusting it and not, which is the whole reason this
+ * note exists; leaving it stale would have defeated the point of it.
  */
 function SyncNote({ lastSyncedAt }: { lastSyncedAt: string | null | undefined }) {
-  const { data: settings } = useSettings();
   return (
     <p className="mt-8 border-t border-line pt-5 text-ink-muted">
-      Fixtures and results come from the{" "}
-      {settings?.leagueUrl ? (
-        <a href={settings.leagueUrl} className="link">
-          league's own records
-        </a>
-      ) : (
-        "league's own records"
-      )}
-      , where captains enter them.
+      Results come from the match cards, entered by team captains after the match.
       {lastSyncedAt ? ` Last updated ${formatDateLong(lastSyncedAt)}.` : null}
     </p>
   );
@@ -376,7 +374,7 @@ export function AveragesPage() {
         actions={<PrintButton label="Print the averages" />}
       />
 
-      <AveragesTable stats={stats ?? []} />
+      <AveragesByDivision stats={stats ?? []} />
 
       <div className="mt-10 max-w-readable">
         <Disclosure summary="Why are some players marked “not yet eligible”?">
@@ -385,6 +383,14 @@ export function AveragesPage() {
             half of their team’s matches. It stops someone who played twice, and won both, from
             finishing above a player who turned out every week. Everyone’s record is still shown —
             the marker only affects the placings.
+          </p>
+        </Disclosure>
+        <Disclosure summary="Where do these numbers come from?">
+          <p>
+            They are worked out from the match cards themselves, rubber by rubber, rather than
+            typed in separately — so a player’s average changes the moment a card is entered and
+            can never disagree with the results it is built from. Singles only: the doubles is a
+            pair’s result rather than a player’s, and the league has never counted it here.
           </p>
         </Disclosure>
       </div>

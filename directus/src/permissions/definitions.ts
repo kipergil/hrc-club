@@ -110,6 +110,15 @@ const rules: PermissionRule[] = [
   // than linked directly, so read is enough. Uploads happen in the admin
   // panel.
   { collection: "directus_files", action: "read" },
+  /*
+   * Create, so an uploaded match card can be stored as the evidence
+   * behind a result. Read is enough for everything else the site serves —
+   * logos, photos, documents are all uploaded in the admin panel — and
+   * there is deliberately no update or delete: a card that has been used
+   * to settle a result should not be replaceable or removable through
+   * the app's own token.
+   */
+  { collection: "directus_files", action: "create" },
 ];
 
 /**

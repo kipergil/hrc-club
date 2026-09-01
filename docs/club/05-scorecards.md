@@ -138,14 +138,39 @@ says what the *server* may do, not who may ask it to. The gate is in Express; Di
 idea who is signed in, and a token that could not write here would make the feature impossible
 rather than safer.
 
-## 6. What is not done
+## 6. Averages, derived
 
-- **The uploaded image is not stored yet.** `hrc_scorecards.image` exists and the parse is
-  recorded against a row, but the file itself is not pushed into Directus — so the evidence
-  argument in §2 is currently an argument for a column rather than a fact about the data.
-- **The parse has never run against a real API key.** It is built, typed and wired end to end,
-  and the no-key path is verified; the model call itself is unexercised. First run against a
-  real card should be treated as a test, not a migration.
-- **Averages are still not derived from rubbers.** Everything needed is now in place —
-  `hrc_rubbers` holds every game — so `/averages` could stop depending on an import. That is the
-  obvious next piece.
+`/averages` is now built from the cards rather than an import, the same way the league table is
+built from fixtures. A player's average changes the moment a card is entered and cannot drift
+from the results behind it.
+
+Three details were read off the league's own 2025-26 averages page rather than assumed, because
+each changes the arithmetic:
+
+- **Played counts singles rubbers, not matches.** Three singles a match, so a full fourteen-match
+  season is 42. The highest figure on that page is 44 — a player who also played up for another
+  team.
+- **The doubles is not in it.** Including it would put a full season at 56 and nothing comes near
+  that. The doubles is a pair's result, not a player's.
+- **Won + Lost equals Played on all 147 rows.** A rubber cannot be drawn, so there is no third
+  column to reconcile.
+
+The 50% rule is measured in *matches* against that player's own team's programme: playing every
+match of a twelve-match Division One season is not less committed than playing every match of a
+fourteen-match Premier one. A player who turned out for two teams is placed with the one they
+played most for, and their whole record counts.
+
+Stored `hrc_player_stats` remains the source for archived seasons, whose rubbers this site will
+never hold — the same fallback shape the league tables use.
+
+## 7. What is not done
+
+- **The parse has never run against a real API key.** It is built, typed and wired end to end;
+  the no-key path, the admin gate, the draft assembly, the review form and the save are all
+  verified, and the image upload is verified in isolation. The model call itself is unexercised.
+  The first run against a real card should be treated as a test, not a migration.
+- **A saved card does not mark its upload `applied`.** `hrc_scorecards` records the parse; the
+  save writes rubbers. Joining the two would let the review screen show a card's history.
+- **Handicaps are still not derived.** They are set by the match secretary rather than computed
+  from play, so unlike averages they cannot come out of the cards — `/handicaps` needs an import
+  or an entry screen of its own.

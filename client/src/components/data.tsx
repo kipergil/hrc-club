@@ -485,6 +485,50 @@ function WinRate({ percentage }: { percentage: number | null }) {
   );
 }
 
+/**
+ * The averages, division by division, as the league prints them.
+ *
+ * Placings are awarded within a division, so one long table sorted by
+ * percentage puts a Division Two player above a Premier one and quietly
+ * implies a comparison the league never makes.
+ */
+export function AveragesByDivision({ stats }: { stats: PlayerStat[] }) {
+  const divisions = DIVISION.filter((division) => stats.some((stat) => stat.division === division));
+  const unplaced = stats.filter((stat) => !stat.division);
+
+  if (stats.length === 0) {
+    return (
+      <Empty>
+        No averages yet this season. They appear as soon as the first cards are entered — these are
+        worked out from the match cards themselves, not typed in.
+      </Empty>
+    );
+  }
+
+  // One division and nothing else is not a grouping, it is a heading over
+  // the only table on the page.
+  if (divisions.length <= 1 && unplaced.length === 0) {
+    return <AveragesTable stats={stats} />;
+  }
+
+  return (
+    <div className="space-y-12">
+      {divisions.map((division) => (
+        <section key={division}>
+          <h2 className="mb-3 text-2xl">{divisionLabel(division)}</h2>
+          <AveragesTable stats={stats.filter((stat) => stat.division === division)} />
+        </section>
+      ))}
+      {unplaced.length > 0 ? (
+        <section>
+          <h2 className="mb-3 text-2xl">No division recorded</h2>
+          <AveragesTable stats={unplaced} />
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
   const paged = usePagination(stats, 25);
   const shown = paged.items as PlayerStat[];

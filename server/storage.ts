@@ -1,4 +1,12 @@
-import { createItem, createItems, deleteItems, readItems, readSingleton, updateItem } from "@directus/sdk";
+import {
+  createItem,
+  createItems,
+  deleteItems,
+  readItems,
+  readSingleton,
+  updateItem,
+  uploadFiles,
+} from "@directus/sdk";
 import type {
   Club,
   ClubDetail,
@@ -33,6 +41,7 @@ import type {
 import type { EnquiryInput } from "../shared/schema.js";
 import { DIVISION, type Division } from "../shared/enums.js";
 import { matchScoreOf, outcomeOf } from "../shared/scorecard.js";
+import { buildAverages, type AverageSource } from "../shared/averages.js";
 import { directus } from "./lib/directus.js";
 
 /*
@@ -1075,7 +1084,22 @@ export function buildTable(
   return standings;
 }
 
+/**
+ * The averages.
+ *
+ * Derived from the cards where the season has any, exactly as the league
+ * table is derived from fixtures — so a player's average changes the
+ * moment a card is entered and cannot drift from the results it is built
+ * out of. The stored `hrc_player_stats` remains the source for archived
+ * seasons, whose rubbers this site will never hold.
+ */
 export async function getPlayerStats(seasonSlug?: string): Promise<PlayerStat[]> {
+  const computed = await computeAverages(seasonSlug);
+  if (computed.length > 0) return computed;
+  return getStoredPlayerStats(seasonSlug);
+}
+
+async function getStoredPlayerStats(seasonSlug?: string): Promise<PlayerStat[]> {
   const client = await directus();
   const seasonId = await seasonIdFor(seasonSlug);
   const rows = (await client.request(
@@ -1092,6 +1116,122 @@ export async function getPlayerStats(seasonSlug?: string): Promise<PlayerStat[]>
     }),
   )) as Row[];
   return rows.map(toPlayerStat);
+}
+
+/**
+ * Every singles rubber of a season, turned into averages.
+ *
+ * One query for the rubbers and one for the fixtures behind the 50% rule,
+ * rather than a query per player: a season is two hundred matches and two
+ * thousand rubbers, and this runs on the request path.
+ */
+async function computeAverages(seasonSlug?: string): Promise<PlayerStat[]> {
+  const client = await directus();
+  const seasonId = await seasonIdFor(seasonSlug);
+
+  const rows = (await client.request(
+    readItems("hrc_rubbers", {
+      fields: [
+        "id",
+        "rubber_number",
+        "kind",
+        "home_sets",
+        "away_sets",
+        { home_player: ["id", "full_name", "slug"] },
+        { away_player: ["id", "full_name", "slug"] },
+        {
+          fixture: [
+            "id",
+            "status",
+            { season: ["id"] },
+            { home_team: ["name", "slug", "division"] },
+            { away_team: ["name", "slug", "division"] },
+          ],
+        },
+      ] as unknown as string[],
+      // Only the doubles has a second player a side, and the doubles is
+      // not in the averages, so the partner relations are not fetched.
+      filter: { kind: { _eq: "singles" } },
+      limit: -1,
+    }),
+  )) as Row[];
+
+  const sources: AverageSource[] = [];
+  const teamFixtures = new Map<string, Set<string>>();
+
+  for (const row of rows) {
+    const fixture = rel(row.fixture);
+    if (!fixture) continue;
+    if (seasonId && rel(fixture.season)?.id !== seasonId) continue;
+
+    const homeTeam = rel(fixture.home_team);
+    const awayTeam = rel(fixture.away_team);
+
+    for (const [slot, team, isHome] of [
+      [rel(row.home_player), homeTeam, true],
+      [rel(row.away_player), awayTeam, false],
+    ] as const) {
+      // Most rubbers name a member on one side only: the opposition are
+      // names on a card, because this site holds squads, not every club's
+      // whole membership.
+      if (!slot?.id) continue;
+      sources.push({
+        memberId: slot.id,
+        memberName: slot.full_name ?? "",
+        memberSlug: slot.slug ?? "",
+        kind: "singles",
+        won: isHome ? int(row.home_sets) > int(row.away_sets) : int(row.away_sets) > int(row.home_sets),
+        fixtureId: fixture.id,
+        teamName: team?.name ?? null,
+        teamSlug: team?.slug ?? null,
+        division: team?.division ?? null,
+      });
+    }
+
+    // How many matches each team has played, which the 50% rule needs.
+    for (const team of [homeTeam, awayTeam]) {
+      if (!team?.slug) continue;
+      const seen = teamFixtures.get(team.slug) ?? new Set<string>();
+      seen.add(fixture.id);
+      teamFixtures.set(team.slug, seen);
+    }
+  }
+
+  if (sources.length === 0) return [];
+
+  const teamMatches: Record<string, number> = {};
+  for (const [slug, fixtures] of teamFixtures) teamMatches[slug] = fixtures.size;
+
+  const seasonLabel = seasonSlug ?? (await currentSeasonLabel());
+
+  return buildAverages(sources, teamMatches).map((row) => ({
+    // Stable and distinct without a stored row to take an id from.
+    id: `${row.memberId}-${seasonLabel}`,
+    memberName: row.memberName,
+    memberSlug: row.memberSlug,
+    seasonLabel,
+    teamName: row.teamName,
+    division: row.division,
+    played: row.played,
+    won: row.won,
+    lost: row.lost,
+    winPercentage: row.winPercentage,
+    // Handicaps are set by the match secretary, not computed from play.
+    handicap: null,
+    meetsParticipationThreshold: row.meetsParticipationThreshold,
+  }));
+}
+
+async function currentSeasonLabel(): Promise<string> {
+  const client = await directus();
+  const rows = (await client.request(
+    readItems("hrc_seasons", {
+      fields: ["label"],
+      filter: { is_current: { _eq: true } },
+      limit: 1,
+    }),
+  )) as Row[];
+  return rows[0]?.label ?? "";
 }
 
 export async function getNews(category?: string, limit = 50): Promise<NewsItem[]> {
@@ -1609,6 +1749,7 @@ export async function saveScorecard(input: {
 /** Records an upload and what came of it, so a bad parse can be traced later. */
 export async function recordScorecardUpload(input: {
   fixtureId: string | null;
+  imageId?: string | null;
   status: string;
   parsed?: unknown;
   warnings?: unknown;
@@ -1621,6 +1762,7 @@ export async function recordScorecardUpload(input: {
   const created = (await client.request(
     createItem("hrc_scorecards", {
       fixture: input.fixtureId,
+      image: input.imageId ?? null,
       status: input.status,
       parsed: input.parsed ?? null,
       warnings: input.warnings ?? null,
@@ -1721,4 +1863,45 @@ export async function getMemberRubbers(memberId: string): Promise<PlayerRubber[]
     const byDate = (b.playedOn ?? "").localeCompare(a.playedOn ?? "");
     return byDate !== 0 ? byDate : a.rubberNumber - b.rubberNumber;
   });
+}
+
+/**
+ * Stores an uploaded card and hands back its file id.
+ *
+ * The photograph is the evidence: a disputed result is settled by looking
+ * at what the captain actually wrote, not at what somebody typed
+ * afterwards. Uploaded before the parse rather than after, so a card that
+ * the model then fails to read is still on file — those are exactly the
+ * ones worth looking at.
+ */
+export async function storeScorecardImage(input: {
+  data: string;
+  mediaType: string;
+  filename: string;
+}): Promise<string | null> {
+  const client = await directus();
+
+  const form = new FormData();
+  form.append("title", input.filename);
+  form.append(
+    "file",
+    new Blob([Buffer.from(input.data, "base64")], { type: input.mediaType }),
+    input.filename,
+  );
+
+  try {
+    const created = (await client.request(uploadFiles(form))) as Row;
+    return str(created?.id);
+  } catch (error) {
+    // A card that could not be filed is worth a log and nothing more: the
+    // result still gets entered, which is what the captain came to do.
+    console.error("[scorecard] could not store the image", error);
+    return null;
+  }
+}
+
+/** Attaches a stored image to the upload record it belongs to. */
+export async function attachScorecardImage(scorecardId: string, imageId: string): Promise<void> {
+  const client = await directus();
+  await client.request(updateItem("hrc_scorecards", scorecardId, { image: imageId }));
 }
