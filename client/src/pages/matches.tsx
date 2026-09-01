@@ -31,6 +31,7 @@ import { buildCalendar } from "@/lib/calendar";
 import { Scorecard } from "@/components/scorecard";
 import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
 import type { Division } from "@shared/enums.js";
+import type { Fixture } from "@shared/types.js";
 import { useMemo, useState } from "react";
 
 /**
@@ -142,27 +143,46 @@ export function CalendarPage() {
 // ---------------------------------------------------------------------------
 
 export function FixturesPage() {
-  const { data: fixtures, isLoading, isError } = useFixtures("status=scheduled");
+  const [season, setSeason] = useSeasonParam();
+  const { data: seasons } = useSeasons();
+  const {
+    data: fixtures,
+    isLoading,
+    isError,
+  } = useFixtures(`status=scheduled${season ? `&season=${season}` : ""}`);
 
-  if (isLoading) return <Loading what="the fixture calendar" variant="table" />;
-  if (isError) return <ErrorNote what="fixture calendar" />;
-
-  // Grouped by the league's own week-commencing scheduling, because that is
-  // how captains and players think about the season — "week of the 12th",
-  // not "the 14th and the 16th".
-  const weeks = new Map<string, typeof fixtures>();
-  for (const fixture of fixtures ?? []) {
-    const key = fixture.weekCommencing ?? fixture.playedOn ?? "unscheduled";
-    weeks.set(key, [...(weeks.get(key) ?? []), fixture]);
-  }
+  /*
+   * Grouped by the league's own week-commencing scheduling, because that
+   * is how captains and players think about the season — "week of the
+   * 12th", not "the 14th and the 16th".
+   *
+   * Every hook here runs before any early return. They did not:
+   * `usePagination` sat below the loading and error guards, so the first
+   * render (loading) called fewer hooks than the second (loaded) and
+   * React tore the whole page down with "Rendered more hooks than during
+   * the previous render" — no rows, no empty state, no message. It
+   * survived only when prerendered data made the first render a loaded
+   * one, which is exactly why the page failed *sometimes*: on a cold
+   * client-side navigation and nowhere else.
+   */
+  const weeks = useMemo(() => {
+    const grouped = new Map<string, Fixture[]>();
+    for (const fixture of fixtures ?? []) {
+      const key = fixture.weekCommencing ?? fixture.playedOn ?? "unscheduled";
+      grouped.set(key, [...(grouped.get(key) ?? []), fixture]);
+    }
+    return [...grouped.entries()];
+  }, [fixtures]);
 
   /*
    * Paginated by week rather than by match, so a page break never falls
-   * inside a week. The season is two hundred fixtures across sixteen
-   * weeks; four weeks is about a screenful and keeps each page a unit
-   * somebody would actually ask for — "the next month".
+   * inside a week. Four weeks is about a screenful and keeps each page a
+   * unit somebody would actually ask for — "the next month".
    */
-  const paged = usePagination([...weeks.entries()], 4);
+  const paged = usePagination(weeks, 4, season);
+
+  if (isLoading) return <Loading what="the fixture calendar" variant="table" />;
+  if (isError) return <ErrorNote what="fixture calendar" />;
 
   return (
     <div>
@@ -170,11 +190,13 @@ export function FixturesPage() {
         title="Fixture calendar"
         subtitle="Every match still to play, week by week"
         actions={<PrintButton label="Print the fixture list" />}
-      />
+      >
+        <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
+      </PageHeader>
 
-      {weeks.size === 0 ? (
+      {weeks.length === 0 ? (
         <Empty>
-          There are no matches in the calendar at the moment. Fixtures for a new season usually
+          There are no matches still to play in this season. Fixtures for a new season usually
           appear in September.
         </Empty>
       ) : (
@@ -182,13 +204,13 @@ export function FixturesPage() {
           {paged.items.map(([week, weekFixtures]) => (
             <section key={week}>
               <h2 className="mb-3 text-xl">Week of {formatDateLong(week)}</h2>
-              <FixtureList fixtures={weekFixtures ?? []} emptyMessage="Nothing this week." />
+              <FixtureList fixtures={weekFixtures} emptyMessage="Nothing this week." />
             </section>
           ))}
         </div>
       )}
 
-      {weeks.size > 0 ? <Pagination state={paged} noun="weeks" /> : null}
+      {weeks.length > 0 ? <Pagination state={paged} noun="weeks" /> : null}
 
       <SyncNote lastSyncedAt={fixtures?.[0]?.lastSyncedAt} />
     </div>
@@ -198,7 +220,13 @@ export function FixturesPage() {
 // ---------------------------------------------------------------------------
 
 export function ResultsPage() {
-  const { data: fixtures, isLoading, isError } = useFixtures("status=played");
+  const [season, setSeason] = useSeasonParam();
+  const { data: seasons } = useSeasons();
+  const {
+    data: fixtures,
+    isLoading,
+    isError,
+  } = useFixtures(`status=played${season ? `&season=${season}` : ""}`);
 
   if (isLoading) return <Loading what="results" variant="table" />;
   if (isError) return <ErrorNote what="results" />;
@@ -207,14 +235,16 @@ export function ResultsPage() {
     <div>
       <PageHeader
         title="Match history"
-        subtitle="Every match played in the league this season"
+        subtitle="Every match played in the league"
         actions={<PrintButton label="Print these results" />}
-      />
+      >
+        <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
+      </PageHeader>
 
       <FixtureList
         fixtures={fixtures ?? []}
         perPage={25}
-        emptyMessage="No results yet this season. They appear here once matches have been played and the cards confirmed."
+        emptyMessage="No results in this season yet. They appear here once matches have been played and the cards entered."
       />
 
       <SyncNote lastSyncedAt={fixtures?.[0]?.lastSyncedAt} />

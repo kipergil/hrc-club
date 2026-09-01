@@ -481,7 +481,26 @@ export async function getSeasons(): Promise<Season[]> {
   return rows.map(toSeason);
 }
 
+let currentSeasonCache: Season | null = null;
+
+/**
+ * The season the site is showing.
+ *
+ * Cached for the life of the process. Every fixtures, standings and
+ * averages query that does not name a season asks for this first, so it
+ * was a second round trip to Directus on most requests — and it changes
+ * when somebody ticks a different box in Directus, roughly once a year.
+ * On Vercel a "process" is one invocation, so the cache is per request
+ * there and this is simply one lookup instead of two.
+ */
 export async function getCurrentSeason(): Promise<Season | null> {
+  if (currentSeasonCache) return currentSeasonCache;
+  const season = await fetchCurrentSeason();
+  if (season) currentSeasonCache = season;
+  return season;
+}
+
+async function fetchCurrentSeason(): Promise<Season | null> {
   const client = await directus();
   const rows = (await client.request(
     readItems("hrc_seasons", { fields: ["*"], filter: { is_current: { _eq: true } }, limit: 1 }),
@@ -784,12 +803,32 @@ export async function getTeam(slug: string, seasonSlug?: string): Promise<TeamDe
   };
 }
 
+/**
+ * Named rather than `*`.
+ *
+ * `*` pulled every column a fixture has, including `report` — a match
+ * report is prose, and a list of two hundred fixtures was carrying two
+ * hundred of them to render a table that shows none. Naming the columns
+ * costs a line and takes the list payload down accordingly.
+ */
 const FIXTURE_FIELDS = [
-  "*",
+  "id",
+  "played_on",
+  "start_time",
+  "week_commencing",
+  "competition",
+  "status",
+  "home_score",
+  "away_score",
+  "scorecard_url",
+  "last_synced_at",
   { home_team: ["name", "slug", "division"] },
   { away_team: ["name", "slug", "division"] },
   { venue: ["name"] },
 ] as const;
+
+/** The list projection plus the things only a single match page shows. */
+const FIXTURE_DETAIL_FIELDS = [...FIXTURE_FIELDS, "report", { report_image: ["id"] }] as const;
 
 export interface FixtureQuery {
   season?: string;
@@ -846,7 +885,8 @@ export async function getFixture(id: string): Promise<FixtureDetail | null> {
   const client = await directus();
   const rows = (await client.request(
     readItems("hrc_fixtures", {
-      fields: FIXTURE_FIELDS as unknown as string[],
+      // The one place the report is actually rendered.
+      fields: FIXTURE_DETAIL_FIELDS as unknown as string[],
       filter: { id: { _eq: id } },
       limit: 1,
     }),
@@ -1149,9 +1189,15 @@ async function computeAverages(seasonSlug?: string): Promise<PlayerStat[]> {
           ],
         },
       ] as unknown as string[],
-      // Only the doubles has a second player a side, and the doubles is
-      // not in the averages, so the partner relations are not fetched.
-      filter: { kind: { _eq: "singles" } },
+      /*
+       * Both filters run in the database. The season one used to be a
+       * JS check after the fetch, which meant reading every rubber of
+       * every season to build one season's averages — fine at sixty
+       * rows, and two thousand a season once cards are being entered.
+       */
+      filter: seasonId
+        ? { _and: [{ kind: { _eq: "singles" } }, { fixture: { season: { _eq: seasonId } } }] }
+        : { kind: { _eq: "singles" } },
       limit: -1,
     }),
   )) as Row[];
@@ -1162,7 +1208,6 @@ async function computeAverages(seasonSlug?: string): Promise<PlayerStat[]> {
   for (const row of rows) {
     const fixture = rel(row.fixture);
     if (!fixture) continue;
-    if (seasonId && rel(fixture.season)?.id !== seasonId) continue;
 
     const homeTeam = rel(fixture.home_team);
     const awayTeam = rel(fixture.away_team);

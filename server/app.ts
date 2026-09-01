@@ -1,3 +1,4 @@
+import compression from "compression";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { registerRoutes } from "./routes.js";
 import { apiRateLimiter, securityHeaders } from "./lib/security.js";
@@ -11,6 +12,21 @@ export function createApp(): Express {
   const app = express();
 
   app.disable("x-powered-by");
+
+  /*
+   * Nothing was compressing anything.
+   *
+   * A season of fixtures is 84KB of JSON that is mostly repeated keys and
+   * team names — it gzips to a fraction of that, and until now every byte
+   * of it went over the wire uncompressed. That is the single largest
+   * thing slowing this API down, and it was invisible because the numbers
+   * only look wrong once there is a season's worth of data behind them.
+   *
+   * Above the security headers so it wraps everything below, and before
+   * the routes so it covers every response rather than the handful
+   * somebody remembered.
+   */
+  app.use(compression());
   app.use(securityHeaders());
   app.use("/api", apiRateLimiter);
   /*
