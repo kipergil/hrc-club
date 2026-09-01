@@ -486,7 +486,17 @@ function CardUpload({
   onDraft: (draft: ScorecardDraft) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /*
+   * The status is kept alongside the message, because the two failures
+   * read completely differently to the person holding the card.
+   *
+   * A 503 means the reading could not be attempted at all — no key, a key
+   * the API rejects, a workspace it will not infer, an outage. Nothing
+   * about the photograph would change it. Titling that "That did not work"
+   * blames the captain for the server's configuration and sends them off
+   * to take a better photograph of a card that was never the problem.
+   */
+  const [error, setError] = useState<{ message: string; status: number } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
   // The object URL is a resource, not a value; leaking one per photograph
@@ -508,7 +518,11 @@ function CardUpload({
       });
       onDraft(draft);
     } catch (caught) {
-      setError(isAdminError(caught) ? caught.message : "The card could not be read.");
+      setError(
+        isAdminError(caught)
+          ? { message: caught.message, status: caught.status }
+          : { message: "The card could not be read.", status: 0 },
+      );
     } finally {
       setBusy(false);
     }
@@ -522,7 +536,11 @@ function CardUpload({
         await adminFetch<ScorecardDraft>(`/api/admin/scorecards/blank/${fixture.id}`, token),
       );
     } catch (caught) {
-      setError(isAdminError(caught) ? caught.message : "That did not work.");
+      setError(
+        isAdminError(caught)
+          ? { message: caught.message, status: caught.status }
+          : { message: "That did not work.", status: 0 },
+      );
     } finally {
       setBusy(false);
     }
@@ -550,9 +568,15 @@ function CardUpload({
       ) : null}
 
       {error ? (
-        <Alert tone="warning" title="That did not work">
-          {error}
-        </Alert>
+        error.status === 503 ? (
+          <Alert tone="info" title="Reading photographs is not working at the moment">
+            {error.message}
+          </Alert>
+        ) : (
+          <Alert tone="warning" title="That card could not be read">
+            {error.message}
+          </Alert>
+        )
       ) : null}
 
       {preview ? (

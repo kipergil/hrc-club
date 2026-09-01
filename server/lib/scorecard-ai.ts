@@ -123,10 +123,81 @@ export interface ParseResult {
   outputTokens: number;
 }
 
+/**
+ * The reading could not be attempted — as opposed to being attempted and
+ * going wrong. No key, a key the API rejects, a workspace it will not infer,
+ * a model name that does not exist, a rate limit, an outage. None of these
+ * are anything to do with the card in the photograph, and telling a captain
+ * their card "could not be read" when the real answer is that nobody has
+ * finished configuring the server sends them looking for a better
+ * photograph of a card that was never the problem.
+ */
 export class ScorecardAiUnavailable extends Error {}
 
 export function aiConfigured(): boolean {
   return Boolean(env.ANTHROPIC_API_KEY);
+}
+
+/**
+ * Turns an Anthropic API error into a sentence for the person at the
+ * screen, and decides whether it was the card's fault.
+ *
+ * The raw error is JSON written for whoever operates the service, and it
+ * was going straight to the browser: the first real card ever uploaded came
+ * back as `400 {"type":"error","error":{...}}`, which tells a team captain
+ * nothing they can act on and does not even hint that the fix is a
+ * configuration one. The detail still goes to the log, where an operator
+ * can find it; the reader gets what to do next.
+ */
+function describeApiError(error: unknown): { message: string; configuration: boolean } | null {
+  if (!(error instanceof Anthropic.APIError)) return null;
+
+  const detail = typeof error.message === "string" ? error.message : "";
+  const unavailable = (message: string) => ({ message, configuration: true });
+
+  // Checked before the status codes: an identity-linked key returns a plain
+  // 400, the same status as a genuinely malformed request, so the status
+  // alone cannot tell the two apart.
+  if (detail.includes("anthropic-workspace-id")) {
+    return unavailable(
+      "The Anthropic API key is linked to a person rather than to one workspace, so it also needs a workspace id. " +
+        "Set ANTHROPIC_WORKSPACE_ID (it looks like wrkspc_01…, and is on the workspace's page in the Anthropic Console). " +
+        "You can enter this card by hand in the meantime.",
+    );
+  }
+
+  switch (error.status) {
+    case 401:
+      return unavailable(
+        "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY. You can still enter this card by hand.",
+      );
+    case 403:
+      return unavailable(
+        "The Anthropic API key is not allowed to do this. Check that it belongs to the right workspace. " +
+          "You can still enter this card by hand.",
+      );
+    case 404:
+      return unavailable(
+        `No model named "${env.SCORECARD_MODEL}" is available to this key. Check SCORECARD_MODEL. ` +
+          "You can still enter this card by hand.",
+      );
+    case 429:
+      return unavailable(
+        "Anthropic is rate-limiting us at the moment. Try again in a minute, or enter this card by hand.",
+      );
+    default:
+      if (error.status && error.status >= 500) {
+        return unavailable(
+          "Anthropic could not be reached just now. Try again shortly, or enter this card by hand.",
+        );
+      }
+      // A 400 that is not the workspace one is ours to fix and not the
+      // card's fault either, so it is still not reported as a bad card.
+      return unavailable(
+        "The card could not be sent for reading, which is a fault at our end rather than a problem with the card. " +
+          "You can enter it by hand.",
+      );
+  }
 }
 
 /**
@@ -147,7 +218,19 @@ export async function parseScorecardImage(
     );
   }
 
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  /*
+   * The workspace header goes on the client, not on the request, because
+   * it belongs to the credential rather than to this call. It is sent only
+   * when configured: a workspace-scoped key already carries its workspace,
+   * and sending a contradicting id with one would be worse than sending
+   * nothing.
+   */
+  const client = new Anthropic({
+    apiKey: env.ANTHROPIC_API_KEY,
+    ...(env.ANTHROPIC_WORKSPACE_ID
+      ? { defaultHeaders: { "anthropic-workspace-id": env.ANTHROPIC_WORKSPACE_ID } }
+      : {}),
+  });
 
   /*
    * The squads, where we know them, as a hint rather than a constraint.
@@ -168,34 +251,46 @@ export async function parseScorecardImage(
     hints.push(`Away players are usually drawn from: ${context.awaySquad.join(", ")}.`);
   }
 
-  const response = await client.messages.create({
-    model: env.SCORECARD_MODEL,
-    max_tokens: 8000,
-    system: SYSTEM,
-    tools: [EXTRACT_TOOL],
-    // The model's only job is to fill the tool in; letting it answer in
-    // prose instead is a failure mode with no upside here.
-    tool_choice: { type: "tool", name: EXTRACT_TOOL.name },
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: { type: "base64", media_type: image.mediaType as "image/png", data: image.data },
-          },
-          {
-            type: "text",
-            text: [
-              "Transcribe this match card.",
-              ...hints,
-              "Leave anything you cannot read as null.",
-            ].join("\n"),
-          },
-        ],
-      },
-    ],
-  });
+  let response: Anthropic.Message;
+  try {
+    response = await client.messages.create({
+      model: env.SCORECARD_MODEL,
+      max_tokens: 8000,
+      system: SYSTEM,
+      tools: [EXTRACT_TOOL],
+      // The model's only job is to fill the tool in; letting it answer in
+      // prose instead is a failure mode with no upside here.
+      tool_choice: { type: "tool", name: EXTRACT_TOOL.name },
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: image.mediaType as "image/png", data: image.data },
+            },
+            {
+              type: "text",
+              text: [
+                "Transcribe this match card.",
+                ...hints,
+                "Leave anything you cannot read as null.",
+              ].join("\n"),
+            },
+          ],
+        },
+      ],
+    });
+  } catch (error) {
+    const described = describeApiError(error);
+    if (described?.configuration) {
+      // The operator's copy, with the request id the API returns — the
+      // thing worth having when this needs chasing.
+      console.error("[scorecard] Anthropic rejected the request:", error);
+      throw new ScorecardAiUnavailable(described.message);
+    }
+    throw error;
+  }
 
   const block = response.content.find(
     (item): item is Anthropic.ToolUseBlock => item.type === "tool_use" && item.name === EXTRACT_TOOL.name,
