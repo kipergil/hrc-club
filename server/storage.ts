@@ -242,9 +242,14 @@ function toRubber(row: Row): Rubber {
   return {
     id: row.id,
     rubberNumber: int(row.rubber_number),
-    memberName: member?.full_name ?? null,
+    // `player_name` covers a doubles pair and an unregistered guest, both
+    // of which have a name on the card and no member record behind it.
+    memberName: member?.full_name ?? str(row.player_name),
     memberSlug: member?.slug ?? null,
     opponentPlayerName: str(row.opponent_player_name),
+    // Defaults true, matching the column: the rows that predate this field
+    // were all written for the home side.
+    memberIsHome: row.is_home_player !== false,
     setsFor: int(row.sets_for),
     setsAgainst: int(row.sets_against),
     won: Boolean(row.won),

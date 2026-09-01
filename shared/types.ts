@@ -217,9 +217,19 @@ export interface TeamFixture extends Fixture {
 export interface Rubber {
   id: string;
   rubberNumber: number;
+  /** The player, or the pair, on `memberIsHome`'s side. */
   memberName: string | null;
   memberSlug: string | null;
   opponentPlayerName: string | null;
+  /**
+   * Which side `memberName` played for.
+   *
+   * A rubber row records one side and measures everything from it, so
+   * `setsFor` and `won` mean nothing until you know whose they are. The
+   * card is laid out in home and away columns to match the scoreline, and
+   * this is what decides which column a name goes in.
+   */
+  memberIsHome: boolean;
   setsFor: number;
   setsAgainst: number;
   won: boolean;

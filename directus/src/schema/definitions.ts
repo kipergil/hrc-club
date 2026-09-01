@@ -427,11 +427,30 @@ export const rubbersCollection: CollectionDefinition = {
   sortField: "rubber_number",
   fields: [
     idField(),
-    integerField("rubber_number", { defaultValue: 1, nullable: false, note: "Order on the card, 1-9." }),
+    integerField("rubber_number", { defaultValue: 1, nullable: false, note: "Order on the card, 1-10: nine singles then the doubles." }),
     textField("opponent_player_name", { nullable: true }),
-    integerField("sets_for", { defaultValue: 0, note: "Sets won by the HRC player." }),
+    /*
+     * These rows are one-sided by design — `member` is "our" player and
+     * everything else is measured from them — which was right when this
+     * was one club's site and is not right now. The card is printed
+     * against the fixture's home and away columns, so without knowing
+     * which side `member` played for, every away match renders its
+     * players under the opposition's heading and contradicts the
+     * scoreline directly above it.
+     */
+    booleanField(
+      "is_home_player",
+      true,
+      "Whether `member` played for the fixture's home team. The card's columns are the home and away sides, so this is what keeps a name in the right one.",
+    ),
+    textField("player_name", {
+      nullable: true,
+      note:
+        "Label for `member`'s side when no single member record fits — a doubles pair, or a guest who is not registered here. `member` wins where both are set.",
+    }),
+    integerField("sets_for", { defaultValue: 0, note: "Sets won by `member`'s side." }),
     integerField("sets_against", { defaultValue: 0 }),
-    booleanField("won", false, "Whether the HRC player won the rubber."),
+    booleanField("won", false, "Whether `member`'s side won the rubber."),
     textField("score_detail", {
       nullable: true,
       note: 'Set scores as written on the card, e.g. "11-8, 9-11, 11-6, 11-7".',

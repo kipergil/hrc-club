@@ -28,6 +28,7 @@ import { useAverages, useFixture, useFixtures, useSeasons, useSettings, useStand
 import { SeasonPicker, useSeasonParam } from "@/components/season";
 import { cn, divisionLabel, formatDateLong, formatTime, resultLabel } from "@/lib/utils";
 import { buildCalendar } from "@/lib/calendar";
+import { orientRubber } from "@/lib/scorecard";
 import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
 import type { Division } from "@shared/enums.js";
 import { useMemo, useState } from "react";
@@ -225,6 +226,17 @@ export function ResultsPage() {
 
 // ---------------------------------------------------------------------------
 
+/** One cell of the card — a player, or a doubles pair, linked where we hold them. */
+function RubberPlayer({ player }: { player: { name: string | null; slug: string | null } }) {
+  if (!player.name) return <span className="text-ink-muted">—</span>;
+  if (!player.slug) return <>{player.name}</>;
+  return (
+    <Link href={`/players/${player.slug}`} className="link">
+      {player.name}
+    </Link>
+  );
+}
+
 export function MatchPage({ id }: { id: string }) {
   const { data: match, isLoading, isError } = useFixture(id);
 
@@ -310,34 +322,36 @@ export function MatchPage({ id }: { id: string }) {
               </tr>
             </thead>
             <tbody>
-              {match.rubbers.map((rubber) => (
-                <Tr key={rubber.id}>
-                  <Td className="tabular text-right text-ink-muted">{rubber.rubberNumber}</Td>
-                  <Td className="font-semibold">
-                    {rubber.memberSlug ? (
-                      <Link href={`/players/${rubber.memberSlug}`} className="link">
-                        {rubber.memberName}
-                      </Link>
-                    ) : (
-                      (rubber.memberName ?? "—")
-                    )}
-                  </Td>
-                  <Td>{rubber.opponentPlayerName ?? "—"}</Td>
-                  <Td className="tabular text-right">
-                    <span className="font-semibold">
-                      {rubber.setsFor}–{rubber.setsAgainst}
-                    </span>
-                    {rubber.scoreDetail ? (
-                      <span className="block text-ink-muted">{rubber.scoreDetail}</span>
-                    ) : null}
-                  </Td>
-                  <Td>
-                    <Badge tone={rubber.won ? "positive" : "negative"}>
-                      {rubber.won ? "Won" : "Lost"}
-                    </Badge>
-                  </Td>
-                </Tr>
-              ))}
+              {match.rubbers.map((rubber) => {
+                // Home-first, to agree with the scoreline above it.
+                const row = orientRubber(rubber);
+                return (
+                  <Tr key={rubber.id}>
+                    <Td className="tabular text-right text-ink-muted">{row.number}</Td>
+                    <Td className={cn(row.homeWon && "font-semibold")}>
+                      <RubberPlayer player={row.home} />
+                    </Td>
+                    <Td className={cn(!row.homeWon && "font-semibold")}>
+                      <RubberPlayer player={row.away} />
+                    </Td>
+                    <Td className="tabular text-right">
+                      <span className="font-semibold">
+                        {row.homeSets}–{row.awaySets}
+                      </span>
+                      {row.scoreDetail ? (
+                        <span className="block text-ink-muted">{row.scoreDetail}</span>
+                      ) : null}
+                    </Td>
+                    <Td>
+                      {/* Named, not "Won"/"Lost" — on a league site there is
+                          nobody for an unqualified "Won" to belong to. */}
+                      <Badge tone="neutral">
+                        {(row.homeWon ? match.homeTeam.name : match.awayTeam.name)} won
+                      </Badge>
+                    </Td>
+                  </Tr>
+                );
+              })}
             </tbody>
           </TableScroller>
         </section>
