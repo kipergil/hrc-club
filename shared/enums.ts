@@ -126,6 +126,32 @@ export const SEASON_COMPLETION_LABELS: Record<SeasonCompletion, string> = {
   cancelled: "Cancelled — never played",
 };
 
+/**
+ * A rubber is a singles or the doubles. The league's card has nine of the
+ * first and one of the second, and the difference is structural rather
+ * than cosmetic: only the doubles has two players a side.
+ */
+export const RUBBER_KIND = ["singles", "doubles"] as const;
+export type RubberKind = (typeof RUBBER_KIND)[number];
+
+/**
+ * Where an uploaded scorecard has got to.
+ *
+ * `parsed` means a machine has read it and a person has not yet looked;
+ * nothing reaches the site from that state. `applied` means somebody
+ * checked it and saved it onto the fixture, which is the only way a
+ * result becomes public.
+ */
+export const SCORECARD_STATUS = ["uploaded", "parsed", "failed", "applied"] as const;
+export type ScorecardStatus = (typeof SCORECARD_STATUS)[number];
+
+export const SCORECARD_STATUS_LABELS: Record<ScorecardStatus, string> = {
+  uploaded: "Uploaded, not yet read",
+  parsed: "Read, waiting to be checked",
+  failed: "Could not be read",
+  applied: "Checked and saved",
+};
+
 export const FIXTURE_STATUS = ["scheduled", "played", "postponed", "cancelled", "void"] as const;
 export type FixtureStatus = (typeof FIXTURE_STATUS)[number];
 

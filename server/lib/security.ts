@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import type { RequestHandler } from "express";
@@ -92,6 +93,50 @@ export const enquiryRateLimiter = rateLimit({
     message:
       "You've sent us several messages already. Please give us a chance to reply before sending another.",
   },
+});
+
+/**
+ * Guards every endpoint that writes a result.
+ *
+ * A shared secret rather than accounts, matching what the league's own
+ * site does for captains, and deliberately modest about it: this proves
+ * the caller holds the secret and nothing more. See `env.ADMIN_TOKEN`.
+ *
+ * `timingSafeEqual` because a plain `!==` leaks the secret a byte at a
+ * time to anyone patient enough to measure, and the whole security of
+ * this endpoint is that one string.
+ */
+export function requireAdmin(): RequestHandler {
+  return (req, res, next) => {
+    if (!env.ADMIN_TOKEN) {
+      res.status(503).json({
+        message: "Result entry is not configured on this deployment (no ADMIN_TOKEN is set).",
+      });
+      return;
+    }
+
+    const offered = req.get("x-admin-token") ?? "";
+    const expected = env.ADMIN_TOKEN;
+    const a = Buffer.from(offered);
+    const b = Buffer.from(expected);
+    // Compare equal-length buffers so the comparison itself cannot leak
+    // the length; a mismatched length is simply not the secret.
+    const ok = a.length === b.length && timingSafeEqual(a, b);
+    if (!ok) {
+      res.status(401).json({ message: "That password was not right." });
+      return;
+    }
+    next();
+  };
+}
+
+/** Result entry is a handful of people a week, not a public form. */
+export const adminRateLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  limit: 60,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { message: "Too many attempts. Please wait a while and try again." },
 });
 
 /**

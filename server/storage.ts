@@ -1,4 +1,12 @@
-import { readItems, readSingleton, createItem } from "@directus/sdk";
+import {
+  createItem,
+  createItems,
+  deleteItems,
+  readItems,
+  readSingleton,
+  updateItem,
+  uploadFiles,
+} from "@directus/sdk";
 import type {
   Club,
   ClubDetail,
@@ -18,6 +26,7 @@ import type {
   MemberSummary,
   NewsItem,
   Page,
+  PlayerRubber,
   PlayerStat,
   Rubber,
   Season,
@@ -31,6 +40,8 @@ import type {
 } from "../shared/types.js";
 import type { EnquiryInput } from "../shared/schema.js";
 import { DIVISION, type Division } from "../shared/enums.js";
+import { matchScoreOf, outcomeOf } from "../shared/scorecard.js";
+import { buildAverages, type AverageSource } from "../shared/averages.js";
 import { directus } from "./lib/directus.js";
 
 /*
@@ -237,18 +248,34 @@ function toTeamFixture(fixture: Fixture, teamSlug: string): TeamFixture {
   };
 }
 
+/** A rubber's player, where the site holds a member record for them. */
+function toRubberPlayer(member: Row | null, fallback: unknown): { name: string; slug: string | null } | null {
+  if (member) return { name: member.full_name ?? "", slug: member.slug ?? null };
+  const name = str(fallback);
+  // A guest, or a name nobody has reconciled to a member yet. Shown, but
+  // it links nowhere, because there is no profile behind it.
+  return name ? { name, slug: null } : null;
+}
+
 function toRubber(row: Row): Rubber {
-  const member = rel(row.member);
+  const home = [
+    toRubberPlayer(rel(row.home_player), row.home_player_name),
+    toRubberPlayer(rel(row.home_player_2), null),
+  ].filter((player): player is { name: string; slug: string | null } => player !== null);
+  const away = [
+    toRubberPlayer(rel(row.away_player), row.away_player_name),
+    toRubberPlayer(rel(row.away_player_2), null),
+  ].filter((player): player is { name: string; slug: string | null } => player !== null);
+
   return {
     id: row.id,
     rubberNumber: int(row.rubber_number),
-    memberName: member?.full_name ?? null,
-    memberSlug: member?.slug ?? null,
-    opponentPlayerName: str(row.opponent_player_name),
-    setsFor: int(row.sets_for),
-    setsAgainst: int(row.sets_against),
-    won: Boolean(row.won),
-    scoreDetail: str(row.score_detail),
+    kind: row.kind === "doubles" ? "doubles" : "singles",
+    home,
+    away,
+    homeSets: int(row.home_sets),
+    awaySets: int(row.away_sets),
+    games: Array.isArray(row.games) ? (row.games as Array<[number, number]>) : [],
   };
 }
 
@@ -454,7 +481,26 @@ export async function getSeasons(): Promise<Season[]> {
   return rows.map(toSeason);
 }
 
+let currentSeasonCache: Season | null = null;
+
+/**
+ * The season the site is showing.
+ *
+ * Cached for the life of the process. Every fixtures, standings and
+ * averages query that does not name a season asks for this first, so it
+ * was a second round trip to Directus on most requests — and it changes
+ * when somebody ticks a different box in Directus, roughly once a year.
+ * On Vercel a "process" is one invocation, so the cache is per request
+ * there and this is simply one lookup instead of two.
+ */
 export async function getCurrentSeason(): Promise<Season | null> {
+  if (currentSeasonCache) return currentSeasonCache;
+  const season = await fetchCurrentSeason();
+  if (season) currentSeasonCache = season;
+  return season;
+}
+
+async function fetchCurrentSeason(): Promise<Season | null> {
   const client = await directus();
   const rows = (await client.request(
     readItems("hrc_seasons", { fields: ["*"], filter: { is_current: { _eq: true } }, limit: 1 }),
@@ -757,12 +803,32 @@ export async function getTeam(slug: string, seasonSlug?: string): Promise<TeamDe
   };
 }
 
+/**
+ * Named rather than `*`.
+ *
+ * `*` pulled every column a fixture has, including `report` — a match
+ * report is prose, and a list of two hundred fixtures was carrying two
+ * hundred of them to render a table that shows none. Naming the columns
+ * costs a line and takes the list payload down accordingly.
+ */
 const FIXTURE_FIELDS = [
-  "*",
+  "id",
+  "played_on",
+  "start_time",
+  "week_commencing",
+  "competition",
+  "status",
+  "home_score",
+  "away_score",
+  "scorecard_url",
+  "last_synced_at",
   { home_team: ["name", "slug", "division"] },
   { away_team: ["name", "slug", "division"] },
   { venue: ["name"] },
 ] as const;
+
+/** The list projection plus the things only a single match page shows. */
+const FIXTURE_DETAIL_FIELDS = [...FIXTURE_FIELDS, "report", { report_image: ["id"] }] as const;
 
 export interface FixtureQuery {
   season?: string;
@@ -819,7 +885,8 @@ export async function getFixture(id: string): Promise<FixtureDetail | null> {
   const client = await directus();
   const rows = (await client.request(
     readItems("hrc_fixtures", {
-      fields: FIXTURE_FIELDS as unknown as string[],
+      // The one place the report is actually rendered.
+      fields: FIXTURE_DETAIL_FIELDS as unknown as string[],
       filter: { id: { _eq: id } },
       limit: 1,
     }),
@@ -829,7 +896,13 @@ export async function getFixture(id: string): Promise<FixtureDetail | null> {
   const [rubberRows, reportRows] = await Promise.all([
     client.request(
       readItems("hrc_rubbers", {
-        fields: ["*", { member: ["full_name", "slug"] }],
+        fields: [
+          "*",
+          { home_player: ["full_name", "slug"] },
+          { home_player_2: ["full_name", "slug"] },
+          { away_player: ["full_name", "slug"] },
+          { away_player_2: ["full_name", "slug"] },
+        ],
         filter: { fixture: { _eq: id } },
         sort: ["rubber_number"],
         limit: -1,
@@ -1051,7 +1124,22 @@ export function buildTable(
   return standings;
 }
 
+/**
+ * The averages.
+ *
+ * Derived from the cards where the season has any, exactly as the league
+ * table is derived from fixtures — so a player's average changes the
+ * moment a card is entered and cannot drift from the results it is built
+ * out of. The stored `hrc_player_stats` remains the source for archived
+ * seasons, whose rubbers this site will never hold.
+ */
 export async function getPlayerStats(seasonSlug?: string): Promise<PlayerStat[]> {
+  const computed = await computeAverages(seasonSlug);
+  if (computed.length > 0) return computed;
+  return getStoredPlayerStats(seasonSlug);
+}
+
+async function getStoredPlayerStats(seasonSlug?: string): Promise<PlayerStat[]> {
   const client = await directus();
   const seasonId = await seasonIdFor(seasonSlug);
   const rows = (await client.request(
@@ -1068,6 +1156,127 @@ export async function getPlayerStats(seasonSlug?: string): Promise<PlayerStat[]>
     }),
   )) as Row[];
   return rows.map(toPlayerStat);
+}
+
+/**
+ * Every singles rubber of a season, turned into averages.
+ *
+ * One query for the rubbers and one for the fixtures behind the 50% rule,
+ * rather than a query per player: a season is two hundred matches and two
+ * thousand rubbers, and this runs on the request path.
+ */
+async function computeAverages(seasonSlug?: string): Promise<PlayerStat[]> {
+  const client = await directus();
+  const seasonId = await seasonIdFor(seasonSlug);
+
+  const rows = (await client.request(
+    readItems("hrc_rubbers", {
+      fields: [
+        "id",
+        "rubber_number",
+        "kind",
+        "home_sets",
+        "away_sets",
+        { home_player: ["id", "full_name", "slug"] },
+        { away_player: ["id", "full_name", "slug"] },
+        {
+          fixture: [
+            "id",
+            "status",
+            { season: ["id"] },
+            { home_team: ["name", "slug", "division"] },
+            { away_team: ["name", "slug", "division"] },
+          ],
+        },
+      ] as unknown as string[],
+      /*
+       * Both filters run in the database. The season one used to be a
+       * JS check after the fetch, which meant reading every rubber of
+       * every season to build one season's averages — fine at sixty
+       * rows, and two thousand a season once cards are being entered.
+       */
+      filter: seasonId
+        ? { _and: [{ kind: { _eq: "singles" } }, { fixture: { season: { _eq: seasonId } } }] }
+        : { kind: { _eq: "singles" } },
+      limit: -1,
+    }),
+  )) as Row[];
+
+  const sources: AverageSource[] = [];
+  const teamFixtures = new Map<string, Set<string>>();
+
+  for (const row of rows) {
+    const fixture = rel(row.fixture);
+    if (!fixture) continue;
+
+    const homeTeam = rel(fixture.home_team);
+    const awayTeam = rel(fixture.away_team);
+
+    for (const [slot, team, isHome] of [
+      [rel(row.home_player), homeTeam, true],
+      [rel(row.away_player), awayTeam, false],
+    ] as const) {
+      // Most rubbers name a member on one side only: the opposition are
+      // names on a card, because this site holds squads, not every club's
+      // whole membership.
+      if (!slot?.id) continue;
+      sources.push({
+        memberId: slot.id,
+        memberName: slot.full_name ?? "",
+        memberSlug: slot.slug ?? "",
+        kind: "singles",
+        won: isHome ? int(row.home_sets) > int(row.away_sets) : int(row.away_sets) > int(row.home_sets),
+        fixtureId: fixture.id,
+        teamName: team?.name ?? null,
+        teamSlug: team?.slug ?? null,
+        division: team?.division ?? null,
+      });
+    }
+
+    // How many matches each team has played, which the 50% rule needs.
+    for (const team of [homeTeam, awayTeam]) {
+      if (!team?.slug) continue;
+      const seen = teamFixtures.get(team.slug) ?? new Set<string>();
+      seen.add(fixture.id);
+      teamFixtures.set(team.slug, seen);
+    }
+  }
+
+  if (sources.length === 0) return [];
+
+  const teamMatches: Record<string, number> = {};
+  for (const [slug, fixtures] of teamFixtures) teamMatches[slug] = fixtures.size;
+
+  const seasonLabel = seasonSlug ?? (await currentSeasonLabel());
+
+  return buildAverages(sources, teamMatches).map((row) => ({
+    // Stable and distinct without a stored row to take an id from.
+    id: `${row.memberId}-${seasonLabel}`,
+    memberName: row.memberName,
+    memberSlug: row.memberSlug,
+    seasonLabel,
+    teamName: row.teamName,
+    division: row.division,
+    played: row.played,
+    won: row.won,
+    lost: row.lost,
+    winPercentage: row.winPercentage,
+    // Handicaps are set by the match secretary, not computed from play.
+    handicap: null,
+    meetsParticipationThreshold: row.meetsParticipationThreshold,
+  }));
+}
+
+async function currentSeasonLabel(): Promise<string> {
+  const client = await directus();
+  const rows = (await client.request(
+    readItems("hrc_seasons", {
+      fields: ["label"],
+      filter: { is_current: { _eq: true } },
+      limit: 1,
+    }),
+  )) as Row[];
+  return rows[0]?.label ?? "";
 }
 
 export async function getNews(category?: string, limit = 50): Promise<NewsItem[]> {
@@ -1202,6 +1411,7 @@ export async function getMember(slug: string): Promise<MemberProfile | null> {
     joinedYear: num(rows[0].joined_year),
     status: rows[0].status ?? "active",
     stats: statRows.map(toPlayerStat),
+    rubbers: await getMemberRubbers(memberId),
     squadPlaces: squadRows.map((row) => ({
       teamName: rel(row.team)?.name ?? "",
       teamSlug: rel(row.team)?.slug ?? "",
@@ -1439,4 +1649,304 @@ async function getLeagueCounts(): Promise<HomePayload["counts"]> {
     divisions: new Set(teams.map((row) => row.division).filter(Boolean)).size,
     honoursFrom: Number.isFinite(earliest) && earliest > 1900 ? earliest : null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Scorecards
+// ---------------------------------------------------------------------------
+
+/** The two squads for a fixture, which is what a card's names are matched against. */
+export async function getFixtureSquads(fixtureId: string): Promise<{
+  fixture: Fixture | null;
+  homeSquad: MemberSummary[];
+  awaySquad: MemberSummary[];
+}> {
+  const client = await directus();
+  const rows = (await client.request(
+    readItems("hrc_fixtures", {
+      /*
+       * Its own projection rather than FIXTURE_FIELDS, which deliberately
+       * fetches only what a fixture list renders and so carries no team
+       * ids. Reusing it here silently produced two empty squads — every
+       * name on every card unmatched, with nothing raised anywhere.
+       */
+      fields: [
+        "*",
+        { home_team: ["id", "name", "slug", "division"] },
+        { away_team: ["id", "name", "slug", "division"] },
+        { venue: ["name"] },
+        { season: ["id"] },
+      ] as unknown as string[],
+      filter: { id: { _eq: fixtureId } },
+      limit: 1,
+    }),
+  )) as Row[];
+  if (!rows[0]) return { fixture: null, homeSquad: [], awaySquad: [] };
+
+  const fixture = toFixture(rows[0]);
+  const seasonId = rel(rows[0].season)?.id ?? null;
+  const [home, away] = await Promise.all([
+    squadFor(client, rel(rows[0].home_team)?.id, seasonId),
+    squadFor(client, rel(rows[0].away_team)?.id, seasonId),
+  ]);
+  return { fixture, homeSquad: home, awaySquad: away };
+}
+
+async function squadFor(
+  client: Awaited<ReturnType<typeof directus>>,
+  teamId: unknown,
+  seasonId: string | null,
+): Promise<MemberSummary[]> {
+  if (!teamId) return [];
+  const filter: Record<string, unknown>[] = [{ team: { _eq: teamId as string } }];
+  // A team's squad is per season; without this a card from 2026-27 would
+  // be matched against everyone who has ever played for the club.
+  if (seasonId) filter.push({ season: { _eq: seasonId } });
+
+  const rows = (await client.request(
+    readItems("hrc_squads", {
+      fields: [{ member: MEMBER_PUBLIC_FIELDS as unknown as string[] }],
+      filter: { _and: filter },
+      limit: -1,
+    }),
+  )) as Row[];
+  return rows
+    .map((row) => rel(row.member))
+    .filter((member): member is Row => member !== null)
+    .map(toMemberSummary);
+}
+
+/**
+ * Saves a card onto its fixture, replacing whatever was there.
+ *
+ * Wholesale rather than row-by-row: a corrected card is a new card, and
+ * reconciling ten rubbers against ten rubbers would leave a half-updated
+ * match on any failure — a worse state than either the old card or the
+ * new one. The fixture's score is **derived from the games** here rather
+ * than accepted from the caller, so the number on `/results` and the rows
+ * on the card can never disagree.
+ */
+export async function saveScorecard(input: {
+  fixtureId: string;
+  playedOn: string | null;
+  rubbers: Array<{
+    rubberNumber: number;
+    kind: string;
+    homePlayerId: string | null;
+    homePlayer2Id: string | null;
+    awayPlayerId: string | null;
+    awayPlayer2Id: string | null;
+    homePlayerName: string | null;
+    awayPlayerName: string | null;
+    games: Array<[number, number]>;
+  }>;
+}): Promise<{ homeScore: number; awayScore: number; rubbers: number }> {
+  const client = await directus();
+
+  const existing = (await client.request(
+    readItems("hrc_rubbers", {
+      fields: ["id"],
+      filter: { fixture: { _eq: input.fixtureId } },
+      limit: -1,
+    }),
+  )) as Row[];
+  if (existing.length > 0) {
+    await client.request(deleteItems("hrc_rubbers", existing.map((row) => row.id)));
+  }
+
+  const rows = input.rubbers.map((rubber) => {
+    const { homeSets, awaySets } = outcomeOf(rubber.games);
+    return {
+      fixture: input.fixtureId,
+      rubber_number: rubber.rubberNumber,
+      kind: rubber.kind === "doubles" ? "doubles" : "singles",
+      home_player: rubber.homePlayerId,
+      home_player_2: rubber.homePlayer2Id,
+      away_player: rubber.awayPlayerId,
+      away_player_2: rubber.awayPlayer2Id,
+      // Only kept where no member matched; a name beside a relation is
+      // two sources for one fact.
+      home_player_name: rubber.homePlayerId ? null : rubber.homePlayerName,
+      away_player_name: rubber.awayPlayerId ? null : rubber.awayPlayerName,
+      home_sets: homeSets,
+      away_sets: awaySets,
+      games: rubber.games,
+    };
+  });
+
+  if (rows.length > 0) {
+    await client.request(createItems("hrc_rubbers", rows as never));
+  }
+
+  const score = matchScoreOf(input.rubbers);
+  await client.request(
+    updateItem("hrc_fixtures", input.fixtureId, {
+      status: "played",
+      home_score: score.home,
+      away_score: score.away,
+      ...(input.playedOn ? { played_on: input.playedOn } : {}),
+    }),
+  );
+
+  return { homeScore: score.home, awayScore: score.away, rubbers: rows.length };
+}
+
+/** Records an upload and what came of it, so a bad parse can be traced later. */
+export async function recordScorecardUpload(input: {
+  fixtureId: string | null;
+  imageId?: string | null;
+  status: string;
+  parsed?: unknown;
+  warnings?: unknown;
+  error?: string | null;
+  model?: string | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+}): Promise<{ id: string }> {
+  const client = await directus();
+  const created = (await client.request(
+    createItem("hrc_scorecards", {
+      fixture: input.fixtureId,
+      image: input.imageId ?? null,
+      status: input.status,
+      parsed: input.parsed ?? null,
+      warnings: input.warnings ?? null,
+      error: input.error ?? null,
+      model: input.model ?? null,
+      input_tokens: input.inputTokens ?? null,
+      output_tokens: input.outputTokens ?? null,
+      parsed_at: new Date().toISOString(),
+    }),
+  )) as Row;
+  return { id: created?.id ?? "" };
+}
+
+/**
+ * Every rubber a player has played, from their own side.
+ *
+ * Four relations can point at one member — home, home partner, away, away
+ * partner — so this is four filters OR'd together rather than one, and
+ * which one matched decides how the row is turned round. Getting that
+ * wrong would show a player's wins as losses on their own profile, which
+ * is the sort of thing nobody reports and everybody notices.
+ */
+export async function getMemberRubbers(memberId: string): Promise<PlayerRubber[]> {
+  const client = await directus();
+  const rows = (await client.request(
+    readItems("hrc_rubbers", {
+      fields: [
+        "*",
+        { home_player: ["id", "full_name", "slug"] },
+        { home_player_2: ["id", "full_name", "slug"] },
+        { away_player: ["id", "full_name", "slug"] },
+        { away_player_2: ["id", "full_name", "slug"] },
+        { fixture: ["id", "played_on", "status", { home_team: ["name", "slug", "division"] }, { away_team: ["name", "slug", "division"] }] },
+      ] as unknown as string[],
+      filter: {
+        _or: [
+          { home_player: { _eq: memberId } },
+          { home_player_2: { _eq: memberId } },
+          { away_player: { _eq: memberId } },
+          { away_player_2: { _eq: memberId } },
+        ],
+      },
+      limit: -1,
+    }),
+  )) as Row[];
+
+  const played: PlayerRubber[] = [];
+  for (const row of rows) {
+    const fixture = rel(row.fixture);
+    if (!fixture) continue;
+
+    const isHome =
+      rel(row.home_player)?.id === memberId || rel(row.home_player_2)?.id === memberId;
+
+    const ownSide = isHome
+      ? [rel(row.home_player), rel(row.home_player_2)]
+      : [rel(row.away_player), rel(row.away_player_2)];
+    const otherSide = isHome
+      ? [rel(row.away_player), rel(row.away_player_2)]
+      : [rel(row.home_player), rel(row.home_player_2)];
+
+    const partnerRow = ownSide.find((member) => member && member.id !== memberId) ?? null;
+    const setsFor = isHome ? int(row.home_sets) : int(row.away_sets);
+    const setsAgainst = isHome ? int(row.away_sets) : int(row.home_sets);
+    const games = (Array.isArray(row.games) ? (row.games as Array<[number, number]>) : []).map(
+      // Turned round for an away player, so "11-8" always means they won it.
+      ([home, away]) => (isHome ? [home, away] : [away, home]) as [number, number],
+    );
+
+    played.push({
+      fixtureId: fixture.id,
+      playedOn: str(fixture.played_on),
+      team: toTeamRef(isHome ? rel(fixture.home_team) : rel(fixture.away_team)),
+      opponentTeam: toTeamRef(isHome ? rel(fixture.away_team) : rel(fixture.home_team)),
+      isHome,
+      rubberNumber: int(row.rubber_number),
+      kind: row.kind === "doubles" ? "doubles" : "singles",
+      partner: partnerRow ? { name: partnerRow.full_name ?? "", slug: partnerRow.slug ?? null } : null,
+      opponents: otherSide
+        .filter((member): member is Row => member !== null)
+        .map((member) => ({ name: member.full_name ?? "", slug: member.slug ?? null }))
+        .concat(
+          // The opposition are often names on a card rather than members.
+          otherSide.every((member) => member === null)
+            ? [{ name: str(isHome ? row.away_player_name : row.home_player_name) ?? "", slug: null }].filter(
+                (player) => player.name,
+              )
+            : [],
+        ),
+      setsFor,
+      setsAgainst,
+      won: setsFor > setsAgainst,
+      games,
+    });
+  }
+
+  return played.sort((a, b) => {
+    const byDate = (b.playedOn ?? "").localeCompare(a.playedOn ?? "");
+    return byDate !== 0 ? byDate : a.rubberNumber - b.rubberNumber;
+  });
+}
+
+/**
+ * Stores an uploaded card and hands back its file id.
+ *
+ * The photograph is the evidence: a disputed result is settled by looking
+ * at what the captain actually wrote, not at what somebody typed
+ * afterwards. Uploaded before the parse rather than after, so a card that
+ * the model then fails to read is still on file — those are exactly the
+ * ones worth looking at.
+ */
+export async function storeScorecardImage(input: {
+  data: string;
+  mediaType: string;
+  filename: string;
+}): Promise<string | null> {
+  const client = await directus();
+
+  const form = new FormData();
+  form.append("title", input.filename);
+  form.append(
+    "file",
+    new Blob([Buffer.from(input.data, "base64")], { type: input.mediaType }),
+    input.filename,
+  );
+
+  try {
+    const created = (await client.request(uploadFiles(form))) as Row;
+    return str(created?.id);
+  } catch (error) {
+    // A card that could not be filed is worth a log and nothing more: the
+    // result still gets entered, which is what the captain came to do.
+    console.error("[scorecard] could not store the image", error);
+    return null;
+  }
+}
+
+/** Attaches a stored image to the upload record it belongs to. */
+export async function attachScorecardImage(scorecardId: string, imageId: string): Promise<void> {
+  const client = await directus();
+  await client.request(updateItem("hrc_scorecards", scorecardId, { image: imageId }));
 }

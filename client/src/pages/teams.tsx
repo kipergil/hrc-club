@@ -16,11 +16,16 @@ import {
   Prose,
   SearchBox,
   Stat,
+  TableNote,
+  TableScroller,
+  Td,
+  Th,
+  Tr,
   usePagination,
 } from "@/components/ui";
 import { usePlayer, usePlayers, useSeasons, useTeam, useTeams } from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
-import { divisionLabel, fileUrl, formatDayName, formatTime } from "@/lib/utils";
+import { divisionLabel, fileUrl, formatDateShort, formatDayName, formatTime } from "@/lib/utils";
 
 export function TeamsPage() {
   const { data: teams, isLoading, isError } = useTeams();
@@ -483,6 +488,83 @@ export function PlayerPage({ slug }: { slug: string }) {
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {player.rubbers.length > 0 ? (
+        <section aria-labelledby="rubbers-heading">
+          <h2 id="rubbers-heading" className="mb-3 text-2xl">
+            Every rubber played
+          </h2>
+          {/*
+            Built from the match cards rather than stored, so it appears
+            the moment a card is entered and can never disagree with one.
+            Read from this player's side: "11-8" is a game they won,
+            whichever end of the table they were at.
+          */}
+          <TableNote>
+            {(() => {
+              const won = player.rubbers.filter((rubber) => rubber.won).length;
+              return `${won} won of ${player.rubbers.length}. Game scores are from ${player.displayName ?? player.fullName}'s side.`;
+            })()}
+          </TableNote>
+          <TableScroller>
+            <thead>
+              <tr>
+                <Th>Match</Th>
+                <Th>Opponent</Th>
+                <Th className="text-right">Sets</Th>
+                <Th>Result</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {player.rubbers.map((rubber) => (
+                <Tr key={`${rubber.fixtureId}-${rubber.rubberNumber}`}>
+                  <Td>
+                    <Link href={`/results/${rubber.fixtureId}`} className="link font-semibold">
+                      {/* "at" rather than "v" when they were away, so the
+                          row does not read as a home fixture it was not. */}
+                      {rubber.team.name} {rubber.isHome ? "v" : "at"} {rubber.opponentTeam.name}
+                    </Link>
+                    <span className="block text-ink-muted">
+                      {formatDateShort(rubber.playedOn)}
+                      {rubber.kind === "doubles" ? " · doubles" : ""}
+                      {rubber.partner ? ` with ${rubber.partner.name}` : ""}
+                    </span>
+                  </Td>
+                  <Td>
+                    {rubber.opponents.map((opponent, index) => (
+                      <span key={`${opponent.name}-${index}`}>
+                        {index > 0 ? <span className="text-ink-muted"> &amp; </span> : null}
+                        {opponent.slug ? (
+                          <Link href={`/players/${opponent.slug}`} className="link">
+                            {opponent.name}
+                          </Link>
+                        ) : (
+                          opponent.name
+                        )}
+                      </span>
+                    ))}
+                  </Td>
+                  <Td className="whitespace-nowrap text-right">
+                    <span className="tabular font-semibold">
+                      {rubber.setsFor}–{rubber.setsAgainst}
+                    </span>
+                    {rubber.games.length > 0 ? (
+                      <span className="block text-ink-muted">
+                        {rubber.games.map(([a, b]) => `${a}-${b}`).join(", ")}
+                      </span>
+                    ) : null}
+                  </Td>
+                  <Td>
+                    <Badge tone={rubber.won ? "positive" : "negative"}>
+                      {rubber.won ? "Won" : "Lost"}
+                    </Badge>
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </TableScroller>
         </section>
       ) : null}
 

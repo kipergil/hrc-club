@@ -1,8 +1,15 @@
 import type { Express } from "express";
-import { enquiryInputSchema } from "../shared/schema.js";
+import { enquiryInputSchema, saveScorecardSchema } from "../shared/schema.js";
 import { env } from "./lib/env.js";
 import { CACHE, cache, handler, notFound, ok, param } from "./lib/http.js";
-import { enquiryRateLimiter, requireWebhookSecret } from "./lib/security.js";
+import {
+  adminRateLimiter,
+  enquiryRateLimiter,
+  requireAdmin,
+  requireWebhookSecret,
+} from "./lib/security.js";
+import { ScorecardAiUnavailable, aiConfigured, parseScorecardImage } from "./lib/scorecard-ai.js";
+import { buildDraft } from "./lib/scorecard-draft.js";
 import * as storage from "./storage.js";
 
 export function registerRoutes(app: Express): void {
@@ -322,6 +329,174 @@ export function registerRoutes(app: Express): void {
       await storage.createEnquiry(parsed.data);
       cache(res, CACHE.none);
       res.json({ data: { received: true } });
+    }),
+  );
+
+  // -- Scorecards ----------------------------------------------------------
+
+  /*
+   * Everything under /api/admin writes results, so everything under it is
+   * behind the same gate. Grouped rather than gated one route at a time,
+   * because a route added later without the middleware is a hole nobody
+   * would notice.
+   */
+
+  /** Whether this deployment can read cards at all, so the UI can say so up front. */
+  app.get(
+    "/api/admin/scorecards/capability",
+    adminRateLimiter,
+    requireAdmin(),
+    handler(async (_req, res) => {
+      cache(res, CACHE.none);
+      ok(res, { ai: aiConfigured() });
+    }),
+  );
+
+  /** The empty card for a fixture: both squads, ten blank rubbers. */
+  app.get(
+    "/api/admin/scorecards/blank/:fixtureId",
+    adminRateLimiter,
+    requireAdmin(),
+    handler(async (req, res) => {
+      cache(res, CACHE.none);
+      const fixtureId = param(req.params.fixtureId);
+      const draft = fixtureId ? await buildDraft(fixtureId, null) : null;
+      if (!draft) {
+        notFound(res, "fixture");
+        return;
+      }
+      ok(res, draft);
+    }),
+  );
+
+  /**
+   * Reads a photographed card and returns a draft for a person to check.
+   *
+   * A draft, never a save. The two are separate endpoints because they
+   * are separate decisions: the machine proposes, and somebody who was
+   * at the match decides.
+   */
+  app.post(
+    "/api/admin/scorecards/parse",
+    adminRateLimiter,
+    requireAdmin(),
+    handler(async (req, res) => {
+      cache(res, CACHE.none);
+
+      const { fixtureId, image, mediaType } = req.body ?? {};
+      if (typeof fixtureId !== "string" || typeof image !== "string" || !image) {
+        res.status(400).json({ message: "Pick a match and choose a photograph of the card." });
+        return;
+      }
+      if (typeof mediaType !== "string" || !/^image\/(png|jpeg|webp|gif)$/.test(mediaType)) {
+        res.status(400).json({ message: "That file is not a PNG, JPEG, WebP or GIF image." });
+        return;
+      }
+
+      const context = await storage.getFixtureSquads(fixtureId);
+      if (!context.fixture) {
+        notFound(res, "fixture");
+        return;
+      }
+
+      /*
+       * Refused before anything is stored. This used to sit after the
+       * upload, so a deployment with no API key filed a fresh orphaned
+       * image in Directus every time somebody pressed the button — a
+       * slow leak nothing would ever have reported.
+       */
+      if (!aiConfigured()) {
+        res.status(503).json({
+          message:
+            "No Anthropic API key is configured, so cards cannot be read automatically. You can still enter this one by hand.",
+        });
+        return;
+      }
+
+      /*
+       * Filed before it is read, not after. A card the model then fails
+       * on is exactly the one worth looking at later, and storing only
+       * the successes would keep the evidence for the cases that need it
+       * least.
+       */
+      const imageId = await storage.storeScorecardImage({
+        data: image,
+        mediaType,
+        filename: `card-${context.fixture.homeTeam.slug || "home"}-v-${context.fixture.awayTeam.slug || "away"}.${mediaType.split("/")[1]}`,
+      });
+
+      try {
+        const parsed = await parseScorecardImage(
+          { data: image, mediaType },
+          {
+            homeTeamName: context.fixture.homeTeam.name,
+            awayTeamName: context.fixture.awayTeam.name,
+            homeSquad: context.homeSquad.map((member) => member.fullName),
+            awaySquad: context.awaySquad.map((member) => member.fullName),
+          },
+        );
+
+        const draft = await buildDraft(fixtureId, parsed.card);
+        if (!draft) {
+          notFound(res, "fixture");
+          return;
+        }
+
+        // Recorded whether or not it is ever saved, so a bad parse can be
+        // looked at afterwards rather than only complained about.
+        await storage.recordScorecardUpload({
+          fixtureId,
+          imageId,
+          status: "parsed",
+          parsed: parsed.card,
+          warnings: draft.warnings,
+          model: parsed.model,
+          inputTokens: parsed.inputTokens,
+          outputTokens: parsed.outputTokens,
+        });
+
+        ok(res, draft);
+      } catch (error) {
+        if (error instanceof ScorecardAiUnavailable) {
+          // Not a fault: a league with no API key types cards in by hand,
+          // and the screen it lands on is the one it would have used anyway.
+          res.status(503).json({ message: error.message });
+          return;
+        }
+        const message =
+          error instanceof Error ? error.message : "The card could not be read.";
+        await storage.recordScorecardUpload({ fixtureId, imageId, status: "failed", error: message });
+        res.status(422).json({ message });
+      }
+    }),
+  );
+
+  /** Saves a checked card onto its fixture. */
+  app.post(
+    "/api/admin/scorecards",
+    adminRateLimiter,
+    requireAdmin(),
+    handler(async (req, res) => {
+      cache(res, CACHE.none);
+
+      const parsed = saveScorecardSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({
+          message: "That card could not be saved.",
+          errors: parsed.error.issues.map((issue) => ({
+            path: issue.path.join("."),
+            message: issue.message,
+          })),
+        });
+        return;
+      }
+
+      const saved = await storage.saveScorecard({
+        fixtureId: parsed.data.fixtureId,
+        playedOn: parsed.data.playedOn ?? null,
+        rubbers: parsed.data.rubbers,
+      });
+      ok(res, saved);
     }),
   );
 

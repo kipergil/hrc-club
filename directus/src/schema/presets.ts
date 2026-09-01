@@ -70,6 +70,30 @@ export function richTextField(
   };
 }
 
+/**
+ * A JSON column.
+ *
+ * Used for the small, fixed-shape structures that would otherwise be a
+ * whole collection for no gain — a rubber's five game scores, a parse's
+ * list of warnings. The rule for reaching for this rather than a table is
+ * whether anything ever queries *into* it: nothing filters matches by the
+ * score of the third game, so five games are a value, not five rows.
+ */
+export function jsonField(
+  field: string,
+  opts: { note?: string; nullable?: boolean; defaultValue?: unknown } = {},
+): FieldDefinition {
+  return {
+    field,
+    type: "json",
+    meta: { interface: "input-code", options: { language: "json" }, note: opts.note, width: "full" },
+    schema: {
+      is_nullable: opts.nullable ?? true,
+      default_value: opts.defaultValue === undefined ? null : (opts.defaultValue as never),
+    },
+  };
+}
+
 export function booleanField(field: string, defaultValue: boolean, note?: string): FieldDefinition {
   return {
     field,

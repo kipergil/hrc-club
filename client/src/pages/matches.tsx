@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { PageHeader, PrintButton } from "@/components/layout";
 import {
-  AveragesTable,
+  AveragesByDivision,
   FixtureList,
   HandicapTable,
   SeasonGrid,
@@ -24,32 +24,32 @@ import {
   Tr,
   usePagination,
 } from "@/components/ui";
-import { useAverages, useFixture, useFixtures, useSeasons, useSettings, useStandings } from "@/lib/queries";
+import { useAverages, useFixture, useFixtures, useSeasons, useStandings } from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
 import { cn, divisionLabel, formatDateLong, formatTime, resultLabel } from "@/lib/utils";
 import { buildCalendar } from "@/lib/calendar";
+import { Scorecard } from "@/components/scorecard";
 import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
 import type { Division } from "@shared/enums.js";
+import type { Fixture } from "@shared/types.js";
 import { useMemo, useState } from "react";
 
 /**
- * A small note under every page that shows synced league data, saying where
- * it came from and when it last arrived. Being able to see that a table is
- * an hour old is the difference between trusting it and not.
+ * The note under every page that carries competitive data, saying where
+ * it came from and when.
+ *
+ * It used to say results "come from the league's own records, where
+ * captains enter them", which was true when this site only mirrored the
+ * league. Cards are now entered here — that is what `/admin/scorecards`
+ * is — so the sentence had become a polite untruth on every page it
+ * appeared under. Being able to see where a number came from is the
+ * difference between trusting it and not, which is the whole reason this
+ * note exists; leaving it stale would have defeated the point of it.
  */
 function SyncNote({ lastSyncedAt }: { lastSyncedAt: string | null | undefined }) {
-  const { data: settings } = useSettings();
   return (
     <p className="mt-8 border-t border-line pt-5 text-ink-muted">
-      Fixtures and results come from the{" "}
-      {settings?.leagueUrl ? (
-        <a href={settings.leagueUrl} className="link">
-          league's own records
-        </a>
-      ) : (
-        "league's own records"
-      )}
-      , where captains enter them.
+      Results come from the match cards, entered by team captains after the match.
       {lastSyncedAt ? ` Last updated ${formatDateLong(lastSyncedAt)}.` : null}
     </p>
   );
@@ -143,27 +143,46 @@ export function CalendarPage() {
 // ---------------------------------------------------------------------------
 
 export function FixturesPage() {
-  const { data: fixtures, isLoading, isError } = useFixtures("status=scheduled");
+  const [season, setSeason] = useSeasonParam();
+  const { data: seasons } = useSeasons();
+  const {
+    data: fixtures,
+    isLoading,
+    isError,
+  } = useFixtures(`status=scheduled${season ? `&season=${season}` : ""}`);
 
-  if (isLoading) return <Loading what="the fixture calendar" variant="table" />;
-  if (isError) return <ErrorNote what="fixture calendar" />;
-
-  // Grouped by the league's own week-commencing scheduling, because that is
-  // how captains and players think about the season — "week of the 12th",
-  // not "the 14th and the 16th".
-  const weeks = new Map<string, typeof fixtures>();
-  for (const fixture of fixtures ?? []) {
-    const key = fixture.weekCommencing ?? fixture.playedOn ?? "unscheduled";
-    weeks.set(key, [...(weeks.get(key) ?? []), fixture]);
-  }
+  /*
+   * Grouped by the league's own week-commencing scheduling, because that
+   * is how captains and players think about the season — "week of the
+   * 12th", not "the 14th and the 16th".
+   *
+   * Every hook here runs before any early return. They did not:
+   * `usePagination` sat below the loading and error guards, so the first
+   * render (loading) called fewer hooks than the second (loaded) and
+   * React tore the whole page down with "Rendered more hooks than during
+   * the previous render" — no rows, no empty state, no message. It
+   * survived only when prerendered data made the first render a loaded
+   * one, which is exactly why the page failed *sometimes*: on a cold
+   * client-side navigation and nowhere else.
+   */
+  const weeks = useMemo(() => {
+    const grouped = new Map<string, Fixture[]>();
+    for (const fixture of fixtures ?? []) {
+      const key = fixture.weekCommencing ?? fixture.playedOn ?? "unscheduled";
+      grouped.set(key, [...(grouped.get(key) ?? []), fixture]);
+    }
+    return [...grouped.entries()];
+  }, [fixtures]);
 
   /*
    * Paginated by week rather than by match, so a page break never falls
-   * inside a week. The season is two hundred fixtures across sixteen
-   * weeks; four weeks is about a screenful and keeps each page a unit
-   * somebody would actually ask for — "the next month".
+   * inside a week. Four weeks is about a screenful and keeps each page a
+   * unit somebody would actually ask for — "the next month".
    */
-  const paged = usePagination([...weeks.entries()], 4);
+  const paged = usePagination(weeks, 4, season);
+
+  if (isLoading) return <Loading what="the fixture calendar" variant="table" />;
+  if (isError) return <ErrorNote what="fixture calendar" />;
 
   return (
     <div>
@@ -171,11 +190,13 @@ export function FixturesPage() {
         title="Fixture calendar"
         subtitle="Every match still to play, week by week"
         actions={<PrintButton label="Print the fixture list" />}
-      />
+      >
+        <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
+      </PageHeader>
 
-      {weeks.size === 0 ? (
+      {weeks.length === 0 ? (
         <Empty>
-          There are no matches in the calendar at the moment. Fixtures for a new season usually
+          There are no matches still to play in this season. Fixtures for a new season usually
           appear in September.
         </Empty>
       ) : (
@@ -183,13 +204,13 @@ export function FixturesPage() {
           {paged.items.map(([week, weekFixtures]) => (
             <section key={week}>
               <h2 className="mb-3 text-xl">Week of {formatDateLong(week)}</h2>
-              <FixtureList fixtures={weekFixtures ?? []} emptyMessage="Nothing this week." />
+              <FixtureList fixtures={weekFixtures} emptyMessage="Nothing this week." />
             </section>
           ))}
         </div>
       )}
 
-      {weeks.size > 0 ? <Pagination state={paged} noun="weeks" /> : null}
+      {weeks.length > 0 ? <Pagination state={paged} noun="weeks" /> : null}
 
       <SyncNote lastSyncedAt={fixtures?.[0]?.lastSyncedAt} />
     </div>
@@ -199,7 +220,13 @@ export function FixturesPage() {
 // ---------------------------------------------------------------------------
 
 export function ResultsPage() {
-  const { data: fixtures, isLoading, isError } = useFixtures("status=played");
+  const [season, setSeason] = useSeasonParam();
+  const { data: seasons } = useSeasons();
+  const {
+    data: fixtures,
+    isLoading,
+    isError,
+  } = useFixtures(`status=played${season ? `&season=${season}` : ""}`);
 
   if (isLoading) return <Loading what="results" variant="table" />;
   if (isError) return <ErrorNote what="results" />;
@@ -208,14 +235,16 @@ export function ResultsPage() {
     <div>
       <PageHeader
         title="Match history"
-        subtitle="Every match played in the league this season"
+        subtitle="Every match played in the league"
         actions={<PrintButton label="Print these results" />}
-      />
+      >
+        <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
+      </PageHeader>
 
       <FixtureList
         fixtures={fixtures ?? []}
         perPage={25}
-        emptyMessage="No results yet this season. They appear here once matches have been played and the cards confirmed."
+        emptyMessage="No results in this season yet. They appear here once matches have been played and the cards entered."
       />
 
       <SyncNote lastSyncedAt={fixtures?.[0]?.lastSyncedAt} />
@@ -290,58 +319,7 @@ export function MatchPage({ id }: { id: string }) {
         ) : null}
       </Card>
 
-      {match.rubbers.length > 0 ? (
-        <section aria-labelledby="card-heading">
-          <h2 id="card-heading" className="mb-3 text-2xl">
-            The card
-          </h2>
-          <TableNote>
-            Each line is one game between two players — a “rubber”. The set scores are shown as they
-            were written on the card on the night.
-          </TableNote>
-          <TableScroller>
-            <thead>
-              <tr>
-                <Th className="w-14 text-right">#</Th>
-                <Th>{match.homeTeam.name}</Th>
-                <Th>{match.awayTeam.name}</Th>
-                <Th className="text-right">Sets</Th>
-                <Th>Result</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {match.rubbers.map((rubber) => (
-                <Tr key={rubber.id}>
-                  <Td className="tabular text-right text-ink-muted">{rubber.rubberNumber}</Td>
-                  <Td className="font-semibold">
-                    {rubber.memberSlug ? (
-                      <Link href={`/players/${rubber.memberSlug}`} className="link">
-                        {rubber.memberName}
-                      </Link>
-                    ) : (
-                      (rubber.memberName ?? "—")
-                    )}
-                  </Td>
-                  <Td>{rubber.opponentPlayerName ?? "—"}</Td>
-                  <Td className="tabular text-right">
-                    <span className="font-semibold">
-                      {rubber.setsFor}–{rubber.setsAgainst}
-                    </span>
-                    {rubber.scoreDetail ? (
-                      <span className="block text-ink-muted">{rubber.scoreDetail}</span>
-                    ) : null}
-                  </Td>
-                  <Td>
-                    <Badge tone={rubber.won ? "positive" : "negative"}>
-                      {rubber.won ? "Won" : "Lost"}
-                    </Badge>
-                  </Td>
-                </Tr>
-              ))}
-            </tbody>
-          </TableScroller>
-        </section>
-      ) : null}
+      <Scorecard match={match} />
 
       {match.report ? (
         <section aria-labelledby="report-heading">
@@ -426,7 +404,7 @@ export function AveragesPage() {
         actions={<PrintButton label="Print the averages" />}
       />
 
-      <AveragesTable stats={stats ?? []} />
+      <AveragesByDivision stats={stats ?? []} />
 
       <div className="mt-10 max-w-readable">
         <Disclosure summary="Why are some players marked “not yet eligible”?">
@@ -435,6 +413,14 @@ export function AveragesPage() {
             half of their team’s matches. It stops someone who played twice, and won both, from
             finishing above a player who turned out every week. Everyone’s record is still shown —
             the marker only affects the placings.
+          </p>
+        </Disclosure>
+        <Disclosure summary="Where do these numbers come from?">
+          <p>
+            They are worked out from the match cards themselves, rubber by rubber, rather than
+            typed in separately — so a player’s average changes the moment a card is entered and
+            can never disagree with the results it is built from. Singles only: the doubles is a
+            pair’s result rather than a player’s, and the league has never counted it here.
           </p>
         </Disclosure>
       </div>

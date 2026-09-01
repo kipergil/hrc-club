@@ -22,6 +22,33 @@ export const env = {
   DIRECTUS_ADMIN_EMAIL: optional("DIRECTUS_ADMIN_EMAIL"),
   DIRECTUS_ADMIN_PASSWORD: optional("DIRECTUS_ADMIN_PASSWORD"),
 
+  /**
+   * Reads photographed match cards. Absent is a supported state: the
+   * upload screen says so and manual entry carries on working, because a
+   * league without an Anthropic account still has to be able to enter a
+   * result.
+   */
+  ANTHROPIC_API_KEY: optional("ANTHROPIC_API_KEY"),
+  /** Overridable so a cheaper model can be tried against real cards without a deploy. */
+  SCORECARD_MODEL: process.env.SCORECARD_MODEL ?? "claude-opus-5",
+
+  /**
+   * Gates every scorecard write.
+   *
+   * A single shared secret, held by the handful of people who enter
+   * results — which is what the league's own site does with its captains'
+   * sign-in, and honest about what it is. It is not user accounts: it
+   * cannot tell you who entered a card, only that whoever did had the
+   * secret. `hrc_scorecards.applied_by` is a name typed by the person
+   * saving, for the record rather than for security. When the members'
+   * area lands (Clerk, per the architecture note) this is what it
+   * replaces.
+   *
+   * Unset means the scorecard endpoints refuse everything, which is the
+   * right default for a deployment nobody has configured.
+   */
+  ADMIN_TOKEN: optional("ADMIN_TOKEN"),
+
   /** Shared secret for /api/revalidate and /api/sync/league. */
   WEBHOOK_SECRET: optional("WEBHOOK_SECRET"),
   /** Vercel Deploy Hook, called when content changes so the static copy catches up. */

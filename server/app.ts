@@ -1,3 +1,4 @@
+import compression from "compression";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { registerRoutes } from "./routes.js";
 import { apiRateLimiter, securityHeaders } from "./lib/security.js";
@@ -11,8 +12,34 @@ export function createApp(): Express {
   const app = express();
 
   app.disable("x-powered-by");
+
+  /*
+   * Nothing was compressing anything.
+   *
+   * A season of fixtures is 84KB of JSON that is mostly repeated keys and
+   * team names — it gzips to a fraction of that, and until now every byte
+   * of it went over the wire uncompressed. That is the single largest
+   * thing slowing this API down, and it was invisible because the numbers
+   * only look wrong once there is a season's worth of data behind them.
+   *
+   * Above the security headers so it wraps everything below, and before
+   * the routes so it covers every response rather than the handful
+   * somebody remembered.
+   */
+  app.use(compression());
   app.use(securityHeaders());
   app.use("/api", apiRateLimiter);
+  /*
+   * 64kb everywhere except the one route that carries a photograph.
+   *
+   * The general limit stays small on purpose — every public endpoint
+   * takes a form's worth of text, and a large body limit on a public API
+   * is an invitation. A card image is base64 in a JSON body, so it needs
+   * room, and it gets it only on the route that is behind the admin gate.
+   * 8mb covers a phone photograph with the headroom base64 costs (~33%);
+   * bigger than that is a scan nobody needed at that size.
+   */
+  app.use("/api/admin/scorecards/parse", express.json({ limit: "8mb" }));
   app.use(express.json({ limit: "64kb" }));
   app.use(express.urlencoded({ extended: false }));
 

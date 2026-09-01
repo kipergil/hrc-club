@@ -21,6 +21,9 @@ import {
   NAV_GROUP_LABELS,
   NEWS_CATEGORY,
   PAGE_STATUS,
+  RUBBER_KIND,
+  SCORECARD_STATUS,
+  SCORECARD_STATUS_LABELS,
   SEASON_COMPLETION,
   SEASON_COMPLETION_LABELS,
   SESSION_TYPE,
@@ -37,6 +40,7 @@ import {
   fileField,
   idField,
   integerField,
+  jsonField,
   m2o,
   richTextField,
   selectField,
@@ -422,19 +426,37 @@ export const rubbersCollection: CollectionDefinition = {
   collection: "hrc_rubbers",
   icon: "scoreboard",
   note:
-    "Individual rubbers within a match — the club's own copy of the scorecard. Optional detail: a fixture is complete and displayable without any rubber rows.",
-  displayTemplate: "{{rubber_number}}. {{member.full_name}} v {{opponent_player_name}}",
+    "One rubber of a match, shaped like the league's own scorecard: nine singles in the card's printed order (A-X, B-Y, C-Z, B-X, A-Z, C-Y, B-Z, C-X, A-Y) then the doubles. Both sides are named, and the individual game scores are kept, because the card has them and a player's record is built from them.",
+  displayTemplate: "{{rubber_number}}. {{home_player.full_name}} v {{away_player.full_name}}",
   sortField: "rubber_number",
   fields: [
     idField(),
-    integerField("rubber_number", { defaultValue: 1, nullable: false, note: "Order on the card, 1-9." }),
-    textField("opponent_player_name", { nullable: true }),
-    integerField("sets_for", { defaultValue: 0, note: "Sets won by the HRC player." }),
-    integerField("sets_against", { defaultValue: 0 }),
-    booleanField("won", false, "Whether the HRC player won the rubber."),
-    textField("score_detail", {
+    integerField("rubber_number", {
+      defaultValue: 1,
+      nullable: false,
+      note: "1-9 are the singles, in the card's printed order; 10 is the doubles.",
+    }),
+    selectField("kind", RUBBER_KIND, { defaultValue: "singles", nullable: false }),
+    /*
+     * Both sides, symmetrically.
+     *
+     * The previous shape had a single `member` and an opponent's name as
+     * free text — right when this was one club's site, and wrong the
+     * moment it carried the league: on an away match the recorded player
+     * was the visitor, and every consumer had to know which side a row
+     * had been written from. Two relations means a rubber reads the same
+     * way whoever is looking at it.
+     */
+    textField("home_player_name", {
       nullable: true,
-      note: 'Set scores as written on the card, e.g. "11-8, 9-11, 11-6, 11-7".',
+      note: "As written on the card. Used when the name matches no member here — a guest, or a spelling nobody has reconciled yet.",
+    }),
+    textField("away_player_name", { nullable: true }),
+    integerField("home_sets", { defaultValue: 0, note: "Games won. Derived from `games` on save." }),
+    integerField("away_sets", { defaultValue: 0 }),
+    jsonField("games", {
+      defaultValue: [],
+      note: 'The five game columns from the card, home points first: [[11,8],[9,11],[11,6]]. Best of five, so at most five entries.',
     }),
     dateCreatedField(),
     dateUpdatedField(),
@@ -446,12 +468,78 @@ export const rubbersCollection: CollectionDefinition = {
       oneField: "rubbers",
       onDelete: "CASCADE",
     }),
-    m2o("hrc_rubbers", "member", "hrc_members", {
+    m2o("hrc_rubbers", "home_player", "hrc_members", {
       template: "{{full_name}}",
-      oneField: "rubbers",
+      oneField: "home_rubbers",
       onDelete: "SET NULL",
-      note: "The HRC player. SET NULL rather than CASCADE so removing a member never erases match history.",
+      note: "SET NULL rather than CASCADE so removing a member never erases match history.",
     }),
+    m2o("hrc_rubbers", "home_player_2", "hrc_members", {
+      template: "{{full_name}}",
+      oneField: "home_doubles_rubbers",
+      onDelete: "SET NULL",
+      note: "The doubles partner. Empty on all nine singles.",
+    }),
+    m2o("hrc_rubbers", "away_player", "hrc_members", {
+      template: "{{full_name}}",
+      oneField: "away_rubbers",
+      onDelete: "SET NULL",
+    }),
+    m2o("hrc_rubbers", "away_player_2", "hrc_members", {
+      template: "{{full_name}}",
+      oneField: "away_doubles_rubbers",
+      onDelete: "SET NULL",
+    }),
+  ],
+};
+
+/**
+ * An uploaded scorecard, and what a machine made of it.
+ *
+ * Kept as its own record rather than written straight onto the fixture,
+ * for three reasons. The photograph is the evidence, and a disputed
+ * result is settled by looking at the card rather than at what somebody
+ * typed. A parse is a draft until a person has checked it — `applied` is
+ * the only status that has touched the site. And when a parse comes out
+ * wrong, the image and the raw output are both still here to work out
+ * why, which is the only way the prompt ever improves.
+ */
+export const scorecardsCollection: CollectionDefinition = {
+  collection: "hrc_scorecards",
+  icon: "document_scanner",
+  note:
+    "A photographed or scanned match card, the machine's reading of it, and whether a human has confirmed it. Nothing here is public until its status is `applied`.",
+  displayTemplate: "{{status}} — {{fixture.home_team.name}} v {{fixture.away_team.name}}",
+  fields: [
+    idField(),
+    selectField("status", SCORECARD_STATUS, {
+      labels: SCORECARD_STATUS_LABELS,
+      defaultValue: "uploaded",
+      nullable: false,
+    }),
+    jsonField("parsed", {
+      note: "What the model read, in the shape `shared/scorecard.ts` defines. A draft: never rendered to the public.",
+    }),
+    jsonField("warnings", {
+      note: "What the checks found — arithmetic that does not add up, names that disagree with the card's fixed pairing order.",
+    }),
+    textField("error", { nullable: true, note: "Why a parse failed, in words a committee member can act on." }),
+    textField("model", { nullable: true, note: "Which model read it, so a bad batch can be traced to a version." }),
+    integerField("input_tokens", { nullable: true, defaultValue: null }),
+    integerField("output_tokens", { nullable: true, defaultValue: null }),
+    timestampField("parsed_at"),
+    timestampField("applied_at"),
+    textField("applied_by", { nullable: true, note: "Who checked and saved it." }),
+    dateCreatedField(),
+    dateUpdatedField(),
+  ],
+  relationFields: [
+    m2o("hrc_scorecards", "fixture", "hrc_fixtures", {
+      oneField: "scorecards",
+      onDelete: "SET NULL",
+      note: "Which match this card is for. Set by whoever uploads it.",
+    }),
+    fileField("hrc_scorecards", "image", { note: "The card itself. The evidence behind the result." }),
   ],
 };
 
@@ -1054,6 +1142,7 @@ export const allCollections: CollectionDefinition[] = [
   squadsCollection,
   fixturesCollection,
   rubbersCollection,
+  scorecardsCollection,
   standingsCollection,
   playerStatsCollection,
   honoursCollection,
