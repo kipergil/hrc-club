@@ -13,6 +13,17 @@ export function createApp(): Express {
   app.disable("x-powered-by");
   app.use(securityHeaders());
   app.use("/api", apiRateLimiter);
+  /*
+   * 64kb everywhere except the one route that carries a photograph.
+   *
+   * The general limit stays small on purpose — every public endpoint
+   * takes a form's worth of text, and a large body limit on a public API
+   * is an invitation. A card image is base64 in a JSON body, so it needs
+   * room, and it gets it only on the route that is behind the admin gate.
+   * 8mb covers a phone photograph with the headroom base64 costs (~33%);
+   * bigger than that is a scan nobody needed at that size.
+   */
+  app.use("/api/admin/scorecards/parse", express.json({ limit: "8mb" }));
   app.use(express.json({ limit: "64kb" }));
   app.use(express.urlencoded({ extended: false }));
 

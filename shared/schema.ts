@@ -49,3 +49,38 @@ export const enquiryInputSchema = z.object({
 });
 
 export type EnquiryInput = z.infer<typeof enquiryInputSchema>;
+
+/**
+ * Saving a card.
+ *
+ * Note what is *not* here: the match score. It is derived from the games
+ * on the server, so a caller cannot save a card whose rows disagree with
+ * its own scoreline — the one inconsistency that would be invisible on
+ * every page that shows the result.
+ */
+export const saveScorecardSchema = z.object({
+  fixtureId: z.string().min(1),
+  playedOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-09-23.")
+    .nullable()
+    .optional(),
+  savedBy: z.string().trim().max(80).optional(),
+  rubbers: z
+    .array(
+      z.object({
+        rubberNumber: z.number().int().min(1).max(10),
+        kind: z.enum(["singles", "doubles"]),
+        homePlayerId: z.string().nullable(),
+        homePlayer2Id: z.string().nullable(),
+        awayPlayerId: z.string().nullable(),
+        awayPlayer2Id: z.string().nullable(),
+        homePlayerName: z.string().trim().max(120).nullable(),
+        awayPlayerName: z.string().trim().max(120).nullable(),
+        games: z.array(z.tuple([z.number().int().min(0).max(99), z.number().int().min(0).max(99)])).max(5),
+      }),
+    )
+    .max(10),
+});
+
+export type SaveScorecardInput = z.infer<typeof saveScorecardSchema>;

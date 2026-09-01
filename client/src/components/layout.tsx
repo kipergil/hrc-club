@@ -357,6 +357,17 @@ function Footer() {
                 Help with this page
               </Link>
             </li>
+            {/*
+              Where a captain goes to enter a result. In the footer rather
+              than the menu because it is for a handful of people, and the
+              league's own site puts its Admin link in much the same
+              place — findable if you know to look, out of the way if not.
+            */}
+            <li>
+              <Link href="/admin/scorecards" className="link">
+                Enter a result
+              </Link>
+            </li>
             {settings?.contactEmail ? (
               <li>
                 <a href={`mailto:${settings.contactEmail}`} className="link">

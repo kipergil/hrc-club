@@ -17,6 +17,8 @@ import type {
   FixtureStatus,
   MembershipPeriod,
   NewsCategory,
+  RubberKind,
+  ScorecardStatus,
   SessionType,
   SponsorTier,
 } from "./enums.js";
@@ -114,6 +116,35 @@ export interface MemberProfile extends MemberSummary {
   stats: PlayerStat[];
   squadPlaces: Array<{ teamName: string; teamSlug: string; seasonLabel: string; role: string }>;
   honours: Honour[];
+  /** Every rubber they played, newest first, built from the cards. */
+  rubbers: PlayerRubber[];
+}
+
+/**
+ * One rubber from a player's own side.
+ *
+ * Derived rather than stored, for the same reason a team's win/loss is:
+ * the same row is a win for one player and a loss for the other, and
+ * storing it twice means keeping two copies honest.
+ */
+export interface PlayerRubber {
+  fixtureId: string;
+  playedOn: string | null;
+  /** The team they played for, and the one they played against. */
+  team: TeamRef;
+  opponentTeam: TeamRef;
+  /** Whether their team was at home, so the fixture can be named correctly. */
+  isHome: boolean;
+  rubberNumber: number;
+  kind: RubberKind;
+  /** Their doubles partner, on the doubles. */
+  partner: RubberPlayer | null;
+  opponents: RubberPlayer[];
+  setsFor: number;
+  setsAgainst: number;
+  won: boolean;
+  /** Game scores from this player's side. */
+  games: Array<[number, number]>;
 }
 
 export interface Club {
@@ -214,26 +245,33 @@ export interface TeamFixture extends Fixture {
   result: FixtureResult | null;
 }
 
+/** One player on one side of a rubber, linked where the site holds them. */
+export interface RubberPlayer {
+  name: string;
+  slug: string | null;
+}
+
+/**
+ * One rubber, as the league's card records it.
+ *
+ * Symmetrical: both sides are named and both sides' games are here, so
+ * the row reads the same whichever team you support. The previous shape
+ * held one player and the opponent's name as free text, which meant every
+ * consumer had to know which side the row had been written from — and the
+ * match page got it wrong for every away match until somebody looked.
+ */
 export interface Rubber {
   id: string;
+  /** 1-9 are the singles, in the card's printed order; 10 is the doubles. */
   rubberNumber: number;
-  /** The player, or the pair, on `memberIsHome`'s side. */
-  memberName: string | null;
-  memberSlug: string | null;
-  opponentPlayerName: string | null;
-  /**
-   * Which side `memberName` played for.
-   *
-   * A rubber row records one side and measures everything from it, so
-   * `setsFor` and `won` mean nothing until you know whose they are. The
-   * card is laid out in home and away columns to match the scoreline, and
-   * this is what decides which column a name goes in.
-   */
-  memberIsHome: boolean;
-  setsFor: number;
-  setsAgainst: number;
-  won: boolean;
-  scoreDetail: string | null;
+  kind: RubberKind;
+  /** One name for a singles, two for the doubles. */
+  home: RubberPlayer[];
+  away: RubberPlayer[];
+  homeSets: number;
+  awaySets: number;
+  /** Game scores, home points first — the card's five columns. */
+  games: Array<[number, number]>;
 }
 
 export interface FixtureDetail extends Fixture {
@@ -423,4 +461,65 @@ export interface HomePayload {
     /** The earliest year in the roll of honour, or null if there is none. */
     honoursFrom: number | null;
   };
+}
+
+
+/**
+ * An uploaded card and what the machine made of it.
+ *
+ * Never public: only an `applied` card's rubbers reach the site, and they
+ * reach it as rubbers on the fixture rather than as this record.
+ */
+export interface ScorecardUpload {
+  id: string;
+  status: ScorecardStatus;
+  fixtureId: string | null;
+  imageId: string | null;
+  warnings: ScorecardWarning[];
+  error: string | null;
+  model: string | null;
+  parsedAt: string | null;
+  appliedAt: string | null;
+  createdAt: string | null;
+}
+
+export interface ScorecardWarning {
+  severity: "error" | "warning";
+  rubberNumber: number | null;
+  field: string | null;
+  message: string;
+}
+
+/** One rubber in a draft, before anyone has confirmed it. */
+export interface ScorecardDraftRubber {
+  rubberNumber: number;
+  kind: RubberKind;
+  /** Member ids where a name matched a squad player, else null. */
+  homePlayerId: string | null;
+  homePlayer2Id: string | null;
+  awayPlayerId: string | null;
+  awayPlayer2Id: string | null;
+  /** The names as read, kept even when matched, so the form can show what the card said. */
+  homePlayerName: string | null;
+  homePlayer2Name: string | null;
+  awayPlayerName: string | null;
+  awayPlayer2Name: string | null;
+  games: Array<[number, number]>;
+}
+
+/**
+ * What the parse endpoint hands back: a draft card with names already
+ * matched against the two squads where they could be, plus everything the
+ * checks found. A proposal — nothing is saved until a person presses save.
+ */
+export interface ScorecardDraft {
+  fixtureId: string;
+  homeTeam: TeamRef;
+  awayTeam: TeamRef;
+  playedOn: string | null;
+  rubbers: ScorecardDraftRubber[];
+  warnings: ScorecardWarning[];
+  /** Both squads, for the form's player pickers. */
+  homeSquad: MemberSummary[];
+  awaySquad: MemberSummary[];
 }

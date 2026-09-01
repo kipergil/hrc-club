@@ -17,6 +17,7 @@
  */
 export const KNOWN_ROUTE_SEGMENTS: readonly string[] = [
   "about",
+  "admin",
   "accessibility",
   "averages",
   "clubs",

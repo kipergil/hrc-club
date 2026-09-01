@@ -1,28 +1,34 @@
 import { createItems, deleteItems, readItems, updateItem } from "@directus/sdk";
 import { getSchemaClient } from "../lib/client.js";
+import {
+  DOUBLES_RUBBER,
+  RUBBERS_PER_MATCH,
+  SINGLES_ORDER,
+  matchScoreOf,
+  outcomeOf,
+} from "../../../shared/scorecard.js";
 
 /**
  * Fills in sample results for one team, so the pages that only exist to
- * show results can be looked at before a single card has been entered.
+ * show results can be looked at carrying data.
  *
  * **This writes invented data to the live database.** Nothing here is a
- * real score. It exists because `/results`, `/tables`, `/teams/:slug` and
- * a match's own page are all built, tested and completely empty until the
- * season starts, and a design that has never been seen carrying data is a
- * design nobody has actually reviewed.
+ * real score.
  *
  *   npm run directus:sample:results            # fill them in
  *   npm run directus:sample:results -- --clear # take them all out again
  *
  * `--clear` is exact rather than approximate: it deletes the rubbers it
  * created and returns the fixtures to `scheduled` with null scores, which
- * is precisely the state they were in beforehand. Run it before the real
- * season starts, or the first real result will land in a table that
- * already has fiction in it.
+ * is the state they were in beforehand. Run it before the real season
+ * starts, or the first real result will land in a table that already has
+ * fiction in it.
  *
- * The format is the league's own: three players a side, nine singles and
- * a doubles, ten rubbers in all, and a team's points are the rubbers it
- * won. That is what makes the derived league table add up.
+ * Cards follow the league's own sheet: three players a side, nine singles
+ * in the printed order, then the doubles. The match score is *derived*
+ * from the games rather than set alongside them, which is the same path a
+ * real card takes through `shared/scorecard.ts` — so if that arithmetic
+ * were wrong, this sample would be visibly wrong too.
  */
 
 const TEAM = "HRC B";
@@ -31,25 +37,14 @@ const TEAM = "HRC B";
 const MATCHES = 6;
 
 /**
- * The results, written out rather than randomised.
+ * How each match should come out, as rubbers won by HRC B.
  *
- * A seeded random generator would be shorter and would produce a season
- * that is all much of a muchness. These are chosen to exercise the things
- * the pages actually have to render: a comfortable win, a narrow win, a
- * heavy defeat, and — the one every league table's tie-break code cares
- * about and no random run reliably produces — a **5–5 draw**.
- *
- * `for` is HRC B's rubbers, whichever side of the fixture they are on;
- * the importer works out home and away from the fixture itself.
+ * Written out rather than randomised, to exercise what the pages have to
+ * render: a comfortable win, a narrow one, a heavy defeat, and a 5-5
+ * draw — the case every league table's tie-break cares about and no
+ * random run reliably produces.
  */
-const RESULTS: Array<{ for: number; against: number }> = [
-  { for: 3, against: 7 }, // away at Water Lane A — beaten by the champions
-  { for: 8, against: 2 }, // home to Grundy Park A
-  { for: 4, against: 6 }, // away at HRC A — the club derby
-  { for: 7, against: 3 }, // home to Cheshunt A
-  { for: 5, against: 5 }, // away at Ellenborough A — a draw
-  { for: 6, against: 4 }, // away at Kidston
-];
+const RESULTS = [3, 8, 4, 7, 5, 6];
 
 /** Opposition names, so a card is not nine blanks. Invented, like the scores. */
 const OPPONENTS: Record<string, string[]> = {
@@ -65,35 +60,29 @@ const GENERIC = ["A. Berry", "C. Doyle", "E. Fisher"];
 
 type Row = Record<string, any>;
 type Client = Awaited<ReturnType<typeof getSchemaClient>>;
+type Game = [number, number];
+
+function rel(value: unknown): Row | null {
+  return value && typeof value === "object" ? (value as Row) : null;
+}
 
 /**
- * Set scores for one rubber, consistent with who won it.
+ * A plausible best-of-five, from the point of view of the side that won.
  *
- * Best of five, 11 up. The detail matters only because the card prints
- * it, and a scoreline of "3-1" beside "11-8, 11-6" would be visibly wrong
- * to anyone who plays.
+ * Rotated through three shapes so a card is not ten identical 3-0s, and
+ * every game is a legal one — 11 up, two clear — because
+ * `checkScorecard` would otherwise flag this sample as unreadable.
  */
-function setScores(won: boolean, index: number): { setsFor: number; setsAgainst: number; detail: string } {
-  // Three shapes, rotated, so a card is not ten identical 3-0s.
+function gamesFor(homeWins: boolean, index: number): Game[] {
   const shape = index % 3;
-  const games =
+  const winnerFirst: Game[] =
     shape === 0
-      ? ["11-8", "11-6", "11-9"]
+      ? [[11, 8], [11, 6], [11, 9]]
       : shape === 1
-        ? ["11-7", "9-11", "11-8", "11-5"]
-        : ["8-11", "11-9", "11-7", "9-11", "11-8"];
-  const setsWon = 3;
-  const setsLost = games.filter((game) => {
-    const [a, b] = game.split("-").map(Number);
-    return (a ?? 0) < (b ?? 0);
-  }).length;
+        ? [[11, 7], [9, 11], [11, 8], [11, 5]]
+        : [[8, 11], [11, 9], [11, 7], [9, 11], [12, 10]];
 
-  // Written from the winner's side, then flipped for the loser so the
-  // detail always reads left-to-right as the row's own player.
-  const flip = (game: string) => game.split("-").reverse().join("-");
-  return won
-    ? { setsFor: setsWon, setsAgainst: setsLost, detail: games.join(", ") }
-    : { setsFor: setsLost, setsAgainst: setsWon, detail: games.map(flip).join(", ") };
+  return homeWins ? winnerFirst : winnerFirst.map(([a, b]) => [b, a] as Game);
 }
 
 async function squadOf(client: Client, teamName: string): Promise<Row[]> {
@@ -113,7 +102,6 @@ async function fixturesOf(client: Client, teamName: string): Promise<Row[]> {
       fields: [
         "id",
         "week_commencing",
-        "played_on",
         "status",
         "home_team.id",
         "home_team.name",
@@ -155,8 +143,7 @@ async function main(): Promise<void> {
 
   if (clear) {
     console.log(`Removing the sample results for ${TEAM}\n`);
-    const ids = fixtures.map((fixture) => fixture.id as string);
-    const removed = await clearRubbers(client, ids);
+    const removed = await clearRubbers(client, fixtures.map((fixture) => fixture.id as string));
     for (const fixture of fixtures) {
       await client.request(
         updateItem("hrc_fixtures" as never, fixture.id, {
@@ -179,13 +166,12 @@ async function main(): Promise<void> {
   }
   const players = squad.slice(0, 3);
 
-  // Anything left over from a previous run, so re-running does not stack
-  // twenty rubbers onto a ten-rubber match.
   await clearRubbers(client, fixtures.map((fixture) => fixture.id as string));
 
   let written = 0;
+  const tally = { won: 0, drawn: 0, lost: 0, points: 0 };
 
-  for (const [index, result] of RESULTS.slice(0, MATCHES).entries()) {
+  for (const [index, teamRubbers] of RESULTS.slice(0, MATCHES).entries()) {
     const fixture = fixtures[index];
     if (!fixture) break;
 
@@ -193,78 +179,88 @@ async function main(): Promise<void> {
     const opponentName = (isHome ? rel(fixture.away_team) : rel(fixture.home_team))?.name as string;
     const opponents = OPPONENTS[opponentName] ?? GENERIC;
 
-    /*
-     * Which of the ten rubbers this team won. Deterministic rather than
-     * random so a re-run produces the same season, and spread across the
-     * card rather than front-loaded so no match reads as nine straight
-     * wins then nothing.
-     */
+    // Which rubbers this team wins. Spread across the card rather than
+    // front-loaded, so no match reads as a run of wins then nothing.
     const wins = new Set<number>();
-    for (let n = 0; wins.size < result.for; n += 1) {
-      wins.add((n * 3 + 1) % 10);
-    }
+    for (let n = 0; wins.size < teamRubbers; n += 1) wins.add((n * 3 + 1) % RUBBERS_PER_MATCH);
 
-    const rubbers: Row[] = [];
-    for (let n = 0; n < 10; n += 1) {
-      const isDoubles = n === 9;
-      const won = wins.has(n);
-      const { setsFor, setsAgainst, detail } = setScores(won, n);
+    const rows: Row[] = [];
+    for (let n = 0; n < RUBBERS_PER_MATCH; n += 1) {
+      const number = n + 1;
+      const isDoubles = number === DOUBLES_RUBBER;
+      const teamWins = wins.has(n);
+      // The card is written home-first; the team we are filling in may be
+      // either side, so translate once here.
+      const games = gamesFor(isHome ? teamWins : !teamWins, n);
+      const { homeSets, awaySets } = outcomeOf(games);
 
-      rubbers.push({
+      const slots = SINGLES_ORDER[n];
+      const teamPlayer = isDoubles ? players[0]! : players["ABC".indexOf(slots![0])]!;
+      const teamPartner = isDoubles ? players[1]! : null;
+      const oppIndex = isDoubles ? 0 : "XYZ".indexOf(slots![1]);
+      const oppPlayer = opponents[oppIndex] ?? opponents[0]!;
+      const oppPartner = isDoubles ? (opponents[1] ?? null) : null;
+
+      rows.push({
         fixture: fixture.id,
-        rubber_number: n + 1,
-        // Nine singles: each of the three plays each of the three.
-        member: isDoubles ? null : players[n % 3]!.member.id,
-        player_name: isDoubles
-          ? `${players[0]!.member.full_name} & ${players[1]!.member.full_name}`
-          : null,
-        opponent_player_name: isDoubles
-          ? `${opponents[0]} & ${opponents[1]}`
-          : opponents[Math.floor(n / 3)],
-        is_home_player: isHome,
-        sets_for: setsFor,
-        sets_against: setsAgainst,
-        won,
-        score_detail: detail,
+        rubber_number: number,
+        kind: isDoubles ? "doubles" : "singles",
+        // Our players are members; the opposition are names on a card,
+        // because this site does not hold other clubs' squads as players.
+        home_player: isHome ? teamPlayer.member.id : null,
+        home_player_2: isHome ? teamPartner?.member.id ?? null : null,
+        home_player_name: isHome ? null : oppPlayer,
+        away_player: isHome ? null : teamPlayer.member.id,
+        away_player_2: isHome ? null : teamPartner?.member.id ?? null,
+        away_player_name: isHome ? oppPlayer : null,
+        home_sets: homeSets,
+        away_sets: awaySets,
+        games,
       });
+
+      // The doubles pair's second name, on whichever side is the opposition.
+      if (isDoubles && oppPartner) {
+        const row = rows[rows.length - 1]!;
+        if (isHome) row.away_player_name = `${oppPlayer} & ${oppPartner}`;
+        else row.home_player_name = `${oppPlayer} & ${oppPartner}`;
+      }
     }
 
-    await client.request(createItems("hrc_rubbers" as never, rubbers as never));
+    await client.request(createItems("hrc_rubbers" as never, rows as never));
 
-    // The match is played on the Wednesday of its week — HRC's home night,
-    // and near enough for a sample.
+    // Derived from the games, exactly as a real card is.
+    const score = matchScoreOf(rows.map((row) => ({ games: row.games as Game[] })));
+
     const week = new Date(`${fixture.week_commencing}T00:00:00Z`);
-    week.setUTCDate(week.getUTCDate() + 2);
+    week.setUTCDate(week.getUTCDate() + 2); // HRC play on Wednesdays.
 
     await client.request(
       updateItem("hrc_fixtures" as never, fixture.id, {
         status: "played",
         played_on: week.toISOString().slice(0, 10),
-        home_score: isHome ? result.for : result.against,
-        away_score: isHome ? result.against : result.for,
+        home_score: score.home,
+        away_score: score.away,
       } as never),
     );
 
+    const ours = isHome ? score.home : score.away;
+    const theirs = isHome ? score.away : score.home;
+    if (ours > theirs) tally.won += 1;
+    else if (ours < theirs) tally.lost += 1;
+    else tally.drawn += 1;
+    tally.points += ours;
+
     written += 1;
     console.log(
-      `  = ${fixture.week_commencing} ${isHome ? "v" : "at"} ${opponentName}: ` +
-        `${result.for}-${result.against} (${result.for > result.against ? "won" : result.for < result.against ? "lost" : "drawn"})`,
+      `  = ${fixture.week_commencing} ${isHome ? "v" : "at"} ${opponentName}: ${ours}-${theirs}`,
     );
   }
 
-  const won = RESULTS.slice(0, MATCHES).filter((r) => r.for > r.against).length;
-  const drawn = RESULTS.slice(0, MATCHES).filter((r) => r.for === r.against).length;
-  const points = RESULTS.slice(0, MATCHES).reduce((total, r) => total + r.for, 0);
-
   console.log(
-    `\n  ${written} matches, ${written * 10} rubbers. ` +
-      `${TEAM}: ${won} won, ${drawn} drawn, ${written - won - drawn} lost, ${points} points.`,
+    `\n  ${written} matches, ${written * RUBBERS_PER_MATCH} rubbers. ` +
+      `${TEAM}: ${tally.won} won, ${tally.drawn} drawn, ${tally.lost} lost, ${tally.points} points.`,
   );
   console.log("\n  Remove it all with: npm run directus:sample:results -- --clear");
-}
-
-function rel(value: unknown): Row | null {
-  return value && typeof value === "object" ? (value as Row) : null;
 }
 
 main().catch((error) => {

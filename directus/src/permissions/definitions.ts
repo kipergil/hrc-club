@@ -18,7 +18,6 @@ const READ_ONLY_COLLECTIONS = [
   "hrc_seasons",
   "hrc_teams",
   "hrc_squads",
-  "hrc_rubbers",
   "hrc_honours",
   "hrc_membership_options",
   "hrc_committee_roles",
@@ -36,6 +35,21 @@ const READ_ONLY_COLLECTIONS = [
  * never removed, so a link to it never 404s.
  */
 const SYNCED_COLLECTIONS = ["hrc_fixtures", "hrc_standings", "hrc_player_stats"];
+
+/**
+ * Written when a match card is entered or uploaded.
+ *
+ * Rubbers get `delete` as well, because saving a corrected card replaces
+ * the match's rubbers wholesale rather than trying to reconcile ten rows
+ * against ten rows — a half-updated card is a worse state than either the
+ * old one or the new one.
+ *
+ * These grants say what the *server* may do, not who may ask it to. The
+ * scorecard endpoints are behind an admin gate in Express; Directus has no
+ * idea who is signed in, and a token that could not write here would make
+ * the feature impossible rather than safer.
+ */
+const SCORECARD_COLLECTIONS = ["hrc_rubbers", "hrc_scorecards"];
 
 /**
  * The public projection of a member. `email` and `phone` are absent by
@@ -71,6 +85,13 @@ const rules: PermissionRule[] = [
     { collection, action: "read" },
     { collection, action: "create" },
     { collection, action: "update" },
+  ]),
+
+  ...SCORECARD_COLLECTIONS.flatMap((collection): PermissionRule[] => [
+    { collection, action: "read" },
+    { collection, action: "create" },
+    { collection, action: "update" },
+    { collection, action: "delete" },
   ]),
 
   // Members are readable only through the projection above, and updatable
