@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Upload, X } from "lucide-react";
-import type { Fixture, MemberSummary, ScorecardDraft, ScorecardDraftRubber } from "@shared/types.js";
+import type {
+  Fixture,
+  MemberSummary,
+  ScorecardDraft,
+  ScorecardDraftRubber,
+  ScorecardLineupSlot,
+} from "@shared/types.js";
 import {
   DOUBLES_RUBBER,
   formatGames,
@@ -184,15 +190,23 @@ function PlayerPicker({
   squad,
   id,
   name,
+  options = [],
   onChange,
 }: {
   label: string;
   squad: MemberSummary[];
   id: string | null;
   name: string | null;
+  /** Member ids the card's name could equally have meant. */
+  options?: string[];
   onChange: (id: string | null, name: string | null) => void;
 }) {
   const unmatched = !id && name;
+  const ambiguous = !id && options.length > 1;
+  const named = options
+    .map((option) => squad.find((member) => member.id === option)?.fullName)
+    .filter(Boolean) as string[];
+
   return (
     <div>
       <select
@@ -204,21 +218,80 @@ function PlayerPicker({
           unmatched ? "border-accent" : "border-line-strong",
         )}
       >
-        <option value="">{name ? `“${name}” — not matched` : "Nobody"}</option>
-        {squad.map((member) => (
-          <option key={member.id} value={member.id}>
-            {member.fullName}
-          </option>
-        ))}
+        {/*
+         * Short on purpose. This used to repeat the name — “Sam Jones” —
+         * not matched — which is both redundant with the line below and
+         * too long for the doubles cells, where it truncated mid-word to
+         * "not matcl". The name belongs under the field, where it has room.
+         */}
+        <option value="">
+          {name ? (ambiguous ? "Which one?" : "Not matched") : "Nobody"}
+        </option>
+        {/*
+         * The players the name could mean come first, under their own
+         * heading. On a squad of eight, hunting for the two Sams in an
+         * alphabetical list is the slow part of checking a card.
+         */}
+        {ambiguous ? (
+          <optgroup label={`Could be “${name}”`}>
+            {options.map((option) => {
+              const member = squad.find((one) => one.id === option);
+              return member ? (
+                <option key={member.id} value={member.id}>
+                  {member.fullName}
+                </option>
+              ) : null;
+            })}
+          </optgroup>
+        ) : null}
+        <optgroup label={ambiguous ? "Everyone else" : "Squad"}>
+          {squad
+            .filter((member) => !ambiguous || !options.includes(member.id))
+            .map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.fullName}
+              </option>
+            ))}
+        </optgroup>
       </select>
+
       {/* What the card said, kept visible beside who it was taken to mean. */}
       {unmatched ? (
         <p className="mt-1 text-ink-muted">
-          On the card: <span className="font-semibold text-ink">{name}</span>
+          {ambiguous ? (
+            <>
+              <span className="font-semibold text-ink">{name}</span> could be {named.join(" or ")}
+            </>
+          ) : (
+            <>
+              On the card: <span className="font-semibold text-ink">{name}</span>
+            </>
+          )}
         </p>
       ) : null}
     </div>
   );
+}
+
+/** The letter the sheet gives a player: A, B, C or X, Y, Z. */
+function SlotLetter({ letter }: { letter: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex size-8 shrink-0 items-center justify-center rounded-card border border-line-strong bg-surface-sunken font-semibold tabular text-ink"
+    >
+      {letter}
+    </span>
+  );
+}
+
+/** Who a letter currently stands for: the chosen player, else the card's word for them. */
+function slotName(slot: ScorecardLineupSlot | undefined, squad: MemberSummary[]): string {
+  if (!slot) return "—";
+  if (slot.memberId) {
+    return squad.find((member) => member.id === slot.memberId)?.fullName ?? "—";
+  }
+  return slot.name ?? "—";
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +307,23 @@ function ScorecardForm({
   onSaved: (result: { homeScore: number; awayScore: number }) => void;
   onBack: () => void;
 }) {
-  const [rubbers, setRubbers] = useState<ScorecardDraftRubber[]>(draft.rubbers);
+  /*
+   * The line-up is the state; the singles rubbers are a view of it.
+   *
+   * The sheet names its six players once, against the letters, and the
+   * printed order does the rest — so correcting a misread "Sam" is one
+   * change here rather than the same change in rubbers 2, 7 and 9. Only
+   * the doubles keeps players of its own, because its pairing is the one
+   * the letters do not settle.
+   */
+  const [homeLineup, setHomeLineup] = useState<ScorecardLineupSlot[]>(draft.homeLineup);
+  const [awayLineup, setAwayLineup] = useState<ScorecardLineupSlot[]>(draft.awayLineup);
+  const [doubles, setDoubles] = useState<ScorecardDraftRubber>(
+    () =>
+      draft.rubbers.find((rubber) => rubber.rubberNumber === DOUBLES_RUBBER) ??
+      draft.rubbers[draft.rubbers.length - 1]!,
+  );
+
   // Held as text so a half-typed "11-" is not thrown away on every keystroke.
   const [gameText, setGameText] = useState<string[]>(() =>
     draft.rubbers.map((rubber) => formatGames(rubber.games as Game[])),
@@ -249,36 +338,68 @@ function ScorecardForm({
     [parsed],
   );
 
-  function update(index: number, patch: Partial<ScorecardDraftRubber>) {
-    setRubbers((current) =>
-      current.map((rubber, i) => (i === index ? { ...rubber, ...patch } : rubber)),
-    );
+  const homeBySlot = useMemo(
+    () => new Map(homeLineup.map((entry) => [entry.slot, entry])),
+    [homeLineup],
+  );
+  const awayBySlot = useMemo(
+    () => new Map(awayLineup.map((entry) => [entry.slot, entry])),
+    [awayLineup],
+  );
+
+  function setSlot(side: "home" | "away", slot: string, memberId: string | null) {
+    const apply = (current: ScorecardLineupSlot[]) =>
+      current.map((entry) => (entry.slot === slot ? { ...entry, memberId } : entry));
+    if (side === "home") setHomeLineup(apply);
+    else setAwayLineup(apply);
   }
 
   async function save() {
     setSaving(true);
     setError(null);
     try {
+      const rubbers = draft.rubbers.map((rubber, index) => {
+        const games = parsed[index]!.games;
+        if (rubber.rubberNumber === DOUBLES_RUBBER) {
+          return {
+            rubberNumber: rubber.rubberNumber,
+            kind: doubles.kind,
+            homePlayerId: doubles.homePlayerId,
+            homePlayer2Id: doubles.homePlayer2Id,
+            awayPlayerId: doubles.awayPlayerId,
+            awayPlayer2Id: doubles.awayPlayer2Id,
+            homePlayerName: doubles.homePlayerName,
+            awayPlayerName: doubles.awayPlayerName,
+            games,
+          };
+        }
+
+        // A singles takes its players from the line-up, every time. There
+        // is nowhere else for them to come from and nowhere else to edit.
+        const slots = slotsForRubber(rubber.rubberNumber);
+        const home = homeBySlot.get(slots?.[0] ?? "");
+        const away = awayBySlot.get(slots?.[1] ?? "");
+        return {
+          rubberNumber: rubber.rubberNumber,
+          kind: "singles" as const,
+          homePlayerId: home?.memberId ?? null,
+          homePlayer2Id: null,
+          awayPlayerId: away?.memberId ?? null,
+          awayPlayer2Id: null,
+          // Kept only where nobody was chosen, so the card still records
+          // what it said about a guest or an unreconciled spelling.
+          homePlayerName: home?.memberId ? null : (home?.name ?? null),
+          awayPlayerName: away?.memberId ? null : (away?.name ?? null),
+          games,
+        };
+      });
+
       const result = await adminFetch<{ homeScore: number; awayScore: number }>(
         "/api/admin/scorecards",
         token,
         {
           method: "POST",
-          body: {
-            fixtureId: draft.fixtureId,
-            playedOn: playedOn || null,
-            rubbers: rubbers.map((rubber, index) => ({
-              rubberNumber: rubber.rubberNumber,
-              kind: rubber.kind,
-              homePlayerId: rubber.homePlayerId,
-              homePlayer2Id: rubber.homePlayer2Id,
-              awayPlayerId: rubber.awayPlayerId,
-              awayPlayer2Id: rubber.awayPlayer2Id,
-              homePlayerName: rubber.homePlayerName,
-              awayPlayerName: rubber.awayPlayerName,
-              games: parsed[index]!.games,
-            })),
-          },
+          body: { fixtureId: draft.fixtureId, playedOn: playedOn || null, rubbers },
         },
       );
       onSaved(result);
@@ -301,6 +422,40 @@ function ScorecardForm({
 
   const general = draft.warnings.filter((warning) => warning.rubberNumber === null);
 
+  /** One side's three letters, as the box at the top of the sheet. */
+  function LineupBox({
+    side,
+    teamName,
+    entries,
+    squad,
+  }: {
+    side: "home" | "away";
+    teamName: string;
+    entries: ScorecardLineupSlot[];
+    squad: MemberSummary[];
+  }) {
+    return (
+      <div className="space-y-3">
+        <p className="font-semibold">{teamName}</p>
+        {entries.map((entry) => (
+          <div key={entry.slot} className="flex items-start gap-3">
+            <SlotLetter letter={entry.slot} />
+            <div className="min-w-0 flex-1">
+              <PlayerPicker
+                label={`${teamName} player ${entry.slot}`}
+                squad={squad}
+                id={entry.memberId}
+                name={entry.name}
+                options={entry.options}
+                onChange={(id) => setSlot(side, entry.slot, id)}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -309,7 +464,8 @@ function ScorecardForm({
             {draft.homeTeam.name} v {draft.awayTeam.name}
           </h2>
           <p className="text-ink-muted">
-            The card is ten rubbers: nine singles in the league's printed order, then the doubles.
+            The card as it is printed: the six players against their letters, then ten rubbers —
+            nine singles in the league's order, and the doubles.
           </p>
         </div>
         <Button variant="secondary" onClick={onBack}>
@@ -340,117 +496,224 @@ function ScorecardForm({
         </Field>
       </div>
 
+      {/*
+       * The line-up box, first, exactly as it sits on the sheet. Getting
+       * these six right is most of checking a card: every singles row
+       * below follows from them, so a name fixed here is fixed in all
+       * three of that player's rubbers at once.
+       */}
+      <Card>
+        <h3 className="text-xl">Who played</h3>
+        <p className="mt-1 text-ink-muted">
+          The card names three players a side against these letters. The nine singles below are
+          then fixed by the league's printed order — change a player here and their rubbers follow.
+        </p>
+        <div className="mt-4 grid gap-6 sm:grid-cols-2">
+          <LineupBox
+            side="home"
+            teamName={draft.homeTeam.name}
+            entries={homeLineup}
+            squad={draft.homeSquad}
+          />
+          <LineupBox
+            side="away"
+            teamName={draft.awayTeam.name}
+            entries={awayLineup}
+            squad={draft.awaySquad}
+          />
+        </div>
+      </Card>
+
       <TableNote>
         Type the games as they are written — <strong>11-8, 9-11, 11-6</strong>. The sets and the
         match score work themselves out.
       </TableNote>
 
-      <ol className="space-y-3">
-        {rubbers.map((rubber, index) => {
-          const entry = parsed[index]!;
-          const outcome = outcomeOf(entry.games);
-          const isDoubles = rubber.rubberNumber === DOUBLES_RUBBER;
-          const slots = slotsForRubber(rubber.rubberNumber);
-          const problems = byRubber.get(rubber.rubberNumber) ?? [];
+      {/*
+       * The rubbers as a table, in the card's own order and shape: number,
+       * who against who, the five game columns as one field, and the sets.
+       * A person checking a photograph reads down a column, so the screen
+       * is a column too.
+       */}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[46rem] border-collapse">
+          <caption className="sr-only">
+            The ten rubbers, in the order the card prints them
+          </caption>
+          <thead>
+            <tr className="border-b border-line-strong text-left">
+              <th scope="col" className="py-2 pr-2 font-semibold">
+                #
+              </th>
+              <th scope="col" className="w-1/4 py-2 pr-2 font-semibold">
+                {draft.homeTeam.name}
+              </th>
+              <th scope="col" className="w-1/4 py-2 pr-2 font-semibold">
+                {draft.awayTeam.name}
+              </th>
+              <th scope="col" className="py-2 pr-2 font-semibold">
+                Games ({draft.homeTeam.name} first)
+              </th>
+              <th scope="col" className="py-2 font-semibold">
+                Sets
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {draft.rubbers.map((rubber, index) => {
+              const entry = parsed[index]!;
+              const outcome = outcomeOf(entry.games);
+              const isDoubles = rubber.rubberNumber === DOUBLES_RUBBER;
+              const slots = slotsForRubber(rubber.rubberNumber);
+              const problems = byRubber.get(rubber.rubberNumber) ?? [];
+              const home = homeBySlot.get(slots?.[0] ?? "");
+              const away = awayBySlot.get(slots?.[1] ?? "");
 
-          return (
-            <li key={rubber.rubberNumber}>
-              <Card className={cn(isDoubles && "border-brand bg-brand-soft")}>
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <p className="font-semibold">
-                    <span className="tabular">{rubber.rubberNumber}.</span>{" "}
-                    {isDoubles ? "Doubles" : `${slots?.[0]} v ${slots?.[1]}`}
-                  </p>
-                  <p className="tabular text-ink-muted">
+              return (
+                <tr
+                  key={rubber.rubberNumber}
+                  className={cn(
+                    "border-b border-line align-top",
+                    isDoubles && "bg-brand-soft",
+                  )}
+                >
+                  <th scope="row" className="py-3 pr-2 text-left font-semibold tabular">
+                    {rubber.rubberNumber}
+                  </th>
+
+                  {isDoubles ? (
+                    <>
+                      <td className="min-w-[13rem] py-3 pr-2">
+                        <div className="space-y-2">
+                          <PlayerPicker
+                            label={`Doubles, ${draft.homeTeam.name} player`}
+                            squad={draft.homeSquad}
+                            id={doubles.homePlayerId}
+                            name={doubles.homePlayerName}
+                            onChange={(id, name) =>
+                              setDoubles((current) => ({
+                                ...current,
+                                homePlayerId: id,
+                                homePlayerName: name,
+                              }))
+                            }
+                          />
+                          <PlayerPicker
+                            label={`Doubles, ${draft.homeTeam.name} partner`}
+                            squad={draft.homeSquad}
+                            id={doubles.homePlayer2Id}
+                            name={doubles.homePlayer2Name}
+                            onChange={(id, name) =>
+                              setDoubles((current) => ({
+                                ...current,
+                                homePlayer2Id: id,
+                                homePlayer2Name: name,
+                              }))
+                            }
+                          />
+                        </div>
+                      </td>
+                      <td className="min-w-[13rem] py-3 pr-2">
+                        <div className="space-y-2">
+                          <PlayerPicker
+                            label={`Doubles, ${draft.awayTeam.name} player`}
+                            squad={draft.awaySquad}
+                            id={doubles.awayPlayerId}
+                            name={doubles.awayPlayerName}
+                            onChange={(id, name) =>
+                              setDoubles((current) => ({
+                                ...current,
+                                awayPlayerId: id,
+                                awayPlayerName: name,
+                              }))
+                            }
+                          />
+                          <PlayerPicker
+                            label={`Doubles, ${draft.awayTeam.name} partner`}
+                            squad={draft.awaySquad}
+                            id={doubles.awayPlayer2Id}
+                            name={doubles.awayPlayer2Name}
+                            onChange={(id, name) =>
+                              setDoubles((current) => ({
+                                ...current,
+                                awayPlayer2Id: id,
+                                awayPlayer2Name: name,
+                              }))
+                            }
+                          />
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      {/*
+                       * Read-only, and deliberately so: a singles player is
+                       * the line-up's answer, and a second place to change
+                       * it is a second place for the two to disagree.
+                       */}
+                      <td className="py-3 pr-2">
+                        <div className="flex items-center gap-2">
+                          <SlotLetter letter={slots?.[0] ?? "?"} />
+                          <span className={cn(!home?.memberId && "text-ink-muted")}>
+                            {slotName(home, draft.homeSquad)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 pr-2">
+                        <div className="flex items-center gap-2">
+                          <SlotLetter letter={slots?.[1] ?? "?"} />
+                          <span className={cn(!away?.memberId && "text-ink-muted")}>
+                            {slotName(away, draft.awaySquad)}
+                          </span>
+                        </div>
+                      </td>
+                    </>
+                  )}
+
+                  <td className="py-3 pr-2">
+                    <label htmlFor={`games-${rubber.rubberNumber}`} className="sr-only">
+                      Rubber {rubber.rubberNumber} games, {draft.homeTeam.name} first
+                    </label>
+                    <input
+                      id={`games-${rubber.rubberNumber}`}
+                      inputMode="numeric"
+                      placeholder="11-8, 9-11, 11-6"
+                      value={gameText[index]}
+                      onChange={(event) =>
+                        setGameText((current) =>
+                          current.map((text, i) => (i === index ? event.target.value : text)),
+                        )
+                      }
+                      className="min-h-touch w-full min-w-[12rem] rounded-card border border-line-strong bg-surface px-3 text-ink"
+                    />
+                    {entry.invalid.length > 0 ? (
+                      <p className="mt-1 font-semibold text-negative">
+                        ⚠ Could not read: {entry.invalid.join(", ")}
+                      </p>
+                    ) : null}
+                    {problems.length > 0 ? (
+                      <ul className="mt-1 space-y-1 text-accent">
+                        {problems.map((problem) => (
+                          <li key={problem}>⚠ {problem}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </td>
+
+                  {/* Nowrap: "not finished" broke over three lines and made
+                      every unfinished rubber twice the height of a done one. */}
+                  <td className="whitespace-nowrap py-3 tabular">
                     {outcome.homeSets}–{outcome.awaySets}
-                    {entry.games.length > 0 && !outcome.complete ? " · not finished" : ""}
-                  </p>
-                </div>
-
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <p className="font-semibold text-ink-muted">{draft.homeTeam.name}</p>
-                    <PlayerPicker
-                      label={`Rubber ${rubber.rubberNumber}, ${draft.homeTeam.name} player`}
-                      squad={draft.homeSquad}
-                      id={rubber.homePlayerId}
-                      name={rubber.homePlayerName}
-                      onChange={(id, name) => update(index, { homePlayerId: id, homePlayerName: name })}
-                    />
-                    {isDoubles ? (
-                      <PlayerPicker
-                        label={`Doubles, ${draft.homeTeam.name} partner`}
-                        squad={draft.homeSquad}
-                        id={rubber.homePlayer2Id}
-                        name={rubber.homePlayer2Name}
-                        onChange={(id, name) =>
-                          update(index, { homePlayer2Id: id, homePlayer2Name: name })
-                        }
-                      />
+                    {entry.games.length > 0 && !outcome.complete ? (
+                      <span className="block text-ink-muted">unfinished</span>
                     ) : null}
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="font-semibold text-ink-muted">{draft.awayTeam.name}</p>
-                    <PlayerPicker
-                      label={`Rubber ${rubber.rubberNumber}, ${draft.awayTeam.name} player`}
-                      squad={draft.awaySquad}
-                      id={rubber.awayPlayerId}
-                      name={rubber.awayPlayerName}
-                      onChange={(id, name) => update(index, { awayPlayerId: id, awayPlayerName: name })}
-                    />
-                    {isDoubles ? (
-                      <PlayerPicker
-                        label={`Doubles, ${draft.awayTeam.name} partner`}
-                        squad={draft.awaySquad}
-                        id={rubber.awayPlayer2Id}
-                        name={rubber.awayPlayer2Name}
-                        onChange={(id, name) =>
-                          update(index, { awayPlayer2Id: id, awayPlayer2Name: name })
-                        }
-                      />
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <label
-                    htmlFor={`games-${rubber.rubberNumber}`}
-                    className="block font-semibold text-ink"
-                  >
-                    Games ({draft.homeTeam.name} first)
-                  </label>
-                  <input
-                    id={`games-${rubber.rubberNumber}`}
-                    inputMode="numeric"
-                    placeholder="11-8, 9-11, 11-6"
-                    value={gameText[index]}
-                    onChange={(event) =>
-                      setGameText((current) =>
-                        current.map((text, i) => (i === index ? event.target.value : text)),
-                      )
-                    }
-                    className="mt-2 min-h-touch w-full rounded-card border border-line-strong bg-surface px-3 text-ink"
-                  />
-                  {entry.invalid.length > 0 ? (
-                    <p className="mt-2 font-semibold text-negative">
-                      ⚠ Could not read: {entry.invalid.join(", ")}
-                    </p>
-                  ) : null}
-                </div>
-
-                {problems.length > 0 ? (
-                  <ul className="mt-3 space-y-1 text-accent">
-                    {problems.map((problem) => (
-                      <li key={problem}>⚠ {problem}</li>
-                    ))}
-                  </ul>
-                ) : null}
-              </Card>
-            </li>
-          );
-        })}
-      </ol>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       <Panel className="sticky bottom-0 flex flex-wrap items-center justify-between gap-4">
         <p className="text-lg">
@@ -486,7 +749,17 @@ function CardUpload({
   onDraft: (draft: ScorecardDraft) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /*
+   * The status is kept alongside the message, because the two failures
+   * read completely differently to the person holding the card.
+   *
+   * A 503 means the reading could not be attempted at all — no key, a key
+   * the API rejects, a workspace it will not infer, an outage. Nothing
+   * about the photograph would change it. Titling that "That did not work"
+   * blames the captain for the server's configuration and sends them off
+   * to take a better photograph of a card that was never the problem.
+   */
+  const [error, setError] = useState<{ message: string; status: number } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
   // The object URL is a resource, not a value; leaking one per photograph
@@ -508,7 +781,11 @@ function CardUpload({
       });
       onDraft(draft);
     } catch (caught) {
-      setError(isAdminError(caught) ? caught.message : "The card could not be read.");
+      setError(
+        isAdminError(caught)
+          ? { message: caught.message, status: caught.status }
+          : { message: "The card could not be read.", status: 0 },
+      );
     } finally {
       setBusy(false);
     }
@@ -522,7 +799,11 @@ function CardUpload({
         await adminFetch<ScorecardDraft>(`/api/admin/scorecards/blank/${fixture.id}`, token),
       );
     } catch (caught) {
-      setError(isAdminError(caught) ? caught.message : "That did not work.");
+      setError(
+        isAdminError(caught)
+          ? { message: caught.message, status: caught.status }
+          : { message: "That did not work.", status: 0 },
+      );
     } finally {
       setBusy(false);
     }
@@ -550,9 +831,15 @@ function CardUpload({
       ) : null}
 
       {error ? (
-        <Alert tone="warning" title="That did not work">
-          {error}
-        </Alert>
+        error.status === 503 ? (
+          <Alert tone="info" title="Reading photographs is not working at the moment">
+            {error.message}
+          </Alert>
+        ) : (
+          <Alert tone="warning" title="That card could not be read">
+            {error.message}
+          </Alert>
+        )
       ) : null}
 
       {preview ? (

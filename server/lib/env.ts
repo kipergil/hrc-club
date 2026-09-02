@@ -29,6 +29,20 @@ export const env = {
    * result.
    */
   ANTHROPIC_API_KEY: optional("ANTHROPIC_API_KEY"),
+  /**
+   * Required when the key above is identity-linked — a key tied to a person
+   * rather than to one workspace. Such a key does not say which workspace a
+   * request belongs to, so the API refuses it outright:
+   *
+   *   anthropic-workspace-id is required when authenticating with an
+   *   identity-linked API key
+   *
+   * A workspace-scoped key carries that already and needs nothing here,
+   * which is why this is optional and why an unset value is not treated as
+   * a fault until the API says so. The id is on the workspace's page in the
+   * Anthropic Console and looks like `wrkspc_01…`.
+   */
+  ANTHROPIC_WORKSPACE_ID: optional("ANTHROPIC_WORKSPACE_ID"),
   /** Overridable so a cheaper model can be tried against real cards without a deploy. */
   SCORECARD_MODEL: process.env.SCORECARD_MODEL ?? "claude-opus-5",
 

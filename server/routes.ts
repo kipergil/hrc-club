@@ -457,15 +457,30 @@ export function registerRoutes(app: Express): void {
 
         ok(res, draft);
       } catch (error) {
-        if (error instanceof ScorecardAiUnavailable) {
-          // Not a fault: a league with no API key types cards in by hand,
-          // and the screen it lands on is the one it would have used anyway.
-          res.status(503).json({ message: error.message });
-          return;
-        }
         const message =
           error instanceof Error ? error.message : "The card could not be read.";
+
+        /*
+         * The image is filed either way. It has already been uploaded by
+         * this point, so returning without recording it would leave an
+         * unreferenced file in Directus on every attempt — the same slow
+         * leak the no-key check above was moved to prevent, reappearing
+         * the first time a key turned out to be misconfigured.
+         */
         await storage.recordScorecardUpload({ fixtureId, imageId, status: "failed", error: message });
+
+        if (error instanceof ScorecardAiUnavailable) {
+          /*
+           * Not the card's fault: no key, a key the API rejects, a
+           * workspace it will not infer, an outage. 503 rather than 422
+           * because nothing about the photograph would change the
+           * outcome, and the message says so — a captain sent looking for
+           * a clearer photograph of a perfectly good card is a captain
+           * who stops using this.
+           */
+          res.status(503).json({ message });
+          return;
+        }
         res.status(422).json({ message });
       }
     }),

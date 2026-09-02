@@ -42,7 +42,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
   input_schema: {
     type: "object",
     additionalProperties: false,
-    required: ["rubbers"],
+    required: ["homePlayers", "awayPlayers", "rubbers"],
     properties: {
       playedOn: {
         type: ["string", "null"],
@@ -52,6 +52,37 @@ const EXTRACT_TOOL: Anthropic.Tool = {
       awayTeamName: { type: ["string", "null"] },
       startTime: { type: ["string", "null"], description: 'e.g. "19:30".' },
       finishTime: { type: ["string", "null"] },
+      /*
+       * The line-up box, and the most important thing on the card.
+       *
+       * The sheet names its three players a side once, against the
+       * letters, and the nine singles rows then refer to the letters
+       * alone. Reading the box gives six names to check instead of
+       * eighteen, and — because the pairing order is printed — determines
+       * every singles rubber's players outright.
+       */
+      homePlayers: {
+        type: "object",
+        additionalProperties: false,
+        required: ["A", "B", "C"],
+        description: "The home team's three players, as the card lists them against A, B and C.",
+        properties: {
+          A: { type: ["string", "null"] },
+          B: { type: ["string", "null"] },
+          C: { type: ["string", "null"] },
+        },
+      },
+      awayPlayers: {
+        type: "object",
+        additionalProperties: false,
+        required: ["X", "Y", "Z"],
+        description: "The away team's three players, as the card lists them against X, Y and Z.",
+        properties: {
+          X: { type: ["string", "null"] },
+          Y: { type: ["string", "null"] },
+          Z: { type: ["string", "null"] },
+        },
+      },
       rubbers: {
         type: "array",
         description: `One entry per row of the card, up to ${RUBBERS_PER_MATCH}.`,
@@ -64,7 +95,12 @@ const EXTRACT_TOOL: Anthropic.Tool = {
               type: "integer",
               description: `1-9 are the singles in the card's printed order; ${DOUBLES_RUBBER} is the doubles.`,
             },
-            homePlayer: { type: ["string", "null"], description: "Home player's name as written." },
+            homePlayer: {
+              type: ["string", "null"],
+              description:
+                "Only if this row itself writes a name. Null for a singles row that just holds " +
+                "scores — the player is already known from the line-up box and the printed order.",
+            },
             homePlayer2: {
               type: ["string", "null"],
               description: "Home partner. Only on the doubles row; null on every singles.",
@@ -103,7 +139,8 @@ const SYSTEM = `You transcribe table tennis match cards for the Hertford & Distr
 
 The card is a fixed printed form. Every card has the same structure:
 
-- Three players a side. The home players are labelled A, B and C down the left; the away players are X, Y and Z.
+- **A line-up box near the top** naming three players a side against letters: the home players are A, B and C, the away players are X, Y and Z. Read this box carefully — it is the most important thing on the card, because the nine singles rows below refer to the letters rather than repeating the names.
+- Names in that box are usually written informally, most often a first name alone ("Sunil", "Dave"). Record exactly what is written. Do not expand a first name into a full name, and do not invent a surname.
 - Ten rubbers: nine singles then a doubles. The singles are always played in this printed order, and the order never varies:
 ${SINGLES_ORDER.map((pair, index) => `  ${index + 1}. ${pair[0]} v ${pair[1]}`).join("\n")}
   ${DOUBLES_RUBBER}. Doubles (two players a side)
@@ -114,7 +151,8 @@ Rules:
 - Transcribe only what is written. If a cell is empty, unreadable, or you are unsure, use null for a name and omit the game rather than guessing. A blank is easy for a human to fill in; a confident wrong number is not.
 - Game scores are home points first, matching the card's Home row above the Away row.
 - Do not compute or correct anything. If the card's own arithmetic is wrong, record what is written — that disagreement is useful and something else checks for it.
-- Names: give them as written, including initials. Do not expand "S. Trakru" into a full name you have inferred.`;
+- Names: give them as written, including initials. Do not expand "S. Trakru" into a full name you have inferred.
+- **Per-rubber names are only for rows that actually write one.** Most singles rows hold nothing but scores, because the line-up box already says who is playing. Leave homePlayer and awayPlayer null on those rows rather than copying the name down from the box — copying it in would hide a row that genuinely disagrees, which is one of the checks run afterwards. The doubles is the exception: its pairing is not fixed, so name both players a side there if the card does.`;
 
 export interface ParseResult {
   card: ScorecardInput;
@@ -123,10 +161,81 @@ export interface ParseResult {
   outputTokens: number;
 }
 
+/**
+ * The reading could not be attempted — as opposed to being attempted and
+ * going wrong. No key, a key the API rejects, a workspace it will not infer,
+ * a model name that does not exist, a rate limit, an outage. None of these
+ * are anything to do with the card in the photograph, and telling a captain
+ * their card "could not be read" when the real answer is that nobody has
+ * finished configuring the server sends them looking for a better
+ * photograph of a card that was never the problem.
+ */
 export class ScorecardAiUnavailable extends Error {}
 
 export function aiConfigured(): boolean {
   return Boolean(env.ANTHROPIC_API_KEY);
+}
+
+/**
+ * Turns an Anthropic API error into a sentence for the person at the
+ * screen, and decides whether it was the card's fault.
+ *
+ * The raw error is JSON written for whoever operates the service, and it
+ * was going straight to the browser: the first real card ever uploaded came
+ * back as `400 {"type":"error","error":{...}}`, which tells a team captain
+ * nothing they can act on and does not even hint that the fix is a
+ * configuration one. The detail still goes to the log, where an operator
+ * can find it; the reader gets what to do next.
+ */
+function describeApiError(error: unknown): { message: string; configuration: boolean } | null {
+  if (!(error instanceof Anthropic.APIError)) return null;
+
+  const detail = typeof error.message === "string" ? error.message : "";
+  const unavailable = (message: string) => ({ message, configuration: true });
+
+  // Checked before the status codes: an identity-linked key returns a plain
+  // 400, the same status as a genuinely malformed request, so the status
+  // alone cannot tell the two apart.
+  if (detail.includes("anthropic-workspace-id")) {
+    return unavailable(
+      "The Anthropic API key is linked to a person rather than to one workspace, so it also needs a workspace id. " +
+        "Set ANTHROPIC_WORKSPACE_ID (it looks like wrkspc_01…, and is on the workspace's page in the Anthropic Console). " +
+        "You can enter this card by hand in the meantime.",
+    );
+  }
+
+  switch (error.status) {
+    case 401:
+      return unavailable(
+        "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY. You can still enter this card by hand.",
+      );
+    case 403:
+      return unavailable(
+        "The Anthropic API key is not allowed to do this. Check that it belongs to the right workspace. " +
+          "You can still enter this card by hand.",
+      );
+    case 404:
+      return unavailable(
+        `No model named "${env.SCORECARD_MODEL}" is available to this key. Check SCORECARD_MODEL. ` +
+          "You can still enter this card by hand.",
+      );
+    case 429:
+      return unavailable(
+        "Anthropic is rate-limiting us at the moment. Try again in a minute, or enter this card by hand.",
+      );
+    default:
+      if (error.status && error.status >= 500) {
+        return unavailable(
+          "Anthropic could not be reached just now. Try again shortly, or enter this card by hand.",
+        );
+      }
+      // A 400 that is not the workspace one is ours to fix and not the
+      // card's fault either, so it is still not reported as a bad card.
+      return unavailable(
+        "The card could not be sent for reading, which is a fault at our end rather than a problem with the card. " +
+          "You can enter it by hand.",
+      );
+  }
 }
 
 /**
@@ -147,7 +256,19 @@ export async function parseScorecardImage(
     );
   }
 
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  /*
+   * The workspace header goes on the client, not on the request, because
+   * it belongs to the credential rather than to this call. It is sent only
+   * when configured: a workspace-scoped key already carries its workspace,
+   * and sending a contradicting id with one would be worse than sending
+   * nothing.
+   */
+  const client = new Anthropic({
+    apiKey: env.ANTHROPIC_API_KEY,
+    ...(env.ANTHROPIC_WORKSPACE_ID
+      ? { defaultHeaders: { "anthropic-workspace-id": env.ANTHROPIC_WORKSPACE_ID } }
+      : {}),
+  });
 
   /*
    * The squads, where we know them, as a hint rather than a constraint.
@@ -168,34 +289,46 @@ export async function parseScorecardImage(
     hints.push(`Away players are usually drawn from: ${context.awaySquad.join(", ")}.`);
   }
 
-  const response = await client.messages.create({
-    model: env.SCORECARD_MODEL,
-    max_tokens: 8000,
-    system: SYSTEM,
-    tools: [EXTRACT_TOOL],
-    // The model's only job is to fill the tool in; letting it answer in
-    // prose instead is a failure mode with no upside here.
-    tool_choice: { type: "tool", name: EXTRACT_TOOL.name },
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: { type: "base64", media_type: image.mediaType as "image/png", data: image.data },
-          },
-          {
-            type: "text",
-            text: [
-              "Transcribe this match card.",
-              ...hints,
-              "Leave anything you cannot read as null.",
-            ].join("\n"),
-          },
-        ],
-      },
-    ],
-  });
+  let response: Anthropic.Message;
+  try {
+    response = await client.messages.create({
+      model: env.SCORECARD_MODEL,
+      max_tokens: 8000,
+      system: SYSTEM,
+      tools: [EXTRACT_TOOL],
+      // The model's only job is to fill the tool in; letting it answer in
+      // prose instead is a failure mode with no upside here.
+      tool_choice: { type: "tool", name: EXTRACT_TOOL.name },
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: image.mediaType as "image/png", data: image.data },
+            },
+            {
+              type: "text",
+              text: [
+                "Transcribe this match card.",
+                ...hints,
+                "Leave anything you cannot read as null.",
+              ].join("\n"),
+            },
+          ],
+        },
+      ],
+    });
+  } catch (error) {
+    const described = describeApiError(error);
+    if (described?.configuration) {
+      // The operator's copy, with the request id the API returns — the
+      // thing worth having when this needs chasing.
+      console.error("[scorecard] Anthropic rejected the request:", error);
+      throw new ScorecardAiUnavailable(described.message);
+    }
+    throw error;
+  }
 
   const block = response.content.find(
     (item): item is Anthropic.ToolUseBlock => item.type === "tool_use" && item.name === EXTRACT_TOOL.name,

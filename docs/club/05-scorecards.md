@@ -85,12 +85,22 @@ for a misspelled name would send the captain back to typing it out by hand — t
 this feature exists to avoid.
 
 **Names are matched confidently or not at all.** `shared/name-match.ts` matches on the full
-name, the surname, or the surname plus an initial, and every strategy requires the answer to be
-unique among that team's squad. "S. Smith" against a squad with two Smiths is not a match, it
-is a question, and the form is where questions get asked. Fuzzy distance scoring is
-deliberately absent: it is what produces confident wrong answers, and a wrong match silently
-credits a rubber to the wrong player and surfaces months later in an averages table nobody can
-explain.
+name, the **given name**, the surname, or the surname plus an initial, and every strategy
+requires the answer to be unique among that team's squad. Fuzzy distance scoring is deliberately
+absent: it is what produces confident wrong answers, and a wrong match silently credits a rubber
+to the wrong player and surfaces months later in an averages table nobody can explain.
+
+Given names come second only to the full name because that is what cards actually carry. A sheet
+is filled in among people who all know each other, so "Sunil" is what gets written — and the
+first version, which tried a single word only as a surname, therefore failed on nearly every name
+on a real card.
+
+**An ambiguous name is a question, not a silence.** Where two players answer to "Sam", the
+resolution carries both of them through to the form, which offers them first under a "Could be
+'Sam'" heading and says *Sam could be Sam Jones or Sam Whitfield*. Returning nothing would leave
+the editor to work out both who the card meant and which two people it could have been.
+"Sam" against a squad holding a Sam Jones and an Ali **Sam** is ambiguous too — preferring the
+given name there would be a coin toss dressed up as a rule.
 
 ## 4. Entering a card
 
@@ -101,14 +111,30 @@ explain.
 3. **Photograph, or type.** A photograph is read by Claude and lands in the review form; "type
    the card in instead" opens the same form empty. Manual entry is not a separate feature, it
    is this one with the first step skipped, which is why it keeps working with no API key.
-4. **Check every line.** The photograph stays on screen beside the form — that comparison *is*
-   the review. Games are typed as they are written (`11-8, 9-11, 11-6`); the sets and the match
-   score work themselves out live.
+4. **Check the six players, then the ten rubbers.** The photograph stays on screen beside the
+   form — that comparison *is* the review. Games are typed as they are written
+   (`11-8, 9-11, 11-6`); the sets and the match score work themselves out live.
 5. **Save.**
 
 The form is always ten rubbers in the card's printed order, whether anything filled them in or
 not. A form that grew and shrank with what a model happened to read would hide a missing rubber
 instead of showing an empty row.
+
+### The screen is shaped like the sheet
+
+**Who played, first.** The line-up box at the top holds three players a side against their
+letters — A, B, C and X, Y, Z — exactly as the card prints it. Below it, the ten rubbers as a
+table: number, the two players with their letters, the games, the sets.
+
+This is not only cosmetic. **The line-up is the state and the singles are a view of it.** Because
+the pairing order is printed, A/B/C and X/Y/Z determine every singles rubber outright, so a name
+is resolved once rather than in each of the three rubbers that player appears in — six names to
+check instead of eighteen, and one correction where there used to be three. The singles rows are
+deliberately read-only: a second place to change a player is a second place for the two to
+disagree.
+
+The doubles is the exception, and keeps its own pickers. Its pairing is the one thing the letters
+do not settle — any two of the three may play it.
 
 ### The parse
 
@@ -119,13 +145,48 @@ because knowing row 4 is B-X lets it read a smudged name against the clean one i
 explicit that an unreadable cell is left empty: a blank is visible in the review screen and a
 plausible guess is not.
 
+The tool asks for the **line-up box** first and separately, because that is where the names
+actually are: most singles rows hold nothing but scores. The prompt is explicit that a row's name
+fields are only for rows that write one, and that the box's names must *not* be copied down into
+them — copying them in would manufacture agreement and hide a row that genuinely disagrees, which
+is one of the checks run afterwards.
+
 ## 5. Configuration
 
 | Variable | Effect if unset |
 |---|---|
 | `ADMIN_TOKEN` | Every scorecard endpoint returns 503. Result entry is off. |
 | `ANTHROPIC_API_KEY` | Photographs cannot be read. The screen says so plainly and manual entry works normally. |
+| `ANTHROPIC_WORKSPACE_ID` | Nothing, **unless the key is identity-linked** — see below. |
 | `SCORECARD_MODEL` | Defaults to `claude-opus-5`. Overridable so a cheaper model can be tried against real cards without a deploy. |
+
+**An identity-linked key needs a workspace id.** A key tied to a person rather than to one
+workspace does not say which workspace a request belongs to, and the API refuses it:
+
+```
+anthropic-workspace-id is required when authenticating with an identity-linked API key
+```
+
+Set `ANTHROPIC_WORKSPACE_ID` (it looks like `wrkspc_01…`, and is on the workspace's page in the
+Anthropic Console) and it is sent as a header on every call. A workspace-scoped key carries its
+own workspace and needs nothing — which is why the header is sent only when configured, rather
+than always and sometimes empty.
+
+### Failing without blaming the card
+
+The upload route distinguishes two failures, because they read completely differently to the
+person holding the card:
+
+- **503 — it could not be attempted.** No key, a key the API rejects, a workspace it will not
+  infer, a model that does not exist, a rate limit, an outage. Nothing about the photograph
+  would change the outcome, so the screen says so and points at manual entry. The API's own
+  error text goes to the log, where an operator can find it, and never to the screen: the first
+  real upload returned `400 {"type":"error",…}` verbatim to a team captain, which tells them
+  nothing they can act on and does not even hint that the fix is a configuration one.
+- **422 — the card is the problem.** The call succeeded and came back with no card in it.
+
+Either way the image is filed. It is uploaded before the model is called, so any path that
+returns without recording it leaves an unreferenced file in Directus on every attempt.
 
 **`ADMIN_TOKEN` is a shared secret, not accounts.** It proves the caller knows the password and
 nothing more — it cannot tell you who entered a card. That matches what the league's own site
@@ -165,10 +226,12 @@ never hold — the same fallback shape the league tables use.
 
 ## 7. What is not done
 
-- **The parse has never run against a real API key.** It is built, typed and wired end to end;
-  the no-key path, the admin gate, the draft assembly, the review form and the save are all
-  verified, and the image upload is verified in isolation. The model call itself is unexercised.
-  The first run against a real card should be treated as a test, not a migration.
+- **The parse has still not produced a card from a real photograph.** The first attempt against
+  a real key was refused by the API before the model saw anything, because the key is
+  identity-linked and no workspace id was being sent — now fixed, and covered by tests that put
+  a real request on the wire against a stand-in for the API (`server/scorecard-ai.test.ts`).
+  What remains unexercised is the model's actual reading of a card. Treat the first successful
+  one as a test, not a migration.
 - **A saved card does not mark its upload `applied`.** `hrc_scorecards` records the parse; the
   save writes rubbers. Joining the two would let the review screen show a card's history.
 - **Handicaps are still not derived.** They are set by the match secretary rather than computed
