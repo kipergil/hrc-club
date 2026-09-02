@@ -43,6 +43,8 @@ function card(overrides: Partial<ScorecardInput> = {}): ScorecardInput {
     awayTeamName: "Water Lane A",
     startTime: "19:30",
     finishTime: "22:10",
+    homePlayers: { A: "Home A", B: "Home B", C: "Home C" },
+    awayPlayers: { X: "Away X", Y: "Away Y", Z: "Away Z" },
     rubbers: Array.from({ length: RUBBERS_PER_MATCH }, (_, i) =>
       i + 1 === DOUBLES_RUBBER
         ? rubber(DOUBLES_RUBBER, {
@@ -248,6 +250,42 @@ describe("checkPairings", () => {
     const { homeSlots } = checkPairings(card());
     // The doubles pair is A and B here; it must not overwrite either slot.
     expect(homeSlots.A).toBe("Home A");
+  });
+
+  it("takes the line-up box as who the letters are", () => {
+    /*
+     * The sheet names its players once, against the letters, and the nine
+     * singles rows then refer to the letters alone. A card whose rows are
+     * blank still knows who played.
+     */
+    const rowsBlank = card();
+    for (const rubber of rowsBlank.rubbers) {
+      rubber.homePlayer = null;
+      rubber.awayPlayer = null;
+    }
+    const { homeSlots, awaySlots } = checkPairings(rowsBlank);
+    expect(homeSlots).toEqual({ A: "Home A", B: "Home B", C: "Home C" });
+    expect(awaySlots).toEqual({ X: "Away X", Y: "Away Y", Z: "Away Z" });
+  });
+
+  it("reports a row that disagrees with the line-up box against the row", () => {
+    // The box is the card telling you who B is; the row is the misreading.
+    const misread = card();
+    misread.rubbers[1]!.homePlayer = "Somebody Else";
+    const { warnings, homeSlots } = checkPairings(misread);
+    expect(homeSlots.B).toBe("Home B");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]!.rubberNumber).toBe(2);
+  });
+
+  it("falls back to the rows when the box was left blank", () => {
+    const noBox = card({
+      homePlayers: { A: null, B: null, C: null },
+      awayPlayers: { X: null, Y: null, Z: null },
+    });
+    const { homeSlots, warnings } = checkPairings(noBox);
+    expect(warnings).toEqual([]);
+    expect(homeSlots).toEqual({ A: "Home A", B: "Home B", C: "Home C" });
   });
 });
 

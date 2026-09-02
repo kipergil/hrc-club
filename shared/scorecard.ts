@@ -85,15 +85,54 @@ export const rubberInputSchema = z.object({
 });
 export type RubberInput = z.infer<typeof rubberInputSchema>;
 
+const playerNameSchema = z.string().trim().max(120).nullable();
+
+/**
+ * The line-up box at the top of the sheet.
+ *
+ * The card names its three players a side **once**, against the letters,
+ * and then the nine singles rows refer to the letters alone. Reading it
+ * that way rather than re-reading a name in every row is the whole
+ * difference between six names to check and eighteen: the pairing order is
+ * printed, so A/B/C and X/Y/Z determine every singles rubber's players
+ * outright.
+ *
+ * Optional because a card can be typed in from nothing, and because a
+ * photograph of a sheet whose line-up box was left blank is still a card
+ * worth reading — the names then come from the rows, as they used to.
+ */
+export const homeLineupSchema = z
+  .object({ A: playerNameSchema, B: playerNameSchema, C: playerNameSchema })
+  .default({ A: null, B: null, C: null });
+export const awayLineupSchema = z
+  .object({ X: playerNameSchema, Y: playerNameSchema, Z: playerNameSchema })
+  .default({ X: null, Y: null, Z: null });
+
+export type HomeLineup = z.infer<typeof homeLineupSchema>;
+export type AwayLineup = z.infer<typeof awayLineupSchema>;
+
 export const scorecardInputSchema = z.object({
   playedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   homeTeamName: z.string().trim().max(120).nullable(),
   awayTeamName: z.string().trim().max(120).nullable(),
   startTime: z.string().trim().max(20).nullable(),
   finishTime: z.string().trim().max(20).nullable(),
+  homePlayers: homeLineupSchema,
+  awayPlayers: awayLineupSchema,
   rubbers: z.array(rubberInputSchema),
 });
 export type ScorecardInput = z.infer<typeof scorecardInputSchema>;
+
+/** The name the card gives for one slot, from the line-up box. */
+export function lineupName(
+  card: ScorecardInput,
+  side: "home" | "away",
+  slot: HomeSlot | AwaySlot,
+): string | null {
+  const box: Record<string, string | null> =
+    side === "home" ? card.homePlayers : card.awayPlayers;
+  return box[slot] ?? null;
+}
 
 // ---------------------------------------------------------------------------
 // Scoring
@@ -275,6 +314,22 @@ export function checkPairings(card: ScorecardInput): {
   const homeSlots: Partial<Record<HomeSlot, string>> = {};
   const awaySlots: Partial<Record<AwaySlot, string>> = {};
   const warnings: CardWarning[] = [];
+
+  /*
+   * The line-up box first, so it is what the rows are checked against
+   * rather than merely another opinion. Where the card names its players
+   * against the letters, that is the card telling you who A is; a row
+   * saying somebody else is the misreading, and this is the direction the
+   * disagreement should be reported in.
+   */
+  for (const slot of HOME_SLOTS) {
+    const name = card.homePlayers?.[slot];
+    if (name) homeSlots[slot] = name;
+  }
+  for (const slot of AWAY_SLOTS) {
+    const name = card.awayPlayers?.[slot];
+    if (name) awaySlots[slot] = name;
+  }
 
   for (const rubber of card.rubbers) {
     const slots = slotsForRubber(rubber.rubberNumber);

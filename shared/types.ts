@@ -490,6 +490,28 @@ export interface ScorecardWarning {
   message: string;
 }
 
+/**
+ * One of the six players on the card, against the letter the sheet gives
+ * them: A, B, C for the home side and X, Y, Z for the away side.
+ *
+ * This is where a name is resolved, once, rather than in each of the three
+ * rubbers that player appears in. The printed pairing order does the rest.
+ */
+export interface ScorecardLineupSlot {
+  slot: string;
+  /** The squad player this is taken to be, where the name could only be one. */
+  memberId: string | null;
+  /** The name exactly as the card wrote it, kept whether or not it matched. */
+  name: string | null;
+  /** How it matched — "first", "surname", "exact", "initial" — or null. */
+  how: string | null;
+  /**
+   * Where the name fits more than one player in the squad, all of them.
+   * Two players called Sam is a question for the editor, not a silence.
+   */
+  options: string[];
+}
+
 /** One rubber in a draft, before anyone has confirmed it. */
 export interface ScorecardDraftRubber {
   rubberNumber: number;
@@ -517,6 +539,10 @@ export interface ScorecardDraft {
   homeTeam: TeamRef;
   awayTeam: TeamRef;
   playedOn: string | null;
+  /** A, B, C — chosen once and used by every singles rubber they appear in. */
+  homeLineup: ScorecardLineupSlot[];
+  /** X, Y, Z. */
+  awayLineup: ScorecardLineupSlot[];
   rubbers: ScorecardDraftRubber[];
   warnings: ScorecardWarning[];
   /** Both squads, for the form's player pickers. */

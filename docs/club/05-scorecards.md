@@ -85,12 +85,22 @@ for a misspelled name would send the captain back to typing it out by hand — t
 this feature exists to avoid.
 
 **Names are matched confidently or not at all.** `shared/name-match.ts` matches on the full
-name, the surname, or the surname plus an initial, and every strategy requires the answer to be
-unique among that team's squad. "S. Smith" against a squad with two Smiths is not a match, it
-is a question, and the form is where questions get asked. Fuzzy distance scoring is
-deliberately absent: it is what produces confident wrong answers, and a wrong match silently
-credits a rubber to the wrong player and surfaces months later in an averages table nobody can
-explain.
+name, the **given name**, the surname, or the surname plus an initial, and every strategy
+requires the answer to be unique among that team's squad. Fuzzy distance scoring is deliberately
+absent: it is what produces confident wrong answers, and a wrong match silently credits a rubber
+to the wrong player and surfaces months later in an averages table nobody can explain.
+
+Given names come second only to the full name because that is what cards actually carry. A sheet
+is filled in among people who all know each other, so "Sunil" is what gets written — and the
+first version, which tried a single word only as a surname, therefore failed on nearly every name
+on a real card.
+
+**An ambiguous name is a question, not a silence.** Where two players answer to "Sam", the
+resolution carries both of them through to the form, which offers them first under a "Could be
+'Sam'" heading and says *Sam could be Sam Jones or Sam Whitfield*. Returning nothing would leave
+the editor to work out both who the card meant and which two people it could have been.
+"Sam" against a squad holding a Sam Jones and an Ali **Sam** is ambiguous too — preferring the
+given name there would be a coin toss dressed up as a rule.
 
 ## 4. Entering a card
 
@@ -101,14 +111,30 @@ explain.
 3. **Photograph, or type.** A photograph is read by Claude and lands in the review form; "type
    the card in instead" opens the same form empty. Manual entry is not a separate feature, it
    is this one with the first step skipped, which is why it keeps working with no API key.
-4. **Check every line.** The photograph stays on screen beside the form — that comparison *is*
-   the review. Games are typed as they are written (`11-8, 9-11, 11-6`); the sets and the match
-   score work themselves out live.
+4. **Check the six players, then the ten rubbers.** The photograph stays on screen beside the
+   form — that comparison *is* the review. Games are typed as they are written
+   (`11-8, 9-11, 11-6`); the sets and the match score work themselves out live.
 5. **Save.**
 
 The form is always ten rubbers in the card's printed order, whether anything filled them in or
 not. A form that grew and shrank with what a model happened to read would hide a missing rubber
 instead of showing an empty row.
+
+### The screen is shaped like the sheet
+
+**Who played, first.** The line-up box at the top holds three players a side against their
+letters — A, B, C and X, Y, Z — exactly as the card prints it. Below it, the ten rubbers as a
+table: number, the two players with their letters, the games, the sets.
+
+This is not only cosmetic. **The line-up is the state and the singles are a view of it.** Because
+the pairing order is printed, A/B/C and X/Y/Z determine every singles rubber outright, so a name
+is resolved once rather than in each of the three rubbers that player appears in — six names to
+check instead of eighteen, and one correction where there used to be three. The singles rows are
+deliberately read-only: a second place to change a player is a second place for the two to
+disagree.
+
+The doubles is the exception, and keeps its own pickers. Its pairing is the one thing the letters
+do not settle — any two of the three may play it.
 
 ### The parse
 
@@ -118,6 +144,12 @@ fails. The prompt tells the model the card's fixed structure, including the pair
 because knowing row 4 is B-X lets it read a smudged name against the clean one in row 2. It is
 explicit that an unreadable cell is left empty: a blank is visible in the review screen and a
 plausible guess is not.
+
+The tool asks for the **line-up box** first and separately, because that is where the names
+actually are: most singles rows hold nothing but scores. The prompt is explicit that a row's name
+fields are only for rows that write one, and that the box's names must *not* be copied down into
+them — copying them in would manufacture agreement and hide a row that genuinely disagrees, which
+is one of the checks run afterwards.
 
 ## 5. Configuration
 
