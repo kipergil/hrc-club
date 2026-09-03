@@ -106,15 +106,20 @@ export function Scorecard({ match }: { match: FixtureDetail }) {
         The card
       </h2>
       <TableNote>
-        Each line is one rubber — best of five games, 11 up. The order is the league card's own:
-        nine singles, then the doubles. Game scores read {match.homeTeam.name} first.
+        Each line is one singles or the doubles — best of five games, 11 up. The order is the
+        league card's own: nine singles, then the doubles. Game scores read {match.homeTeam.name}{" "}
+        first.
       </TableNote>
 
       <div className="hidden sm:block">
         <TableScroller>
           <thead>
             <tr>
-              <Th className="w-20">Rubber</Th>
+              {/*
+                  The row already reads "1. A v X", so the heading only has
+                  to say these are numbered lines on the card.
+                */}
+                <Th className="w-20">No.</Th>
               <Th>{match.homeTeam.name}</Th>
               <Th>{match.awayTeam.name}</Th>
               <Th className="text-right">Sets</Th>

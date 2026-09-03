@@ -162,7 +162,10 @@ describe("checkScorecard", () => {
   it("notices a missing rubber", () => {
     const short = card({ rubbers: card().rubbers.slice(0, 9) });
     const warnings = checkScorecard(short);
-    expect(warnings.some((w) => w.message.includes("Rubber 10 is missing"))).toBe(true);
+    // The reader-facing wording avoids "rubber": correct league jargon,
+    // but in table tennis it more often means the sheet on the bat, and
+    // the league's own site never uses it.
+    expect(warnings.some((w) => w.message.includes("Match 10 on the card"))).toBe(true);
   });
 
   it("notices the same rubber entered twice, and calls it an error", () => {

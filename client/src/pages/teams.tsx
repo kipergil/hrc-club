@@ -565,7 +565,7 @@ export function PlayerPage({ slug }: { slug: string }) {
       {player.rubbers.length > 0 ? (
         <section aria-labelledby="rubbers-heading">
           <h2 id="rubbers-heading" className="mb-3 text-2xl">
-            Every rubber in {shownSeason}
+            Every singles and doubles in {shownSeason}
           </h2>
           {/*
             Built from the match cards rather than stored, so it appears
@@ -579,7 +579,7 @@ export function PlayerPage({ slug }: { slug: string }) {
               // "including the doubles" earns its place: this count sits
               // directly under a record card that says 13 won, and the
               // difference between the two numbers is the doubles.
-              return `${won} of ${player.rubbers.length} rubbers won, including the doubles. Game scores are from ${player.displayName ?? player.fullName}'s side.`;
+              return `Won ${won} of the ${player.rubbers.length} played, including the doubles. Game scores are from ${player.displayName ?? player.fullName}'s side.`;
             })()}
           </TableNote>
           <TableScroller>
