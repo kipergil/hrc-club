@@ -33,7 +33,7 @@ import { buildCalendar } from "@/lib/calendar";
 import { Scorecard } from "@/components/scorecard";
 import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
 import type { Division } from "@shared/enums.js";
-import type { Fixture } from "@shared/types.js";
+import type { Fixture, TeamRef } from "@shared/types.js";
 import { useMemo, useState } from "react";
 
 /**
@@ -325,6 +325,22 @@ export function ResultsPage() {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * A team's name on the match page, linking to the rest of their season.
+ *
+ * Shared by the phone and desktop scorelines so the two cannot drift: the
+ * link rule lives in one place, and a team the site no longer holds falls
+ * back to plain text in both.
+ */
+function MatchTeamName({ team, status }: { team: TeamRef; status: Fixture["status"] }) {
+  if (!team.slug) return <>{team.name}</>;
+  return (
+    <Link href={teamModuleHref(team.slug, status)} className="link">
+      {team.name}
+    </Link>
+  );
+}
+
 export function MatchPage({ id }: { id: string }) {
   const { data: match, isLoading, isError } = useFixture(id);
 
@@ -349,23 +365,56 @@ export function MatchPage({ id }: { id: string }) {
       />
 
       {/* The scoreline, at the size a scoreline deserves. */}
-      <Card className="text-center">
-        <p className="text-ink-muted">{COMPETITION_LABELS[match.competition] ?? match.competition}</p>
-        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-          {/*
-            Both names link out to the rest of that team's season. The
-            scoreline was a dead end before this: the one page where a
-            reader most obviously wants "how are they doing?" named two
-            teams and offered no way to either of them.
-          */}
+      <Card>
+        <p className="text-ink-muted sm:text-center">
+          {COMPETITION_LABELS[match.competition] ?? match.competition}
+        </p>
+
+        {/*
+          Two layouts, because the two names either side of one big score
+          is a shape that only holds while the names are short. At 390px,
+          "Cheshunt A v HRC A" in a [1fr auto 1fr] grid broke "Cheshunt"
+          onto one line and "A" onto the next, and pushed "HRC A" off the
+          edge of the card — the least readable possible rendering of the
+          three things this page exists to say.
+
+          On a phone it is a scoreboard instead: a row per team, name on
+          the left with the whole width to wrap into, score on the right.
+          That is also the shape people are used to reading results in.
+        */}
+        <ul className="mt-3 sm:hidden">
+          {[
+            { team: match.homeTeam, score: match.homeScore, won: homeWon, where: "home" },
+            { team: match.awayTeam, score: match.awayScore, won: awayWon, where: "away" },
+          ].map((side) => (
+            <li
+              key={side.where}
+              className="flex items-center justify-between gap-4 border-b border-line py-2 last:border-b-0"
+            >
+              <span className={cn("min-w-0 text-lg", side.won && "font-semibold")}>
+                <MatchTeamName team={side.team} status={match.status} />
+                <span className="block text-ink-muted">{side.where}</span>
+              </span>
+              {/*
+                Muted means "lost", not "did not win" — on a 5-5 draw both
+                sides were full strength, and greying them both said the
+                opposite of what happened.
+              */}
+              <span
+                className={cn(
+                  "shrink-0 text-3xl font-semibold tabular",
+                  played && !side.won && (homeWon || awayWon) ? "text-ink-muted" : "text-ink",
+                )}
+              >
+                {side.score ?? "—"}
+              </span>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-3 hidden grid-cols-[1fr_auto_1fr] items-center gap-4 sm:grid">
           <p className={cn("text-right text-xl", homeWon && "font-semibold")}>
-            {match.homeTeam.slug ? (
-              <Link href={teamModuleHref(match.homeTeam.slug, match.status)} className="link">
-                {match.homeTeam.name}
-              </Link>
-            ) : (
-              match.homeTeam.name
-            )}
+            <MatchTeamName team={match.homeTeam} status={match.status} />
           </p>
           <p className="flex items-center gap-3 text-4xl font-semibold tabular">
             <span>{match.homeScore ?? "—"}</span>
@@ -375,16 +424,11 @@ export function MatchPage({ id }: { id: string }) {
             <span>{match.awayScore ?? "—"}</span>
           </p>
           <p className={cn("text-left text-xl", awayWon && "font-semibold")}>
-            {match.awayTeam.slug ? (
-              <Link href={teamModuleHref(match.awayTeam.slug, match.status)} className="link">
-                {match.awayTeam.name}
-              </Link>
-            ) : (
-              match.awayTeam.name
-            )}
+            <MatchTeamName team={match.awayTeam} status={match.status} />
           </p>
         </div>
-        <p className="mt-4 flex flex-wrap items-center justify-center gap-3">
+
+        <p className="mt-4 flex flex-wrap items-center gap-3 sm:justify-center">
           {/* Colour is never the only signal, so the outcome is a sentence. */}
           <Badge tone={played ? "positive" : "neutral"}>
             {played
