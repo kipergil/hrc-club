@@ -24,7 +24,7 @@ describe("the season picker", () => {
     render(<SeasonPicker seasons={seasons()} value={undefined} onChange={() => {}} />);
 
     // The whole point: sixteen chips became one chip and one button.
-    expect(screen.getByRole("button", { name: /2026-27 \(current\)/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /2026-27 \(current season\)/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Earlier seasons/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "2019-20" })).toBeNull();
   });
@@ -57,7 +57,7 @@ describe("the season picker", () => {
     const onChange = vi.fn();
     render(<SeasonPicker seasons={seasons()} value="2024-25" onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /2026-27 \(current\)/ }));
+    fireEvent.click(screen.getByRole("button", { name: /2026-27 \(current season\)/ }));
 
     expect(onChange).toHaveBeenCalledWith(undefined);
   });
@@ -82,6 +82,17 @@ describe("the season picker", () => {
     // A popover you can open with the keyboard and not close with it is a trap.
     expect(button.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(button);
+  });
+
+  it("keeps a full name for screen readers while showing a short one", () => {
+    render(<SeasonPicker seasons={seasons()} value={undefined} onChange={() => {}} />);
+
+    // The visible word leans on the "Season" label and the chip beside it
+    // for context. Announced alone, "Earlier" has none — so the accessible
+    // name has to carry what the visible one drops.
+    const button = screen.getByRole("button", { name: "Earlier seasons" });
+    expect(button.textContent).toContain("Earlier");
+    expect(button.textContent).not.toContain("Earlier seasons");
   });
 
   it("renders nothing when there is only one season to choose from", () => {

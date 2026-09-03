@@ -461,7 +461,7 @@ export interface HomePayload {
   counts: {
     clubs: number;
     teams: number;
-    divisions: number;
+    venues: number;
     /** The earliest year in the roll of honour, or null if there is none. */
     honoursFrom: number | null;
   };

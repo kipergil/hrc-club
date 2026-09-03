@@ -92,8 +92,13 @@ export function SeasonPicker({
     buttonRef.current?.focus();
   }
 
+  /*
+   * `whitespace-nowrap` and tighter padding below 640px: at 360 the chip
+   * broke "2026-27 (current)" across two lines, which made it taller than
+   * the control beside it and read as a mistake rather than a filter.
+   */
   const chipBase =
-    "inline-flex min-h-touch items-center gap-2 rounded-card border px-4 font-semibold transition-colors";
+    "inline-flex min-h-touch items-center gap-1.5 whitespace-nowrap rounded-card border px-3 font-semibold transition-colors sm:px-4";
   const chipSelected = "border-brand bg-brand text-brand-ink";
   const chipIdle =
     "border-line-strong bg-surface text-ink hover:border-brand hover:bg-brand-soft hover:text-brand";
@@ -101,40 +106,83 @@ export function SeasonPicker({
   return (
     <div className="no-print" role="group" aria-label={label}>
       <p className="font-semibold text-ink">{label}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      {/*
+        The current season on the left, the way back on the right. They are
+        not two equal choices: one is the season nearly every visit wants,
+        and the other is a door to fifteen more. Sitting them side by side
+        as matching chips gave the archive the same weight as this year and
+        made the pair wide enough to wrap on a phone.
+      */}
+      <div className="mt-2 flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => choose(current)}
           aria-pressed={selected === current.slug}
+          /*
+           * The name stays whole however narrow the screen gets, so what a
+           * screen reader announces does not depend on the viewport.
+           */
+          aria-label={`${current.label} (current season)`}
           className={cn(chipBase, selected === current.slug ? chipSelected : chipIdle)}
         >
-          {current.label} (current)
+          {current.label}
+          {/*
+            "(current)" is the widest part of this chip and the first thing
+            to go when there is no room. With an earlier season chosen the
+            right-hand pill is showing that year, so the left one being the
+            current season is the only thing it can be.
+          */}
+          <span className="hidden sm:inline">(current)</span>
         </button>
 
-        <div className="relative" ref={containerRef}>
+        <div className="relative shrink-0" ref={containerRef}>
           <button
             ref={buttonRef}
             type="button"
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
             aria-controls={panelId}
-            className={cn(chipBase, selectedEarlier ? chipSelected : chipIdle)}
+            /*
+             * The visible word is short because the "Season" label and the
+             * current-season chip beside it supply the context a sighted
+             * reader has. Announced on its own, "Earlier" supplies none —
+             * hence the fuller name here.
+             */
+            aria-label={
+              selectedEarlier
+                ? `${selectedEarlier.label} — choose another season`
+                : "Earlier seasons"
+            }
+            /*
+             * Quieter and narrower than the chip beside it, but still
+             * min-h-touch: this site's readers are mostly over sixty, so
+             * "smaller" is allowed to mean less ink and never a smaller
+             * thing to hit.
+             */
+            className={cn(
+              "inline-flex min-h-touch items-center gap-1 rounded-card border px-2.5 transition-colors",
+              selectedEarlier
+                ? "border-brand/40 bg-brand-soft font-semibold text-brand"
+                : "border-transparent text-ink-muted hover:border-line-strong hover:bg-surface hover:text-ink",
+            )}
           >
             {/*
               The button carries the selection when one is made, so the
               chosen year is never hidden inside a closed popover.
             */}
-            {selectedEarlier ? selectedEarlier.label : "Earlier seasons"}
+            {selectedEarlier ? selectedEarlier.label : "Earlier"}
             <ChevronDown
               aria-hidden="true"
-              className={cn("size-5 transition-transform", open && "rotate-180")}
+              className={cn("size-4 transition-transform", open && "rotate-180")}
             />
           </button>
 
           {open ? (
             <div
               id={panelId}
-              className="absolute left-0 z-30 mt-2 max-h-80 w-56 overflow-y-auto rounded-card border border-line-strong bg-surface p-1.5 shadow-lifted"
+              /* Anchored right, because the button now sits at the right
+                 edge — a left-anchored panel would hang off the screen. */
+              className="absolute right-0 z-30 mt-2 max-h-80 w-56 overflow-y-auto rounded-card border border-line-strong bg-surface p-1.5 shadow-lifted"
             >
               <p className="px-2.5 py-1.5 text-ink-muted">
                 Back to {earlier[earlier.length - 1]!.label}

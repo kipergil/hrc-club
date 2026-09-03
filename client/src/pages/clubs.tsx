@@ -1,7 +1,7 @@
 import { ExternalLink, MapPin, Users } from "lucide-react";
 import { Link } from "wouter";
 import type { Club } from "@shared/types.js";
-import { DIVISION, DIVISION_LABELS } from "@shared/enums.js";
+import { DIVISION, DIVISION_SHORT_LABELS } from "@shared/enums.js";
 import { PageHeader, PrintButton } from "@/components/layout";
 import { Badge, Card, Empty, ErrorNote, Loading, Prose, Stat, TableNote } from "@/components/ui";
 import { GoogleMapsLink, VenueMap } from "@/components/map";
@@ -89,10 +89,17 @@ function ClubCard({ club }: { club: Club }) {
         </span>
       </p>
 
+      {/*
+        Short labels, and `nowrap` so a pill never breaks across lines on
+        its own. `flex-wrap` stays as the safety net for the largest text
+        setting, where three pills genuinely will not fit.
+      */}
       {club.divisions.length > 0 ? (
         <p className="mt-auto flex flex-wrap gap-1.5 pt-3">
           {DIVISION.filter((division) => club.divisions.includes(division)).map((division) => (
-            <Badge key={division}>{DIVISION_LABELS[division]}</Badge>
+            <span key={division} className="whitespace-nowrap">
+              <Badge>{DIVISION_SHORT_LABELS[division]}</Badge>
+            </span>
           ))}
         </p>
       ) : null}
