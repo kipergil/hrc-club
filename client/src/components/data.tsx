@@ -342,9 +342,15 @@ export function StandingsTable({
         {hasRecord ? null : " This is the league's own closing table, which records played and points only."}
       </TableNote>
 
+      {/*
+        `whitespace-normal` because a Badge is nowrap by design — it is for
+        one or two words — and these are sentences. At 360px the abandoned
+        notice was 396px wide and scrolled the whole page sideways, which
+        only shows on the seasons the league never finished.
+      */}
       {incomplete ? (
         <p className="mb-4">
-          <Badge tone="neutral">
+          <Badge tone="neutral" className="whitespace-normal">
             {incomplete === "cancelled"
               ? "Season cancelled — never played"
               : "Season abandoned part-way through"}
