@@ -71,7 +71,7 @@ export const keys = {
   standings: (season?: string) => ["standings", season ?? "current"] as const,
   averages: (season?: string) => ["averages", season ?? "current"] as const,
   players: ["players"] as const,
-  player: (slug: string) => ["player", slug] as const,
+  player: (slug: string, season?: string) => ["player", slug, season ?? "current"] as const,
   news: (category?: string) => ["news", category ?? "all"] as const,
   newsItem: (slug: string) => ["news-item", slug] as const,
   events: ["events"] as const,
@@ -103,7 +103,8 @@ export const fetchers = {
   standings: (season?: string) => apiGet<Standing[]>(`/api/standings${season ? `?season=${season}` : ""}`),
   averages: (season?: string) => apiGet<PlayerStat[]>(`/api/averages${season ? `?season=${season}` : ""}`),
   players: () => apiGet<MemberSummary[]>("/api/players"),
-  player: (slug: string) => apiGet<MemberProfile>(`/api/players/${slug}`),
+  player: (slug: string, season?: string) =>
+    apiGet<MemberProfile>(`/api/players/${slug}${season ? `?season=${encodeURIComponent(season)}` : ""}`),
   news: (category?: string) => apiGet<NewsItem[]>(`/api/news${category ? `?category=${category}` : ""}`),
   newsItem: (slug: string) => apiGet<NewsItem>(`/api/news/${slug}`),
   events: () => apiGet<ClubEvent[]>("/api/events"),
@@ -150,8 +151,8 @@ export const useAverages = (season?: string): UseQueryResult<PlayerStat[]> =>
   useQuery({ queryKey: keys.averages(season), queryFn: () => fetchers.averages(season) });
 export const usePlayers = (): UseQueryResult<MemberSummary[]> =>
   useQuery({ queryKey: keys.players, queryFn: fetchers.players });
-export const usePlayer = (slug: string): UseQueryResult<MemberProfile> =>
-  useQuery({ queryKey: keys.player(slug), queryFn: () => fetchers.player(slug) });
+export const usePlayer = (slug: string, season?: string): UseQueryResult<MemberProfile> =>
+  useQuery({ queryKey: keys.player(slug, season), queryFn: () => fetchers.player(slug, season) });
 export const useNews = (category?: string): UseQueryResult<NewsItem[]> =>
   useQuery({ queryKey: keys.news(category), queryFn: () => fetchers.news(category) });
 export const useNewsItem = (slug: string): UseQueryResult<NewsItem> =>

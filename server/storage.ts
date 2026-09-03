@@ -1368,7 +1368,10 @@ export async function getMembers(): Promise<MemberSummary[]> {
   return rows.map(toMemberSummary);
 }
 
-export async function getMember(slug: string): Promise<MemberProfile | null> {
+export async function getMember(
+  slug: string,
+  seasonSlug?: string,
+): Promise<MemberProfile | null> {
   const client = await directus();
   const rows = (await client.request(
     readItems("hrc_members", {
@@ -1413,7 +1416,10 @@ export async function getMember(slug: string): Promise<MemberProfile | null> {
     joinedYear: num(rows[0].joined_year),
     status: rows[0].status ?? "active",
     stats: statRows.map(toPlayerStat),
-    rubbers: await getMemberRubbers(memberId),
+    // Scoped to the season the page is showing. Without a season this is
+    // the player's whole career, which is what /players/:slug used to be
+    // and is still what an unfiltered request asks for.
+    rubbers: await getMemberRubbers(memberId, seasonSlug),
     squadPlaces: squadRows.map((row) => ({
       teamName: rel(row.team)?.name ?? "",
       teamSlug: rel(row.team)?.slug ?? "",
@@ -1832,8 +1838,28 @@ export async function recordScorecardUpload(input: {
  * wrong would show a player's wins as losses on their own profile, which
  * is the sort of thing nobody reports and everybody notices.
  */
-export async function getMemberRubbers(memberId: string): Promise<PlayerRubber[]> {
+export async function getMemberRubbers(
+  memberId: string,
+  seasonSlug?: string,
+): Promise<PlayerRubber[]> {
   const client = await directus();
+  /*
+   * No season named means the current one, which is what `?season=`
+   * absent means everywhere else on this site. A profile that defaulted
+   * to a whole career would put ten years of rubbers on one page and
+   * disagree with the year filter sitting above them.
+   */
+  const seasonId = await seasonIdFor(seasonSlug);
+
+  const isThisPlayer = {
+    _or: [
+      { home_player: { _eq: memberId } },
+      { home_player_2: { _eq: memberId } },
+      { away_player: { _eq: memberId } },
+      { away_player_2: { _eq: memberId } },
+    ],
+  };
+
   const rows = (await client.request(
     readItems("hrc_rubbers", {
       fields: [
@@ -1842,16 +1868,22 @@ export async function getMemberRubbers(memberId: string): Promise<PlayerRubber[]
         { home_player_2: ["id", "full_name", "slug"] },
         { away_player: ["id", "full_name", "slug"] },
         { away_player_2: ["id", "full_name", "slug"] },
-        { fixture: ["id", "played_on", "status", { home_team: ["name", "slug", "division"] }, { away_team: ["name", "slug", "division"] }] },
+        {
+          fixture: [
+            "id",
+            "played_on",
+            "status",
+            { season: ["label"] },
+            { home_team: ["name", "slug", "division"] },
+            { away_team: ["name", "slug", "division"] },
+          ],
+        },
       ] as unknown as string[],
-      filter: {
-        _or: [
-          { home_player: { _eq: memberId } },
-          { home_player_2: { _eq: memberId } },
-          { away_player: { _eq: memberId } },
-          { away_player_2: { _eq: memberId } },
-        ],
-      },
+      // Filtered in the database, like the averages are: a player with ten
+      // seasons behind them should not have all of them read to show one.
+      filter: seasonId
+        ? { _and: [isThisPlayer, { fixture: { season: { _eq: seasonId } } }] }
+        : isThisPlayer,
       limit: -1,
     }),
   )) as Row[];
@@ -1882,6 +1914,7 @@ export async function getMemberRubbers(memberId: string): Promise<PlayerRubber[]
     played.push({
       fixtureId: fixture.id,
       playedOn: str(fixture.played_on),
+      seasonLabel: rel(fixture.season)?.label ?? null,
       team: toTeamRef(isHome ? rel(fixture.home_team) : rel(fixture.away_team)),
       opponentTeam: toTeamRef(isHome ? rel(fixture.away_team) : rel(fixture.home_team)),
       isHome,
