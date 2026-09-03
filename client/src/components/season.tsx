@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
 import type { Season } from "@shared/types.js";
-import { FilterChips } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { useUrlParam } from "@/lib/params";
 
 /**
@@ -20,11 +21,18 @@ export function useSeasonParam(): [string | undefined, (season: string | undefin
 }
 
 /**
- * The year filter.
+ * The year filter: this season, and everything else behind one button.
  *
- * Chips rather than a `<select>`: there are a handful of seasons, they are
- * the primary control on the page, and on a phone a select opens a modal
- * wheel for what should be one tap.
+ * The league's archive goes back to 2011-12, and laying that out as chips
+ * put sixteen buttons above every table — two wrapped rows of furniture
+ * ahead of the thing they filter, on a page whose subject is the table.
+ * Nearly every visit wants this season or last season; the other fourteen
+ * are worth keeping and not worth the space.
+ *
+ * So the current season stays visible as a chip, and the rest live in a
+ * popover. When an earlier season is chosen the button takes its name, so
+ * the control always says which year you are looking at rather than
+ * leaving you to infer it from the page.
  */
 export function SeasonPicker({
   seasons,
@@ -37,53 +45,127 @@ export function SeasonPicker({
   onChange: (season: string | undefined) => void;
   label?: string;
 }) {
-  const [showAll, setShowAll] = useState(false);
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * Escape and a click outside both close it, and Escape puts focus back
+   * on the button — a popover you can open with the keyboard and not
+   * close with it is a trap. The listeners exist only while it is open,
+   * so a page with a closed picker has none.
+   */
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      buttonRef.current?.focus();
+    }
+    function onPointerDown(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open]);
 
   // One season is not a choice, and a filter offering it is just furniture.
   if (!seasons || seasons.length < 2) return null;
 
-  const current = seasons.find((season) => season.isCurrent);
-  const selected = value ?? current?.slug ?? seasons[0]!.slug;
+  const current = seasons.find((season) => season.isCurrent) ?? seasons[0]!;
+  const selected = value ?? current.slug;
+  const earlier = seasons.filter((season) => season.slug !== current.slug);
+  const selectedEarlier = earlier.find((season) => season.slug === selected);
 
-  /*
-   * This was written for the four or five seasons the site held, and the
-   * league's archive turned out to go back to 2011-12. Sixteen chips wrap
-   * onto two rows and push the table itself below the fold — the filter
-   * ends up larger than the thing it filters.
-   *
-   * So: the recent seasons stay one tap away, and the rest are one tap
-   * behind a button. `RECENT` is six because "this season" and "last
-   * season" are what nearly every visit wants, and a couple either side
-   * covers the rest without a second row.
-   */
-  const RECENT = 6;
-  const collapsed = seasons.length > RECENT + 2 && !showAll;
-  // A season chosen from the archive stays visible while it is selected —
-  // otherwise picking 2013-14 makes the chip you just pressed disappear.
-  const shown = collapsed
-    ? seasons.filter((season, index) => index < RECENT || season.slug === selected)
-    : seasons;
+  function choose(season: Season) {
+    // The current season is the bare URL, so selecting it clears the param
+    // rather than writing `?season=` for the default view.
+    onChange(season.slug === current.slug ? undefined : season.slug);
+    setOpen(false);
+    buttonRef.current?.focus();
+  }
+
+  const chipBase =
+    "inline-flex min-h-touch items-center gap-2 rounded-card border px-4 font-semibold transition-colors";
+  const chipSelected = "border-brand bg-brand text-brand-ink";
+  const chipIdle =
+    "border-line-strong bg-surface text-ink hover:border-brand hover:bg-brand-soft hover:text-brand";
 
   return (
-    <div className="space-y-2">
-      <FilterChips
-        label={label}
-        value={selected}
-        onChange={(next) => onChange(next === current?.slug ? undefined : next)}
-        options={shown.map((season) => ({
-          value: season.slug,
-          label: season.isCurrent ? `${season.label} (current)` : season.label,
-        }))}
-      />
-      {collapsed ? (
+    <div className="no-print" role="group" aria-label={label}>
+      <p className="font-semibold text-ink">{label}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => setShowAll(true)}
-          className="link no-print min-h-touch font-semibold"
+          onClick={() => choose(current)}
+          aria-pressed={selected === current.slug}
+          className={cn(chipBase, selected === current.slug ? chipSelected : chipIdle)}
         >
-          Show all {seasons.length} seasons, back to {seasons[seasons.length - 1]!.label}
+          {current.label} (current)
         </button>
-      ) : null}
+
+        <div className="relative" ref={containerRef}>
+          <button
+            ref={buttonRef}
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            aria-controls={panelId}
+            className={cn(chipBase, selectedEarlier ? chipSelected : chipIdle)}
+          >
+            {/*
+              The button carries the selection when one is made, so the
+              chosen year is never hidden inside a closed popover.
+            */}
+            {selectedEarlier ? selectedEarlier.label : "Earlier seasons"}
+            <ChevronDown
+              aria-hidden="true"
+              className={cn("size-5 transition-transform", open && "rotate-180")}
+            />
+          </button>
+
+          {open ? (
+            <div
+              id={panelId}
+              className="absolute left-0 z-30 mt-2 max-h-80 w-56 overflow-y-auto rounded-card border border-line-strong bg-surface p-1.5 shadow-lifted"
+            >
+              <p className="px-2.5 py-1.5 text-ink-muted">
+                Back to {earlier[earlier.length - 1]!.label}
+              </p>
+              <ul>
+                {earlier.map((season) => {
+                  const isSelected = season.slug === selected;
+                  return (
+                    <li key={season.slug}>
+                      <button
+                        type="button"
+                        onClick={() => choose(season)}
+                        aria-current={isSelected ? "true" : undefined}
+                        className={cn(
+                          "flex min-h-touch w-full items-center justify-between gap-2 rounded-card px-2.5 text-left font-semibold transition-colors",
+                          isSelected
+                            ? "bg-brand-soft text-brand"
+                            : "text-ink hover:bg-brand-soft hover:text-brand",
+                        )}
+                      >
+                        {season.label}
+                        {isSelected ? <Check aria-hidden="true" className="size-5" /> : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
