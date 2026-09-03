@@ -76,6 +76,22 @@ export const DIVISION_LABELS: Record<Division, string> = {
   division_2: "Division 2",
 };
 
+/**
+ * The same three divisions, for places where all of them appear at once.
+ *
+ * A club in every division showed three full-length pills, which wrapped
+ * onto a second line inside a card on a phone and pushed everything below
+ * it down. These fit on one line. The league writes them out in full on
+ * its own pages, so this is a size choice rather than a renaming — use
+ * DIVISION_LABELS anywhere there is room, which is everywhere a division
+ * is a heading rather than a tag.
+ */
+export const DIVISION_SHORT_LABELS: Record<Division, string> = {
+  premier: "Premier",
+  division_1: "Div 1",
+  division_2: "Div 2",
+};
+
 export const SQUAD_ROLE = ["captain", "vice_captain", "player", "reserve"] as const;
 export type SquadRole = (typeof SQUAD_ROLE)[number];
 
