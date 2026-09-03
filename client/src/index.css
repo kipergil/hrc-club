@@ -14,32 +14,44 @@
 
 @layer base {
   /*
-   * The palette is warm paper, ink-first type, and one evergreen used
-   * sparingly — as a tint, a hairline or a single filled control, never as
-   * a slab. The previous palette was not the wrong hue so much as the
-   * wrong dose: a solid brand-green header pill and a filled A button were
-   * the loudest things on a page whose actual subject is a fixture list.
+   * The palette comes from the league's own badge — the hart before a red
+   * heart on `hertsttl.org.uk/images/HTTLLogo.gif`, which is 30% red, 10%
+   * hart black and a little bat-blade tan. Nothing here is invented: the
+   * brand is the badge's red, the accent is the wood of the bats, and the
+   * neutrals are pulled slightly warm toward the red so they read as
+   * chosen rather than as a default grey.
    *
-   * Every ratio below is computed from these values by
+   * The red is `#A9162A` rather than the badge's exact `#B6182D`. The
+   * badge red is 6.65:1 on white, and the pairs below are held to 7:1
+   * because the league's readers are in the main over sixty; this is the
+   * lightest red on the badge's own hue that clears that bar. It is a
+   * shade off the badge and passes, rather than exact and failing.
+   *
+   * One consequence worth knowing: with a red brand, `negative` is also
+   * red, and the two are close in luminance. They are told apart by shape
+   * — a loss is a badge with a tint and a border, a brand link is plain
+   * text — not by hue. That is the cost of a red identity.
+   *
+   * Every ratio here is computed from these values by
    * `scripts/contrast.test.ts` rather than trusted to this comment, which
    * is the only way a claim like "7.4:1" survives a redesign.
    */
   :root {
-    --c-canvas: 250 249 247;
+    --c-canvas: 252 249 248;
     --c-surface: 255 255 255;
-    --c-surface-sunken: 241 240 236;
-    --c-ink: 25 28 26;
-    --c-ink-muted: 75 81 77;
+    --c-surface-sunken: 244 238 236;
+    --c-ink: 26 22 20;
+    --c-ink-muted: 84 75 72;
     /* Hairline for grouping; `line-strong` is for anything a reader must
      * be able to see the edge of, which WCAG puts at 3:1. */
-    --c-line: 227 225 219;
-    --c-line-strong: 142 138 129;
-    --c-brand: 20 88 74;
-    --c-brand-strong: 14 66 56;
-    --c-brand-soft: 230 240 236;
+    --c-line: 232 224 222;
+    --c-line-strong: 140 129 125;
+    --c-brand: 169 22 42;
+    --c-brand-strong: 132 17 33;
+    --c-brand-soft: 252 233 236;
     --c-brand-ink: 255 255 255;
-    --c-accent: 125 67 16;
-    --c-accent-soft: 251 240 228;
+    --c-accent: 128 65 17;
+    --c-accent-soft: 251 240 230;
     --c-accent-ink: 255 255 255;
     --c-positive: 23 92 63;
     --c-positive-soft: 230 241 234;
@@ -75,19 +87,19 @@
   }
 
   :root[data-theme="dark"] {
-    --c-canvas: 16 20 19;
-    --c-surface: 24 29 27;
-    --c-surface-sunken: 20 25 24;
-    --c-ink: 238 241 239;
-    --c-ink-muted: 173 182 177;
-    --c-line: 43 50 48;
-    --c-line-strong: 105 114 110;
-    --c-brand: 121 204 174;
-    --c-brand-strong: 159 220 197;
-    --c-brand-soft: 22 36 31;
-    --c-brand-ink: 6 20 15;
-    --c-accent: 232 173 112;
-    --c-accent-soft: 42 30 18;
+    --c-canvas: 20 16 15;
+    --c-surface: 29 24 23;
+    --c-surface-sunken: 25 20 19;
+    --c-ink: 242 236 234;
+    --c-ink-muted: 181 169 165;
+    --c-line: 51 43 41;
+    --c-line-strong: 115 103 99;
+    --c-brand: 240 138 150;
+    --c-brand-strong: 247 173 182;
+    --c-brand-soft: 42 22 25;
+    --c-brand-ink: 26 5 9;
+    --c-accent: 232 176 132;
+    --c-accent-soft: 44 31 20;
     --c-accent-ink: 26 16 5;
     --c-positive: 121 204 174;
     --c-positive-soft: 22 36 31;
@@ -105,19 +117,19 @@
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --c-canvas: 16 20 19;
-      --c-surface: 24 29 27;
-      --c-surface-sunken: 20 25 24;
-      --c-ink: 238 241 239;
-      --c-ink-muted: 173 182 177;
-      --c-line: 43 50 48;
-      --c-line-strong: 105 114 110;
-      --c-brand: 121 204 174;
-      --c-brand-strong: 159 220 197;
-      --c-brand-soft: 22 36 31;
-      --c-brand-ink: 6 20 15;
-      --c-accent: 232 173 112;
-      --c-accent-soft: 42 30 18;
+      --c-canvas: 20 16 15;
+      --c-surface: 29 24 23;
+      --c-surface-sunken: 25 20 19;
+      --c-ink: 242 236 234;
+      --c-ink-muted: 181 169 165;
+      --c-line: 51 43 41;
+      --c-line-strong: 115 103 99;
+      --c-brand: 240 138 150;
+      --c-brand-strong: 247 173 182;
+      --c-brand-soft: 42 22 25;
+      --c-brand-ink: 26 5 9;
+      --c-accent: 232 176 132;
+      --c-accent-soft: 44 31 20;
       --c-accent-ink: 26 16 5;
       --c-positive: 121 204 174;
       --c-positive-soft: 22 36 31;
@@ -202,10 +214,40 @@
 
 @layer components {
   /*
+   * The league badge, which is drawn for a white page.
+   *
+   * The hart is a black silhouette, so on a dark ground it disappears and
+   * leaves a red heart floating around nothing. The badge is given a pale
+   * plaque in dark mode — the white sheet it was designed on — rather than
+   * being recoloured, because a hart that is not black is not the badge.
+   *
+   * Written here and not as a Tailwind `dark:` utility on purpose. This
+   * site stamps `data-theme` only when the reader has *chosen* a theme, so
+   * `dark:` never fires for somebody whose system is dark and who has
+   * chosen nothing — which is most people in dark mode, and exactly the
+   * case where the hart vanishes.
+   */
+  .site-badge {
+    border-radius: 0.375rem;
+  }
+
+  :root[data-theme="dark"] .site-badge {
+    background-color: rgb(var(--c-ink));
+    padding: 0.125rem 0.25rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .site-badge {
+      background-color: rgb(var(--c-ink));
+      padding: 0.125rem 0.25rem;
+    }
+  }
+
+  /*
    * Leaflet, dressed in this site's tokens.
    *
    * The library ships its own blue-and-white chrome, which on a page of
-   * warm paper and evergreen reads as a widget somebody dropped in. These
+   * warm paper and heart red reads as a widget somebody dropped in. These
    * override only the parts that are visible: the pin, the popup, the
    * zoom buttons and the attribution. Everything structural — the tile
    * grid, the panes, the drag handling — is left exactly as Leaflet

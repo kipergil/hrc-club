@@ -273,24 +273,43 @@ function Header({ pathname }: { pathname: string }) {
     <header className="relative z-40 border-b border-line bg-surface no-print">
       <div className="mx-auto max-w-page px-4">
         <div className="flex items-center justify-between gap-4 py-4">
-          <Link href="/" className="group min-w-0 no-underline">
+          <Link href="/" className="group flex min-w-0 items-center gap-3 no-underline">
             {/*
-              The short name on a phone, the full name from 640px up.
-              Truncating the full one instead rendered the masthead as
-              "Hertford …" on a 390px screen — a site whose own name is
-              cut off before the first word of it that identifies anything.
+              The league's own badge, from the original site. Decorative
+              here — `alt=""` — because the league's name is written out
+              immediately beside it, and a screen reader announcing "the
+              league badge" before the name it already reads is noise.
+
+              Fixed height rather than width: it sits on the same optical
+              line as the masthead at every size, and the intrinsic
+              width/height keep the row from reflowing as it loads.
             */}
-            <span className="block text-xl font-semibold tracking-tight text-ink transition-colors group-hover:text-brand sm:hidden">
-              {settings?.shortName ?? settings?.clubName ?? "Herts TTL"}
-            </span>
-            <span className="hidden text-2xl font-semibold tracking-tight text-ink transition-colors group-hover:text-brand sm:block">
-              {settings?.clubName ?? "Hertford & District Table Tennis League"}
-            </span>
-            {settings?.strapline ? (
-              <span className="mt-0.5 hidden truncate text-ink-muted sm:block">
-                {settings.strapline}
+            <img
+              src="/httl-badge.png"
+              alt=""
+              width={196}
+              height={153}
+              className="site-badge h-11 w-auto shrink-0 sm:h-14"
+            />
+            <span className="min-w-0">
+              {/*
+                The short name on a phone, the full name from 640px up.
+                Truncating the full one instead rendered the masthead as
+                "Hertford …" on a 390px screen — a site whose own name is
+                cut off before the first word of it that identifies anything.
+              */}
+              <span className="block text-xl font-semibold tracking-tight text-ink transition-colors group-hover:text-brand sm:hidden">
+                {settings?.shortName ?? settings?.clubName ?? "Herts TTL"}
               </span>
-            ) : null}
+              <span className="hidden text-2xl font-semibold tracking-tight text-ink transition-colors group-hover:text-brand sm:block">
+                {settings?.clubName ?? "Hertford & District Table Tennis League"}
+              </span>
+              {settings?.strapline ? (
+                <span className="mt-0.5 hidden truncate text-ink-muted sm:block">
+                  {settings.strapline}
+                </span>
+              ) : null}
+            </span>
           </Link>
 
           <div className="flex shrink-0 items-center gap-2">
