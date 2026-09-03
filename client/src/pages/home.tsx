@@ -66,12 +66,37 @@ export default function HomePage() {
           Counted from the data rather than typed into a sentence, so the
           day an eleventh club joins the page is right without an edit.
         */}
+        {/*
+          Each tile leads to the thing it counts. They read as facts about
+          the league, but every one of them is the answer to a question
+          with a page behind it — "ten clubs, where?" — and a figure that
+          cannot be followed makes the reader go and find the menu.
+
+          The years tile leads to the history rather than to nothing: it
+          is the one number here that is not a list.
+        */}
         <dl className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat value={counts.clubs} label={counts.clubs === 1 ? "club" : "clubs"} />
-          <Stat value={counts.teams} label={counts.teams === 1 ? "team" : "teams"} />
-          <Stat value={counts.divisions} label={counts.divisions === 1 ? "division" : "divisions"} />
+          <Stat
+            value={counts.clubs}
+            label={counts.clubs === 1 ? "club" : "clubs"}
+            href="/clubs"
+          />
+          <Stat
+            value={counts.teams}
+            label={counts.teams === 1 ? "team" : "teams"}
+            href="/teams"
+          />
+          <Stat
+            value={counts.venues}
+            label={counts.venues === 1 ? "venue" : "venues"}
+            href="/venues"
+          />
           {settings.foundedYear ? (
-            <Stat value={new Date().getFullYear() - settings.foundedYear} label="years of play" />
+            <Stat
+              value={new Date().getFullYear() - settings.foundedYear}
+              label="years of play"
+              href="/about/history"
+            />
           ) : null}
         </dl>
       </section>

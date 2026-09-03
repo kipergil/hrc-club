@@ -176,14 +176,48 @@ export function Panel({ className, children }: { className?: string; children: R
  * a row of these is a real description list rather than a grid of divs
  * that merely looks like one.
  */
-export function Stat({ value, label }: { value: ReactNode; label: string }) {
-  return (
-    <div className="rounded-card border border-line bg-surface px-4 py-3 shadow-raised print-plain">
+export function Stat({
+  value,
+  label,
+  href,
+}: {
+  value: ReactNode;
+  label: string;
+  /** Where the tile leads. Without it the tile is a figure, not a control. */
+  href?: string;
+}) {
+  const body = (
+    <>
       {/* Value first visually, label first in the DOM order that matters:
           `dt` is the term, so it is read before the number it describes. */}
       <dd className="text-2xl font-semibold tabular text-ink">{value}</dd>
       <dt className="mt-0.5 text-ink-muted">{label}</dt>
-    </div>
+    </>
+  );
+
+  const shell = "rounded-card border border-line bg-surface px-4 py-3 shadow-raised print-plain";
+
+  if (!href) return <div className={shell}>{body}</div>;
+
+  /*
+   * A whole tile as the target, not the number inside it — "10" is a
+   * three-millimetre tap on a phone, and the tile is already the shape a
+   * thumb aims at.
+   *
+   * `no-underline` because the tile's own border and hover carry the
+   * affordance; underlining a two-line figure-and-label pair reads as two
+   * separate links.
+   */
+  return (
+    <Link
+      href={href}
+      className={cn(
+        shell,
+        "block no-underline transition-colors hover:border-brand hover:bg-brand-soft",
+      )}
+    >
+      {body}
+    </Link>
   );
 }
 

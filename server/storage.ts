@@ -1624,8 +1624,15 @@ export async function getHome(): Promise<HomePayload> {
 }
 
 /**
- * The four numbers the home page opens on — clubs, teams, divisions, and
+ * The four numbers the home page opens on — clubs, teams, venues, and
  * how far back the honours run.
+ *
+ * Venues rather than divisions: three divisions is a fact about the
+ * league's shape that nobody needs a tile for, while "where do they
+ * play?" is one of the two questions a stranger actually arrives with.
+ * The count is an unfiltered read of `hrc_venues`, which is exactly what
+ * `getVenues` lists, so the number and the page it links to cannot
+ * disagree.
  *
  * They are counted rather than written down. The league's own home page
  * states its size in a sentence ("10 clubs in the league, providing 26
@@ -1639,9 +1646,10 @@ export async function getHome(): Promise<HomePayload> {
 async function getLeagueCounts(): Promise<HomePayload["counts"]> {
   const client = await directus();
 
-  const [clubs, teams, honours] = await Promise.all([
+  const [clubs, teams, venues, honours] = await Promise.all([
     client.request(readItems("hrc_clubs", { fields: ["id"], limit: -1 })) as Promise<Row[]>,
-    client.request(readItems("hrc_teams", { fields: ["id", "division"], limit: -1 })) as Promise<Row[]>,
+    client.request(readItems("hrc_teams", { fields: ["id"], limit: -1 })) as Promise<Row[]>,
+    client.request(readItems("hrc_venues", { fields: ["id"], limit: -1 })) as Promise<Row[]>,
     client.request(
       readItems("hrc_honours", { fields: ["season_label"], sort: ["season_label"], limit: 1 }),
     ) as Promise<Row[]>,
@@ -1654,7 +1662,7 @@ async function getLeagueCounts(): Promise<HomePayload["counts"]> {
   return {
     clubs: clubs.length,
     teams: teams.length,
-    divisions: new Set(teams.map((row) => row.division).filter(Boolean)).size,
+    venues: venues.length,
     honoursFrom: Number.isFinite(earliest) && earliest > 1900 ? earliest : null,
   };
 }

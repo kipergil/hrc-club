@@ -51,7 +51,7 @@ export function VenuesPage() {
   if (venues.length === 0) {
     return (
       <div>
-        <PageHeader title="Where the league plays" subtitle="Every hall in the league" />
+        <PageHeader title="Venues" subtitle="Every hall in the league" />
         <Empty>No venues have been recorded yet.</Empty>
       </div>
     );
@@ -60,7 +60,7 @@ export function VenuesPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Where the league plays"
+        title="Venues"
         subtitle={`All ${venues.length} halls in the league, from Bishop's Stortford to Enfield`}
         actions={<PrintButton label="Print the venue list" />}
       />
