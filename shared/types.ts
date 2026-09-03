@@ -322,6 +322,8 @@ export interface PlayerStat {
   memberSlug: string;
   seasonLabel: string;
   teamName: string | null;
+  /** Set where the site still holds the team, so the name can link to it. */
+  teamSlug: string | null;
   division: Division | null;
   played: number;
   won: number;

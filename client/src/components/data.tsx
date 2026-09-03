@@ -14,6 +14,7 @@ import {
   usePagination,
 } from "@/components/ui";
 import { cn, divisionLabel, formatDateShort, formatTime, resultLabel } from "@/lib/utils";
+import { teamFixturesHref, teamHref, teamModuleHref } from "@/lib/links";
 import type { CalendarCell, CalendarSegment } from "@/lib/calendar";
 
 /**
@@ -32,15 +33,31 @@ import type { CalendarCell, CalendarSegment } from "@/lib/calendar";
 // ---------------------------------------------------------------------------
 
 /**
- * A team name that links to its page when the site holds one.
+ * A team name that links somewhere useful when the site holds the team.
  *
  * An archived season can name a team that has since folded, and a name with
  * a dead link behind it is worse than a name.
+ *
+ * The destination is passed in rather than assumed, because it depends on
+ * where the name is being read: see `lib/links.ts`. It used to be
+ * `/teams/:slug` everywhere, which took somebody reading results out of the
+ * results and dropped them at the top of a profile page.
  */
-function TeamName({ team, bold = false }: { team: TeamRef; bold?: boolean }) {
+function TeamName({
+  team,
+  bold = false,
+  href,
+}: {
+  team: TeamRef;
+  bold?: boolean;
+  href?: (slug: string) => string;
+}) {
   if (!team.slug) return <span className={cn(bold && "font-semibold")}>{team.name}</span>;
   return (
-    <Link href={`/teams/${team.slug}`} className={cn("link", bold && "font-semibold")}>
+    <Link
+      href={href ? href(team.slug) : teamHref(team.slug)}
+      className={cn("link", bold && "font-semibold")}
+    >
       {team.name}
     </Link>
   );
@@ -114,7 +131,11 @@ export function FixtureList({
                   <CompetitionNote competition={fixture.competition} />
                 </Td>
                 <Td className="text-right">
-                  <TeamName team={fixture.homeTeam} bold />
+                  <TeamName
+                    team={fixture.homeTeam}
+                    bold
+                    href={(slug) => teamModuleHref(slug, fixture.status)}
+                  />
                 </Td>
                 <Td className="text-center">
                   {fixture.status === "played" ? (
@@ -128,7 +149,11 @@ export function FixtureList({
                   )}
                 </Td>
                 <Td>
-                  <TeamName team={fixture.awayTeam} bold />
+                  <TeamName
+                    team={fixture.awayTeam}
+                    bold
+                    href={(slug) => teamModuleHref(slug, fixture.status)}
+                  />
                 </Td>
               </Tr>
             ))}
@@ -145,9 +170,17 @@ export function FixtureList({
                 <CompetitionNote competition={fixture.competition} />
               </p>
               <p className="mt-1 text-lg">
-                <TeamName team={fixture.homeTeam} bold />
+                <TeamName
+                    team={fixture.homeTeam}
+                    bold
+                    href={(slug) => teamModuleHref(slug, fixture.status)}
+                  />
                 <span className="text-ink-muted"> v </span>
-                <TeamName team={fixture.awayTeam} bold />
+                <TeamName
+                    team={fixture.awayTeam}
+                    bold
+                    href={(slug) => teamModuleHref(slug, fixture.status)}
+                  />
               </p>
               <p className="mt-2">
                 {fixture.status === "played" ? (
@@ -348,10 +381,7 @@ export function StandingsTable({
                     main way anyone navigates it.
                   */}
                   {row.teamSlug ? (
-                    <Link
-                      href={`/teams/${row.teamSlug}${season ? `?season=${season}` : ""}`}
-                      className="link"
-                    >
+                    <Link href={teamHref(row.teamSlug, season)} className="link">
                       {row.teamName}
                     </Link>
                   ) : (
@@ -393,10 +423,7 @@ export function StandingsTable({
                 <p className="text-lg font-semibold">
                   <span className="tabular text-ink-muted">{row.position}.</span>{" "}
                   {row.teamSlug ? (
-                    <Link
-                      href={`/teams/${row.teamSlug}${season ? `?season=${season}` : ""}`}
-                      className="link"
-                    >
+                    <Link href={teamHref(row.teamSlug, season)} className="link">
                       {row.teamName}
                     </Link>
                   ) : (
@@ -575,7 +602,15 @@ export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
                     row.memberName
                   )}
                 </Td>
-                <Td className="text-ink-muted">{row.teamName ?? "—"}</Td>
+                <Td className="text-ink-muted">
+                  {row.teamSlug && row.teamName ? (
+                    <Link href={teamHref(row.teamSlug, row.seasonLabel)} className="link">
+                      {row.teamName}
+                    </Link>
+                  ) : (
+                    (row.teamName ?? "—")
+                  )}
+                </Td>
                 <Td className="tabular text-right">{row.played}</Td>
                 <Td className="tabular text-right">{row.won}</Td>
                 <Td className="tabular text-right">{row.lost}</Td>
@@ -608,7 +643,15 @@ export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
                   row.memberName
                 )}
               </p>
-              <p className="text-ink-muted">{row.teamName ?? "No team recorded"}</p>
+              <p className="text-ink-muted">
+                {row.teamSlug && row.teamName ? (
+                  <Link href={teamHref(row.teamSlug, row.seasonLabel)} className="link">
+                    {row.teamName}
+                  </Link>
+                ) : (
+                  (row.teamName ?? "No team recorded")
+                )}
+              </p>
               <p className="mt-1 tabular">
                 Played {row.played} · Won {row.won} · Lost {row.lost}
                 {row.winPercentage === null ? null : ` · ${Math.round(row.winPercentage)}%`}
@@ -673,7 +716,15 @@ export function HandicapTable({ stats }: { stats: PlayerStat[] }) {
                     row.memberName
                   )}
                 </Td>
-                <Td className="text-ink-muted">{row.teamName ?? "—"}</Td>
+                <Td className="text-ink-muted">
+                  {row.teamSlug && row.teamName ? (
+                    <Link href={teamHref(row.teamSlug, row.seasonLabel)} className="link">
+                      {row.teamName}
+                    </Link>
+                  ) : (
+                    (row.teamName ?? "—")
+                  )}
+                </Td>
                 <Td className="tabular text-right text-lg font-semibold">{row.handicap}</Td>
               </Tr>
             ))}
@@ -689,7 +740,15 @@ export function HandicapTable({ stats }: { stats: PlayerStat[] }) {
                 <p className="text-lg font-semibold">{row.memberName}</p>
                 <p className="shrink-0 text-lg font-semibold tabular">{row.handicap}</p>
               </div>
-              <p className="text-ink-muted">{row.teamName ?? "No team recorded"}</p>
+              <p className="text-ink-muted">
+                {row.teamSlug && row.teamName ? (
+                  <Link href={teamHref(row.teamSlug, row.seasonLabel)} className="link">
+                    {row.teamName}
+                  </Link>
+                ) : (
+                  (row.teamName ?? "No team recorded")
+                )}
+              </p>
             </Card>
           </li>
         ))}
@@ -801,7 +860,10 @@ export function SeasonGrid({ segments }: { segments: CalendarSegment[] }) {
                       scope="row"
                       className="sticky left-0 z-10 whitespace-nowrap border-b border-r border-line bg-surface px-4 py-3 text-left font-semibold"
                     >
-                      <Link href={`/teams/${row.team.slug}`} className="link">
+                      {/* The grid is the fixture calendar, so a team's
+                          name leads to that team's fixtures rather than
+                          out of the calendar and into a profile. */}
+                      <Link href={teamFixturesHref(row.team.slug)} className="link">
                         {row.team.name}
                       </Link>
                     </th>

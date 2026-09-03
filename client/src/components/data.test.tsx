@@ -222,3 +222,76 @@ describe("StandingsTable", () => {
     expect(screen.queryByText(/cancelled/i)).toBeNull();
   });
 });
+
+describe("where a team name in a match list leads", () => {
+  /*
+   * The rule itself lives in `lib/links.ts` and is tested there. What these
+   * cover is the wiring — that each row passes its *own* status, so a list
+   * holding both played and unplayed matches sends each name to the right
+   * module. Passing the page's status instead of the row's would look
+   * identical in a screenshot of a results page and be wrong everywhere else.
+   */
+  it("sends a played match's teams to that team's results", () => {
+    render(<FixtureList fixtures={[fixture({ status: "played" })]} emptyMessage="none" />);
+
+    const [home] = screen.getAllByRole("link", { name: "HRC A" });
+    const [away] = screen.getAllByRole("link", { name: "Water Lane A" });
+    expect(home?.getAttribute("href")).toBe("/results?team=hrc-a");
+    expect(away?.getAttribute("href")).toBe("/results?team=water-lane-a");
+  });
+
+  it("sends an unplayed match's teams to that team's fixtures", () => {
+    render(
+      <FixtureList
+        fixtures={[fixture({ status: "scheduled", homeScore: null, awayScore: null })]}
+        emptyMessage="none"
+      />,
+    );
+
+    const [home] = screen.getAllByRole("link", { name: "HRC A" });
+    expect(home?.getAttribute("href")).toBe("/fixtures?team=hrc-a");
+  });
+
+  it("decides per row, not per list", () => {
+    render(
+      <FixtureList
+        fixtures={[
+          fixture({ id: "a", status: "played" }),
+          fixture({
+            id: "b",
+            status: "scheduled",
+            homeScore: null,
+            awayScore: null,
+            homeTeam: { name: "HRC B", slug: "hrc-b", division: "premier" },
+          }),
+        ]}
+        emptyMessage="none"
+      />,
+    );
+
+    expect(screen.getAllByRole("link", { name: "HRC A" })[0]?.getAttribute("href")).toBe("/results?team=hrc-a");
+    expect(screen.getAllByRole("link", { name: "HRC B" })[0]?.getAttribute("href")).toBe("/fixtures?team=hrc-b");
+  });
+
+  it("leaves a team the site no longer holds as plain text", () => {
+    render(
+      <FixtureList
+        fixtures={[
+          fixture({ homeTeam: { name: "Folded FC", slug: "", division: null } }),
+        ]}
+        emptyMessage="none"
+      />,
+    );
+
+    expect(screen.queryByRole("link", { name: "Folded FC" })).toBeNull();
+    expect(screen.getAllByText("Folded FC").length).toBeGreaterThan(0);
+  });
+
+  it("keeps a table row pointing at the team's own page", () => {
+    // The league's own tables page says clicking a team name shows that
+    // team's matches for the season, which is what the team page is.
+    render(<StandingsTable standings={[standing()]} season="2024-25" />);
+
+    expect(screen.getAllByRole("link", { name: "HRC A" })[0]?.getAttribute("href")).toBe("/teams/hrc-a?season=2024-25");
+  });
+});

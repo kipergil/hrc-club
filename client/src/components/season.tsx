@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
-import { useLocation, useSearch } from "wouter";
+import { useState } from "react";
 import type { Season } from "@shared/types.js";
 import { FilterChips } from "@/components/ui";
+import { useUrlParam } from "@/lib/params";
 
 /**
  * The season a page is showing, held in the URL.
@@ -16,24 +16,7 @@ import { FilterChips } from "@/components/ui";
  * the table anyone means when they do not say.
  */
 export function useSeasonParam(): [string | undefined, (season: string | undefined) => void] {
-  const search = useSearch();
-  const [pathname, navigate] = useLocation();
-  const season = new URLSearchParams(search).get("season") ?? undefined;
-
-  const setSeason = useCallback(
-    (next: string | undefined) => {
-      const params = new URLSearchParams(search);
-      if (next) params.set("season", next);
-      else params.delete("season");
-      const query = params.toString();
-      // `replace` so that flicking between years does not fill the back
-      // button with them — back should leave the page, not undo a filter.
-      navigate(query ? `${pathname}?${query}` : pathname, { replace: true });
-    },
-    [navigate, pathname, search],
-  );
-
-  return [season, setSeason];
+  return useUrlParam("season");
 }
 
 /**

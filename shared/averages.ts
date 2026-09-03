@@ -43,6 +43,8 @@ export interface AverageRow {
   memberName: string;
   memberSlug: string;
   teamName: string | null;
+  /** The same team the name refers to — see where it is set below. */
+  teamSlug: string | null;
   division: Division | null;
   played: number;
   won: number;
@@ -87,6 +89,7 @@ export function buildAverages(
           memberName: rubber.memberName,
           memberSlug: rubber.memberSlug,
           teamName: rubber.teamName,
+          teamSlug: rubber.teamSlug,
           division: rubber.division,
           played: 0,
           won: 0,
@@ -126,6 +129,14 @@ export function buildAverages(
       [...entry.byTeam.entries()].sort((a, b) => b[1].count - a[1].count)[0] ?? [];
 
     const teamName = main?.name ?? entry.row.teamName;
+    /*
+     * The slug has to move with the name. Spreading `entry.row` below
+     * carries the slug of whichever card happened to be read first, so a
+     * player who turned out for two teams would be labelled with their
+     * main team and linked to the other one — a wrong link that looks
+     * completely right on the page.
+     */
+    const teamSlug = mainSlug ?? entry.row.teamSlug;
     const division = main?.division ?? entry.row.division;
     const matchesPlayed = entry.fixtures.size;
 
@@ -138,6 +149,7 @@ export function buildAverages(
     rows.push({
       ...entry.row,
       teamName,
+      teamSlug,
       division,
       matchesPlayed,
       winPercentage:

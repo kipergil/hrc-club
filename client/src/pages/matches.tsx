@@ -26,6 +26,8 @@ import {
 } from "@/components/ui";
 import { useAverages, useFixture, useFixtures, useSeasons, useStandings } from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
+import { useUrlParam } from "@/lib/params";
+import { teamModuleHref } from "@/lib/links";
 import { cn, divisionLabel, formatDateLong, formatTime, resultLabel } from "@/lib/utils";
 import { buildCalendar } from "@/lib/calendar";
 import { Scorecard } from "@/components/scorecard";
@@ -142,14 +144,63 @@ export function CalendarPage() {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * The banner shown when a list has been narrowed to one team.
+ *
+ * Filtering has to be visible, or a list that is missing four fifths of its
+ * rows just looks broken. It names the team, offers the way out, and links
+ * to the team's own page — which is where the team name used to go, and is
+ * still one click away for anyone who wanted it.
+ *
+ * The name is taken from the rows rather than fetched: every row in a
+ * filtered list has this team on one side of it, so a second request would
+ * only re-learn what is already on screen.
+ */
+function TeamFilterNote({
+  slug,
+  fixtures,
+  onClear,
+}: {
+  slug: string;
+  fixtures: Fixture[] | undefined;
+  onClear: () => void;
+}) {
+  const name = useMemo(() => {
+    for (const fixture of fixtures ?? []) {
+      if (fixture.homeTeam.slug === slug) return fixture.homeTeam.name;
+      if (fixture.awayTeam.slug === slug) return fixture.awayTeam.name;
+    }
+    return null;
+  }, [fixtures, slug]);
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-brand/30 bg-brand-soft px-4 py-3">
+      <p>
+        Showing only <strong>{name ?? slug}</strong>.
+      </p>
+      <Link href={`/teams/${slug}`} className="link">
+        This team's page
+      </Link>
+      <button type="button" onClick={onClear} className="link font-semibold">
+        Show every team
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 export function FixturesPage() {
   const [season, setSeason] = useSeasonParam();
+  const [team, setTeam] = useUrlParam("team");
   const { data: seasons } = useSeasons();
   const {
     data: fixtures,
     isLoading,
     isError,
-  } = useFixtures(`status=scheduled${season ? `&season=${season}` : ""}`);
+  } = useFixtures(
+    `status=scheduled${season ? `&season=${season}` : ""}${team ? `&team=${encodeURIComponent(team)}` : ""}`,
+  );
 
   /*
    * Grouped by the league's own week-commencing scheduling, because that
@@ -179,7 +230,7 @@ export function FixturesPage() {
    * inside a week. Four weeks is about a screenful and keeps each page a
    * unit somebody would actually ask for — "the next month".
    */
-  const paged = usePagination(weeks, 4, season);
+  const paged = usePagination(weeks, 4, `${season ?? ""}|${team ?? ""}`);
 
   if (isLoading) return <Loading what="the fixture calendar" variant="table" />;
   if (isError) return <ErrorNote what="fixture calendar" />;
@@ -194,10 +245,17 @@ export function FixturesPage() {
         <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
       </PageHeader>
 
+      {team ? (
+        <div className="mb-6">
+          <TeamFilterNote slug={team} fixtures={fixtures} onClear={() => setTeam(undefined)} />
+        </div>
+      ) : null}
+
       {weeks.length === 0 ? (
         <Empty>
-          There are no matches still to play in this season. Fixtures for a new season usually
-          appear in September.
+          {team
+            ? "This team has no matches left in the calendar for this season."
+            : "There are no matches still to play in this season. Fixtures for a new season usually appear in September."}
         </Empty>
       ) : (
         <div className="space-y-10">
@@ -221,12 +279,15 @@ export function FixturesPage() {
 
 export function ResultsPage() {
   const [season, setSeason] = useSeasonParam();
+  const [team, setTeam] = useUrlParam("team");
   const { data: seasons } = useSeasons();
   const {
     data: fixtures,
     isLoading,
     isError,
-  } = useFixtures(`status=played${season ? `&season=${season}` : ""}`);
+  } = useFixtures(
+    `status=played${season ? `&season=${season}` : ""}${team ? `&team=${encodeURIComponent(team)}` : ""}`,
+  );
 
   if (isLoading) return <Loading what="results" variant="table" />;
   if (isError) return <ErrorNote what="results" />;
@@ -241,10 +302,20 @@ export function ResultsPage() {
         <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
       </PageHeader>
 
+      {team ? (
+        <div className="mb-6">
+          <TeamFilterNote slug={team} fixtures={fixtures} onClear={() => setTeam(undefined)} />
+        </div>
+      ) : null}
+
       <FixtureList
         fixtures={fixtures ?? []}
         perPage={25}
-        emptyMessage="No results in this season yet. They appear here once matches have been played and the cards entered."
+        emptyMessage={
+          team
+            ? "This team has not played a match in this season yet."
+            : "No results in this season yet. They appear here once matches have been played and the cards entered."
+        }
       />
 
       <SyncNote lastSyncedAt={fixtures?.[0]?.lastSyncedAt} />
@@ -281,8 +352,20 @@ export function MatchPage({ id }: { id: string }) {
       <Card className="text-center">
         <p className="text-ink-muted">{COMPETITION_LABELS[match.competition] ?? match.competition}</p>
         <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+          {/*
+            Both names link out to the rest of that team's season. The
+            scoreline was a dead end before this: the one page where a
+            reader most obviously wants "how are they doing?" named two
+            teams and offered no way to either of them.
+          */}
           <p className={cn("text-right text-xl", homeWon && "font-semibold")}>
-            {match.homeTeam.name}
+            {match.homeTeam.slug ? (
+              <Link href={teamModuleHref(match.homeTeam.slug, match.status)} className="link">
+                {match.homeTeam.name}
+              </Link>
+            ) : (
+              match.homeTeam.name
+            )}
           </p>
           <p className="flex items-center gap-3 text-4xl font-semibold tabular">
             <span>{match.homeScore ?? "—"}</span>
@@ -292,7 +375,13 @@ export function MatchPage({ id }: { id: string }) {
             <span>{match.awayScore ?? "—"}</span>
           </p>
           <p className={cn("text-left text-xl", awayWon && "font-semibold")}>
-            {match.awayTeam.name}
+            {match.awayTeam.slug ? (
+              <Link href={teamModuleHref(match.awayTeam.slug, match.status)} className="link">
+                {match.awayTeam.name}
+              </Link>
+            ) : (
+              match.awayTeam.name
+            )}
           </p>
         </div>
         <p className="mt-4 flex flex-wrap items-center justify-center gap-3">
