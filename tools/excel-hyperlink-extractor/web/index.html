@@ -1,0 +1,1159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cell Link Extractor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --ground: #f4f6f2;
+    --surface: #ffffff;
+    --surface-sunk: #eef1ea;
+    --ink: #16211c;
+    --ink-soft: #5b6862;
+    --ink-faint: #8a958f;
+    --rule: #dde2d9;
+    --rule-strong: #c6cec3;
+    --accent: #1f6f4a;
+    --accent-ink: #ffffff;
+    --accent-soft: #e2efe7;
+    --warn: #8a5a12;
+    --warn-soft: #f6ecd8;
+    --shadow: 0 1px 2px rgba(22, 33, 28, .06), 0 8px 24px -16px rgba(22, 33, 28, .28);
+
+    --font-ui: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #111412;
+      --surface: #191d1a;
+      --surface-sunk: #141815;
+      --ink: #e7ece7;
+      --ink-soft: #9ba79f;
+      --ink-faint: #6d7a72;
+      --rule: #2a302c;
+      --rule-strong: #3b433d;
+      --accent: #5fc08c;
+      --accent-ink: #0d1a13;
+      --accent-soft: #1b2b22;
+      --warn: #dba646;
+      --warn-soft: #2c2618;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #111412;
+    --surface: #191d1a;
+    --surface-sunk: #141815;
+    --ink: #e7ece7;
+    --ink-soft: #9ba79f;
+    --ink-faint: #6d7a72;
+    --rule: #2a302c;
+    --rule-strong: #3b433d;
+    --accent: #5fc08c;
+    --accent-ink: #0d1a13;
+    --accent-soft: #1b2b22;
+    --warn: #dba646;
+    --warn-soft: #2c2618;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 24px 56px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 14px;
+    align-items: start;
+  }
+
+  .mark {
+    grid-row: span 2;
+    width: 34px;
+    height: 34px;
+    margin-top: 1px;
+    color: var(--accent);
+  }
+
+  .masthead h1 {
+    margin: 0;
+    font-size: 25px;
+    font-weight: 700;
+    letter-spacing: -.015em;
+    text-wrap: balance;
+  }
+
+  .lede {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--ink-soft);
+  }
+
+  .lede b {
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  /* ---------- panels ---------- */
+
+  .workbench {
+    display: grid;
+    grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .panel-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .panel-note {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .setup-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 16px;
+  }
+
+  /* ---------- file intake ---------- */
+
+  .drop {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px dashed var(--rule-strong);
+    border-radius: 8px;
+    background: var(--surface-sunk);
+    transition: border-color .15s, background .15s;
+  }
+
+  .drop.is-over {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .drop-text { min-width: 0; flex: 1; }
+
+  .drop-name {
+    font-weight: 600;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .drop-hint {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 104px;
+    gap: 12px;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .field > label,
+  .group > .group-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  select, input[type="number"] {
+    font: inherit;
+    font-size: 14px;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--rule-strong);
+    border-radius: 6px;
+    padding: 7px 9px;
+    width: 100%;
+  }
+
+  input[type="number"] { font-variant-numeric: tabular-nums; }
+
+  /* ---------- column picker ---------- */
+
+  .group { display: flex; flex-direction: column; gap: 8px; }
+
+  .cols {
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden auto;
+    max-height: 320px;
+  }
+
+  .col-row {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) 40px 44px;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .col-row:last-child { border-bottom: 0; }
+
+  .col-row.head {
+    position: sticky;
+    top: 0;
+    background: var(--surface-sunk);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding-block: 6px;
+  }
+
+  .col-row.head span:nth-child(3),
+  .col-row.head span:nth-child(4) { text-align: center; }
+
+  .col-row.is-picked { background: var(--accent-soft); }
+
+  .colref {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    text-align: center;
+    padding: 2px 0;
+    border-radius: 4px;
+    background: var(--surface-sunk);
+    color: var(--ink-soft);
+  }
+
+  .col-row.is-picked .colref {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .colname {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .colname b {
+    font-weight: 500;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .colname .unnamed { color: var(--ink-faint); font-style: italic; }
+
+  .tally {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .col-row input[type="radio"],
+  .col-row input[type="checkbox"] {
+    justify-self: center;
+    accent-color: var(--accent);
+    width: 15px;
+    height: 15px;
+    margin: 0;
+  }
+
+  .checks { display: flex; flex-direction: column; gap: 7px; }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+  }
+
+  .check input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+
+  /* ---------- output ---------- */
+
+  .out-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .seg {
+    display: flex;
+    background: var(--surface-sunk);
+    border: 1px solid var(--rule);
+    border-radius: 7px;
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .seg button {
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    background: none;
+    border: 0;
+    border-radius: 5px;
+    padding: 4px 12px;
+    cursor: pointer;
+  }
+
+  .seg button[aria-pressed="true"] {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+  }
+
+  .actions { display: flex; align-items: center; gap: 8px; }
+
+  .btn {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 13px;
+    border-radius: 7px;
+    border: 1px solid var(--rule-strong);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .btn:hover { border-color: var(--ink-faint); }
+
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .btn.primary:hover { filter: brightness(1.06); }
+
+  .report {
+    margin: 0;
+    padding: 16px 18px;
+    max-height: 68vh;
+    overflow: auto;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+    white-space: pre;
+    tab-size: 8;
+  }
+
+  .report .k { color: var(--ink-faint); }
+
+  .notice {
+    margin: 0;
+    padding: 10px 16px;
+    font-size: 13px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .notice[hidden] { display: none !important; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  .legend b { font-weight: 500; color: var(--ink); }
+
+  .colophon {
+    color: var(--ink-faint);
+    font-size: 12.5px;
+    max-width: 78ch;
+  }
+
+  .colophon code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    background: var(--surface-sunk);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+
+  .sr {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 900px) {
+    .workbench { grid-template-columns: minmax(0, 1fr); }
+    .report { max-height: 60vh; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="masthead">
+    <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="1.5" y="2.5" width="21" height="19" rx="2.5" stroke="currentColor" stroke-width="1.4" opacity=".45"/>
+      <path d="M1.5 8.5h21M8.5 8.5v13M15.5 2.5v6" stroke="currentColor" stroke-width="1.4" opacity=".45"/>
+      <rect x="8.5" y="8.5" width="7" height="13" fill="currentColor" opacity=".12"/>
+      <path d="M10.4 16.6a1.9 1.9 0 0 1 0-2.7l1.1-1.1a1.9 1.9 0 0 1 2.7 2.7l-.4.4M13.6 14.4a1.9 1.9 0 0 1 0 2.7l-1.1 1.1a1.9 1.9 0 1 1-2.7-2.7l.4-.4"
+            stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <h1>Cell Link Extractor</h1>
+    <p class="lede">
+      Spreadsheets hide their URLs behind the text you see. Drop a workbook in, pick an id column and the
+      columns holding links, and read out every target as plain text.
+      <b>The file is read in this browser and never uploaded.</b>
+    </p>
+  </header>
+
+  <main class="workbench">
+
+    <section class="panel" aria-labelledby="setup-title">
+      <div class="panel-head">
+        <h2 class="panel-title" id="setup-title">Source</h2>
+        <span class="panel-note" id="range-note">&nbsp;</span>
+      </div>
+
+      <div class="setup-body">
+        <div class="drop" id="drop">
+          <div class="drop-text">
+            <div class="drop-name" id="file-name">parts.xlsx</div>
+            <div class="drop-hint" id="file-hint">Sample workbook &mdash; drop your own to replace it</div>
+          </div>
+          <button class="btn" id="pick">Choose file</button>
+          <input type="file" id="file" accept=".xlsx,.xlsm,.xlsb" class="sr">
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="sheet">Worksheet</label>
+            <select id="sheet"></select>
+          </div>
+          <div class="field">
+            <label for="header-row">Header row</label>
+            <input type="number" id="header-row" min="0" step="1" value="1">
+          </div>
+        </div>
+
+        <div class="group">
+          <span class="group-label" id="cols-label">Columns</span>
+          <div class="cols" role="group" aria-labelledby="cols-label">
+            <div class="col-row head">
+              <span aria-hidden="true">Col</span>
+              <span>Header</span>
+              <span>Id</span>
+              <span>Link</span>
+            </div>
+            <div id="col-rows"></div>
+          </div>
+        </div>
+
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="row-number" checked> Use the row number as the id</label>
+          <label class="check"><input type="checkbox" id="include-empty"> List rows with no link too</label>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="out-title">
+      <div class="out-head">
+        <h2 class="panel-title" id="out-title">Report</h2>
+        <div class="seg" role="group" aria-label="Output format">
+          <button type="button" data-format="text" aria-pressed="true">Text</button>
+          <button type="button" data-format="tsv" aria-pressed="false">TSV</button>
+          <button type="button" data-format="csv" aria-pressed="false">CSV</button>
+        </div>
+        <div class="actions">
+          <span class="panel-note" id="tally">&nbsp;</span>
+          <button class="btn" id="download" hidden>Download</button>
+          <button class="btn primary" id="copy">Copy</button>
+        </div>
+      </div>
+      <p class="notice" id="notice" hidden></p>
+      <pre class="report" id="report" tabindex="0">Loading&hellip;</pre>
+    </section>
+
+  </main>
+
+  <ul class="legend">
+    <li><b>Embedded link</b> &mdash; what Ctrl+K puts in a cell, merged cells included</li>
+    <li><b>HYPERLINK formula</b> &mdash; the literal target inside <code>=HYPERLINK("&hellip;")</code></li>
+    <li><b>Url in cell text</b> &mdash; no link, but the text is one</li>
+  </ul>
+
+  <p class="colophon">
+    Reads <code>.xlsx</code> and <code>.xlsm</code>; re-save a legacy <code>.xls</code> from Excel first.
+    Columns are matched by header where there is one, and by letter where there isn't. TSV and CSV give one
+    line per link &mdash; row, id, column, cell, text, link, source &mdash; to paste back into a spreadsheet.
+  </p>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var SAMPLE_NAME = "parts.xlsx";
+  var SAMPLE_B64 = "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Ly93d3cudzMub3JnLzIwMDEvWE1MU2NoZW1hLWluc3RhbmNlIiB4bWxucz0iaHR0cDovL3NjaGVtYXMub3BlbnhtbGZvcm1hdHMub3JnL3BhY2thZ2UvMjAwNi9tZXRhZGF0YS9jb3JlLXByb3BlcnRpZXMiPjxkY3Rlcm1zOmNyZWF0ZWQgeHNpOnR5cGU9ImRjdGVybXM6VzNDRFRGIj4yMDI2LTA5LTAzVDE3OjUxOjUzLjMxNzY5NTRaPC9kY3Rlcm1zOmNyZWF0ZWQ+PGRjdGVybXM6bW9kaWZpZWQgeHNpOnR5cGU9ImRjdGVybXM6VzNDRFRGIj4yMDI2LTA5LTAzVDE3OjUxOjUzLjMxNzcxMzlaPC9kY3Rlcm1zOm1vZGlmaWVkPjwvY29yZVByb3BlcnRpZXM+UEsDBBQAAAAAAHqOI12mNFNnnAIAAJwCAAALAAAAX3JlbHMvLnJlbHPvu788P3htbCB2ZXJzaW9uPSIxLjAiIGVuY29kaW5nPSJ1dGYtOCI/PjxSZWxhdGlvbnNoaXBzIHhtbG5zPSJodHRwOi8vc2NoZW1hcy5vcGVueG1sZm9ybWF0cy5vcmcvcGFja2FnZS8yMDA2L3JlbGF0aW9uc2hpcHMiPjxSZWxhdGlvbnNoaXAgVHlwZT0iaHR0cDovL3NjaGVtYXMub3BlbnhtbGZvcm1hdHMub3JnL29mZmljZURvY3VtZW50LzIwMDYvcmVsYXRpb25zaGlwcy9vZmZpY2VEb2N1bWVudCIgVGFyZ2V0PSIveGwvd29ya2Jvb2sueG1sIiBJZD0iUjE5ZGZhYzA1NjU2MDQyNmUiIC8+PFJlbGF0aW9uc2hpcCBUeXBlPSJodHRwOi8vc2NoZW1hcy5vcGVueG1sZm9ybWF0cy5vcmcvb2ZmaWNlRG9jdW1lbnQvMjAwNi9yZWxhdGlvbnNoaXBzL2V4dGVuZGVkLXByb3BlcnRpZXMiIFRhcmdldD0iL2RvY1Byb3BzL2FwcC54bWwiIElkPSJySWQxIiAvPjxSZWxhdGlvbnNoaXAgVHlwZT0iaHR0cDovL3NjaGVtYXMub3BlbnhtbGZvcm1hdHMub3JnL3BhY2thZ2UvMjAwNi9yZWxhdGlvbnNoaXBzL21ldGFkYXRhL2NvcmUtcHJvcGVydGllcyIgVGFyZ2V0PSIv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";
+
+  var URL_LIKE = /^\s*(https?:\/\/|ftp:\/\/|mailto:|file:\/\/|\\\\|www\.)/i;
+  var READ_OPTS = { sheetStubs: true, cellFormula: true, cellNF: true, cellText: true };
+
+  var state = {
+    workbook: null,
+    fileName: SAMPLE_NAME,
+    isSample: true,
+    sheetName: "",
+    headerRow: 1,
+    idColumn: null,      // 0-based column index, or null for "row number"
+    linkColumns: [],     // 0-based column indexes
+    includeEmpty: false,
+    format: "text",
+    layout: null
+  };
+
+  var el = {
+    drop: document.getElementById("drop"),
+    pick: document.getElementById("pick"),
+    file: document.getElementById("file"),
+    fileName: document.getElementById("file-name"),
+    fileHint: document.getElementById("file-hint"),
+    sheet: document.getElementById("sheet"),
+    headerRow: document.getElementById("header-row"),
+    colRows: document.getElementById("col-rows"),
+    rowNumber: document.getElementById("row-number"),
+    includeEmpty: document.getElementById("include-empty"),
+    rangeNote: document.getElementById("range-note"),
+    report: document.getElementById("report"),
+    notice: document.getElementById("notice"),
+    tally: document.getElementById("tally"),
+    copy: document.getElementById("copy"),
+    download: document.getElementById("download")
+  };
+
+  // ---------- reading a cell ----------
+
+  function cellText(cell) {
+    if (!cell || cell.t === "z") return "";
+    var text = cell.w != null ? cell.w : (cell.v != null ? String(cell.v) : "");
+    return text.trim();
+  }
+
+  // The literal arguments of =HYPERLINK("target", "label"). A computed target would need the
+  // workbook recalculated, so it is reported as no link rather than guessed at.
+  function hyperlinkFormula(formula) {
+    if (!formula) return null;
+    var open = formula.toUpperCase().indexOf("HYPERLINK(");
+    if (open < 0) return null;
+
+    var at = open + "HYPERLINK(".length;
+
+    function literal() {
+      while (at < formula.length && /\s/.test(formula[at])) at++;
+      if (formula[at] !== '"') return null;
+
+      at++;
+      var value = "";
+      while (at < formula.length) {
+        if (formula[at] === '"') {
+          if (formula[at + 1] === '"') { value += '"'; at += 2; continue; }
+          at++;
+          return value;
+        }
+        value += formula[at];
+        at++;
+      }
+      return null;
+    }
+
+    var target = literal();
+    if (!target) return null;
+
+    while (at < formula.length && /\s/.test(formula[at])) at++;
+    var label = formula[at] === "," ? (at++, literal()) : null;
+
+    return { target: target, label: label };
+  }
+
+  function mergeAnchor(sheet, row, col) {
+    var merges = sheet["!merges"] || [];
+    for (var i = 0; i < merges.length; i++) {
+      var m = merges[i];
+      if (row >= m.s.r && row <= m.e.r && col >= m.s.c && col <= m.e.c) {
+        return sheet[XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c })];
+      }
+    }
+    return null;
+  }
+
+  // First match wins: embedded link, then a HYPERLINK formula, then a URL sitting in the text.
+  function readLink(sheet, row, col) {
+    var cell = sheet[XLSX.utils.encode_cell({ r: row, c: col })];
+    var text = cellText(cell);
+    var formula = cell && cell.f ? hyperlinkFormula(cell.f) : null;
+
+    // A formula cell saved without a cached result has no text of its own; Excel would
+    // be showing the label argument, so use that.
+    if (!text && formula && formula.label) text = formula.label;
+
+    if (cell && cell.l && cell.l.Target) {
+      return { text: text, target: cell.l.Target, source: "embedded hyperlink" };
+    }
+
+    var anchor = mergeAnchor(sheet, row, col);
+    if (anchor && anchor.l && anchor.l.Target) {
+      return { text: text, target: anchor.l.Target, source: "embedded hyperlink" };
+    }
+
+    if (formula) {
+      return { text: text, target: formula.target, source: "HYPERLINK formula" };
+    }
+
+    if (URL_LIKE.test(text)) {
+      return { text: text, target: text, source: "url in cell text" };
+    }
+
+    return { text: text, target: null, source: null };
+  }
+
+  // ---------- sheet layout ----------
+
+  function buildLayout() {
+    var sheet = state.workbook.Sheets[state.sheetName];
+    if (!sheet || !sheet["!ref"]) return null;
+
+    var range = XLSX.utils.decode_range(sheet["!ref"]);
+    var headerIndex = state.headerRow > 0 ? state.headerRow - 1 : -1;
+    var firstDataRow = headerIndex >= 0 ? headerIndex + 1 : range.s.r;
+    var columns = [];
+
+    for (var c = range.s.c; c <= range.e.c; c++) {
+      var header = headerIndex >= 0
+        ? cellText(sheet[XLSX.utils.encode_cell({ r: headerIndex, c: c })])
+        : "";
+      var links = 0;
+      for (var r = firstDataRow; r <= range.e.r; r++) {
+        if (readLink(sheet, r, c).target) links++;
+      }
+      columns.push({ index: c, letter: XLSX.utils.encode_col(c), header: header, links: links });
+    }
+
+    return { sheet: sheet, columns: columns, firstDataRow: firstDataRow, lastRow: range.e.r };
+  }
+
+  function columnLabel(column) {
+    return column.header ? column.letter + " (" + column.header + ")" : column.letter;
+  }
+
+  function findColumn(index) {
+    var columns = state.layout ? state.layout.columns : [];
+    for (var i = 0; i < columns.length; i++) {
+      if (columns[i].index === index) return columns[i];
+    }
+    return null;
+  }
+
+  // ---------- extraction ----------
+
+  function extract() {
+    var layout = state.layout;
+    var picked = state.linkColumns.map(findColumn).filter(Boolean);
+    var idColumn = state.idColumn === null ? null : findColumn(state.idColumn);
+    var rows = [];
+
+    for (var r = layout.firstDataRow; r <= layout.lastRow; r++) {
+      var id = idColumn
+        ? cellText(layout.sheet[XLSX.utils.encode_cell({ r: r, c: idColumn.index })])
+        : String(r + 1);
+
+      var entries = picked.map(function (column) {
+        return {
+          column: column,
+          address: XLSX.utils.encode_cell({ r: r, c: column.index }),
+          link: readLink(layout.sheet, r, column.index)
+        };
+      });
+
+      var hasLink = entries.some(function (entry) { return entry.link.target; });
+      if (hasLink || id) rows.push({ number: r + 1, id: id, entries: entries, hasLink: hasLink });
+    }
+
+    return { rows: rows, idColumn: idColumn, columns: picked };
+  }
+
+  // ---------- rendering the report ----------
+
+  function textReport(result, listed) {
+    var lines = [
+      "Excel hyperlinks",
+      "File   : " + state.fileName,
+      "Sheet  : " + state.sheetName,
+      "Id     : " + (result.idColumn ? columnLabel(result.idColumn) : "row number"),
+      "Links  : " + result.columns.map(columnLabel).join(", "),
+      "Rows   : " + listed.length + " listed of " + result.rows.length + " with data",
+      ""
+    ];
+
+    if (!listed.length) {
+      lines.push("No hyperlinks found. Tick “List rows with no link too” to list the rows anyway.");
+      return lines.join("\n");
+    }
+
+    var single = result.columns.length === 1;
+
+    listed.forEach(function (row) {
+      lines.push("[row " + row.number + "] " + (row.id || "(no id)"));
+      row.entries.forEach(function (entry) {
+        var indent = single ? "  " : "    ";
+        if (!single) lines.push("  " + columnLabel(entry.column));
+        lines.push(indent + "text: " + (entry.link.text || "(empty)"));
+        lines.push(indent + "link: " + (entry.link.target
+          ? entry.link.target + (entry.link.source === "embedded hyperlink" ? "" : "  [" + entry.link.source + "]")
+          : "(none)"));
+      });
+      lines.push("");
+    });
+
+    return lines.join("\n");
+  }
+
+  function delimitedReport(result, listed, separator, quote) {
+    function field(value) {
+      var flat = String(value == null ? "" : value).replace(/[\r\n\t]+/g, " ");
+      if (!quote) return flat;
+      return (flat.indexOf(separator) >= 0 || flat.indexOf('"') >= 0)
+        ? '"' + flat.replace(/"/g, '""') + '"'
+        : flat;
+    }
+
+    var lines = [["Row", "Id", "Column", "Cell", "Text", "Link", "Source"].map(field).join(separator)];
+
+    listed.forEach(function (row) {
+      row.entries.forEach(function (entry) {
+        lines.push([
+          row.number,
+          row.id,
+          entry.column.header || entry.column.letter,
+          entry.address,
+          entry.link.text,
+          entry.link.target || "",
+          entry.link.source || ""
+        ].map(field).join(separator));
+      });
+    });
+
+    return lines.join("\n") + "\n";
+  }
+
+  function buildReport() {
+    if (!state.layout) return { text: "This worksheet has no data.", links: 0, rows: 0 };
+    if (!state.linkColumns.length) {
+      return { text: "Tick at least one column under “Link” to pull hyperlinks from it.", links: 0, rows: 0 };
+    }
+
+    var result = extract();
+    var listed = state.includeEmpty ? result.rows : result.rows.filter(function (row) { return row.hasLink; });
+    var links = 0;
+
+    listed.forEach(function (row) {
+      row.entries.forEach(function (entry) { if (entry.link.target) links++; });
+    });
+
+    var text = state.format === "tsv" ? delimitedReport(result, listed, "\t", false)
+      : state.format === "csv" ? delimitedReport(result, listed, ",", true)
+      : textReport(result, listed);
+
+    return { text: text, links: links, rows: listed.length };
+  }
+
+  // ---------- painting the controls ----------
+
+  function paintColumns() {
+    var columns = state.layout ? state.layout.columns : [];
+    el.colRows.textContent = "";
+
+    columns.forEach(function (column) {
+      var row = document.createElement("div");
+      row.className = "col-row" + (state.linkColumns.indexOf(column.index) >= 0 ? " is-picked" : "");
+
+      var ref = document.createElement("span");
+      ref.className = "colref";
+      ref.textContent = column.letter;
+
+      var name = document.createElement("span");
+      name.className = "colname";
+      var title = document.createElement("b");
+      if (column.header) {
+        title.textContent = column.header;
+      } else {
+        title.className = "unnamed";
+        title.textContent = "unnamed";
+      }
+      name.appendChild(title);
+      if (column.links) {
+        var tally = document.createElement("span");
+        tally.className = "tally";
+        tally.textContent = column.links + (column.links === 1 ? " link" : " links");
+        name.appendChild(tally);
+      }
+
+      var idInput = document.createElement("input");
+      idInput.type = "radio";
+      idInput.name = "id-column";
+      idInput.checked = state.idColumn === column.index;
+      idInput.setAttribute("aria-label", "Use column " + column.letter + " as the id");
+      idInput.addEventListener("change", function () {
+        state.idColumn = column.index;
+        el.rowNumber.checked = false;
+        refresh();
+      });
+
+      var linkInput = document.createElement("input");
+      linkInput.type = "checkbox";
+      linkInput.checked = state.linkColumns.indexOf(column.index) >= 0;
+      linkInput.setAttribute("aria-label", "Extract links from column " + column.letter);
+      linkInput.addEventListener("change", function () {
+        var at = state.linkColumns.indexOf(column.index);
+        if (linkInput.checked && at < 0) state.linkColumns.push(column.index);
+        if (!linkInput.checked && at >= 0) state.linkColumns.splice(at, 1);
+        state.linkColumns.sort(function (a, b) { return a - b; });
+        refresh();
+      });
+
+      row.appendChild(ref);
+      row.appendChild(name);
+      row.appendChild(idInput);
+      row.appendChild(linkInput);
+      el.colRows.appendChild(row);
+    });
+  }
+
+  function refresh() {
+    paintColumns();
+
+    var report = buildReport();
+    el.report.textContent = report.text;
+    el.tally.textContent = report.rows
+      ? report.rows + (report.rows === 1 ? " row" : " rows") + " · " + report.links + (report.links === 1 ? " link" : " links")
+      : "";
+
+    if (state.layout) {
+      var span = state.layout.lastRow >= state.layout.firstDataRow
+        ? "rows " + (state.layout.firstDataRow + 1) + "–" + (state.layout.lastRow + 1)
+        : "no data rows";
+      el.rangeNote.textContent = span + " · " + state.layout.columns.length + " cols";
+    } else {
+      el.rangeNote.textContent = "";
+    }
+  }
+
+  function relayout(keepPicks) {
+    state.layout = buildLayout();
+
+    if (!state.layout) {
+      state.linkColumns = [];
+      state.idColumn = null;
+      refresh();
+      return;
+    }
+
+    var columns = state.layout.columns;
+
+    if (!keepPicks) {
+      // Default to the columns that actually hold links, and to the first column as the id
+      // when it holds none itself.
+      state.linkColumns = columns.filter(function (c) { return c.links > 0; }).map(function (c) { return c.index; });
+
+      var idCandidate = columns.filter(function (c) { return c.links === 0; })[0];
+      state.idColumn = idCandidate ? idCandidate.index : null;
+      el.rowNumber.checked = state.idColumn === null;
+    }
+
+    refresh();
+  }
+
+  // ---------- loading a workbook ----------
+
+  function loadWorkbook(data, type, fileName, isSample) {
+    var workbook;
+    try {
+      workbook = XLSX.read(data, Object.assign({ type: type }, READ_OPTS));
+    } catch (error) {
+      showNotice("That file could not be read as a workbook. Excel saves .xlsx and .xlsm; a legacy .xls has to be re-saved first.");
+      return;
+    }
+
+    if (!workbook.SheetNames.length) {
+      showNotice("That workbook has no worksheets.");
+      return;
+    }
+
+    showNotice(null);
+    state.workbook = workbook;
+    state.fileName = fileName;
+    state.isSample = !!isSample;
+    state.sheetName = workbook.SheetNames[0];
+
+    el.fileName.textContent = fileName;
+    el.fileHint.textContent = isSample
+      ? "Sample workbook — drop your own to replace it"
+      : workbook.SheetNames.length + (workbook.SheetNames.length === 1 ? " worksheet" : " worksheets");
+
+    el.sheet.textContent = "";
+    workbook.SheetNames.forEach(function (name) {
+      var option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      el.sheet.appendChild(option);
+    });
+    el.sheet.value = state.sheetName;
+
+    relayout(false);
+  }
+
+  function readFile(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      loadWorkbook(new Uint8Array(reader.result), "array", file.name, false);
+    };
+    reader.onerror = function () {
+      showNotice("That file could not be opened.");
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function showNotice(message) {
+    el.notice.textContent = message || "";
+    el.notice.hidden = !message;
+  }
+
+  // ---------- wiring ----------
+
+  el.pick.addEventListener("click", function () { el.file.click(); });
+  el.file.addEventListener("change", function () { readFile(el.file.files[0]); el.file.value = ""; });
+
+  ["dragenter", "dragover"].forEach(function (name) {
+    document.addEventListener(name, function (event) {
+      event.preventDefault();
+      el.drop.classList.add("is-over");
+    });
+  });
+
+  ["dragleave", "drop"].forEach(function (name) {
+    document.addEventListener(name, function (event) {
+      event.preventDefault();
+      if (name === "drop" || event.target === document.documentElement) el.drop.classList.remove("is-over");
+      if (name === "drop" && event.dataTransfer) readFile(event.dataTransfer.files[0]);
+    });
+  });
+
+  el.sheet.addEventListener("change", function () {
+    state.sheetName = el.sheet.value;
+    relayout(false);
+  });
+
+  el.headerRow.addEventListener("change", function () {
+    var value = parseInt(el.headerRow.value, 10);
+    state.headerRow = isNaN(value) || value < 0 ? 0 : value;
+    el.headerRow.value = state.headerRow;
+    relayout(false);
+  });
+
+  el.rowNumber.addEventListener("change", function () {
+    if (el.rowNumber.checked) state.idColumn = null;
+    refresh();
+  });
+
+  el.includeEmpty.addEventListener("change", function () {
+    state.includeEmpty = el.includeEmpty.checked;
+    refresh();
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".seg button"), function (button) {
+    button.addEventListener("click", function () {
+      state.format = button.dataset.format;
+      Array.prototype.forEach.call(document.querySelectorAll(".seg button"), function (other) {
+        other.setAttribute("aria-pressed", String(other === button));
+      });
+      refresh();
+    });
+  });
+
+  el.copy.addEventListener("click", function () {
+    var text = el.report.textContent;
+    var done = function () {
+      el.copy.textContent = "Copied";
+      setTimeout(function () { el.copy.textContent = "Copy"; }, 1400);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { selectReport(); });
+    } else {
+      selectReport();
+    }
+  });
+
+  function selectReport() {
+    var range = document.createRange();
+    range.selectNodeContents(el.report);
+    var selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    el.copy.textContent = "Press ⌘/Ctrl+C";
+    setTimeout(function () { el.copy.textContent = "Copy"; }, 2600);
+  }
+
+  // Saving takes two routes: a page served on its own can hand the browser a blob, while a
+  // page embedded in a viewer has to ask the host. The button appears only once one works.
+  var save = null;
+
+  el.download.addEventListener("click", function () { if (save) save(); });
+
+  function offerDownload(handler) {
+    save = handler;
+    el.download.hidden = false;
+  }
+
+  function reportFilename(hosted) {
+    // The host's allowlist has no .tsv, and tab-separated text is still text.
+    var extension = state.format === "text" || (hosted && state.format === "tsv") ? "txt" : state.format;
+    return state.fileName.replace(/\.[^.]+$/, "") + "-hyperlinks." + extension;
+  }
+
+  if (window.self === window.top) {
+    offerDownload(function () {
+      var blob = new Blob([el.report.textContent], { type: "text/plain;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = reportFilename(false);
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    });
+  }
+
+  if (window.claude && typeof window.claude.use === "function") {
+    window.claude.use("downloads").then(function (downloads) {
+      if (!downloads) return;
+
+      offerDownload(function () {
+        downloads.save({ filename: reportFilename(true), data: el.report.textContent }).then(function () {
+          el.download.textContent = "Saved";
+          setTimeout(function () { el.download.textContent = "Download"; }, 1400);
+        }, function (error) {
+          var code = error && error.code;
+          if (code === "declined" || code === "rate_limited") return;
+          if (code === "unavailable" || code === "not_granted") {
+            el.download.hidden = true;
+            return;
+          }
+          showNotice("That report could not be saved" + (error && error.message ? ": " + error.message : "."));
+        });
+      });
+    }, function () { /* no host to save through; the copy button still works */ });
+  }
+
+  loadWorkbook(SAMPLE_B64, "base64", SAMPLE_NAME, true);
+})();
+</script>
+
+</body>
+</html>

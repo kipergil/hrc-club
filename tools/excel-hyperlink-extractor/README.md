@@ -1,11 +1,18 @@
 # xlhyperlinks — Excel hyperlink extractor
 
-A small C# console app that reads an Excel workbook and prints, as plain text, the
-hyperlinks hiding inside cells: the cell's visible text next to the URL it actually
-points at, keyed by an id column you choose.
+Reads an Excel workbook and prints, as plain text, the hyperlinks hiding inside cells:
+the cell's visible text next to the URL it actually points at, keyed by an id column you
+choose.
 
-It asks for whatever you don't pass on the command line, so running it with no
-arguments walks you through the whole thing.
+Two front ends over the same rules, producing byte-identical reports:
+
+- **`xlhyperlinks`** — the C# console app in this folder. Interactive, or scriptable.
+- **[`web/index.html`](web/index.html)** — the same thing as a page. Open the file in a
+  browser, drop a workbook on it, pick the columns. It parses the file in the browser
+  with [SheetJS](https://sheetjs.com); nothing is uploaded and there is no server.
+
+The console app asks for whatever you don't pass on the command line, so running it with
+no arguments walks you through the whole thing.
 
 ## Requirements
 
@@ -107,6 +114,29 @@ Rows with no hyperlink in any chosen column are left out unless you pass `--all`
 Reading is done with [ClosedXML](https://github.com/ClosedXML/ClosedXML), so
 `.xlsx` and `.xlsm` work; a legacy `.xls` has to be re-saved as `.xlsx` first.
 
+## The web version
+
+`web/index.html` is one self-contained page — open it from disk, or serve it from
+anywhere; there is no build step and no back end. It loads with the same demo workbook
+`--make-sample` writes (embedded as base64) so it opens on a working example, and reading
+a real file never leaves the browser.
+
+It differs from the console app in two small ways, both forced by the browser:
+
+- SheetJS reads the workbook as saved, so a `=HYPERLINK()` cell that was never
+  recalculated has no cached text. The label argument of the formula is used instead,
+  which is what Excel would be showing.
+- **Download** saves the report when the page can reach a save surface — served on its
+  own, that is the browser; embedded in a viewer, the host handles it. **Copy** always
+  works.
+
+To refresh the embedded sample after changing `SampleWorkbook.cs`, regenerate the
+workbook and swap the base64 in `SAMPLE_B64`:
+
+```bash
+dotnet run -- --make-sample sample.xlsx && base64 -w0 sample.xlsx
+```
+
 ## Layout
 
 | File | |
@@ -117,3 +147,4 @@ Reading is done with [ClosedXML](https://github.com/ClosedXML/ClosedXML), so
 | `HyperlinkExtractor.cs` | Reading the link out of a cell. |
 | `ReportWriter.cs` | The text, TSV and CSV renderings. |
 | `SampleWorkbook.cs` | The `--make-sample` demo file. |
+| `web/index.html` | The browser version — the same rules in one page. |
