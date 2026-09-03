@@ -200,7 +200,7 @@ export function registerRoutes(app: Express): void {
   app.get(
     "/api/players/:slug",
     handler(async (req, res) => {
-      const member = await storage.getMember(req.params.slug);
+      const member = await storage.getMember(req.params.slug, param(req.query.season));
       if (!member) return notFound(res, "player");
       ok(res, member, CACHE.slow);
     }),

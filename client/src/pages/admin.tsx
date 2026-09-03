@@ -672,7 +672,7 @@ function ScorecardForm({
 
                   <td className="py-3 pr-2">
                     <label htmlFor={`games-${rubber.rubberNumber}`} className="sr-only">
-                      Rubber {rubber.rubberNumber} games, {draft.homeTeam.name} first
+                      Match {rubber.rubberNumber} on the card, games, {draft.homeTeam.name} first
                     </label>
                     <input
                       id={`games-${rubber.rubberNumber}`}

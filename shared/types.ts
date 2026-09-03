@@ -130,6 +130,8 @@ export interface MemberProfile extends MemberSummary {
 export interface PlayerRubber {
   fixtureId: string;
   playedOn: string | null;
+  /** The season the match belongs to, so a profile can say which year it is showing. */
+  seasonLabel: string | null;
   /** The team they played for, and the one they played against. */
   team: TeamRef;
   opponentTeam: TeamRef;

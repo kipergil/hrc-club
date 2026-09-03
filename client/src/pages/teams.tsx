@@ -390,12 +390,44 @@ export function PlayersPage() {
 // ---------------------------------------------------------------------------
 
 export function PlayerPage({ slug }: { slug: string }) {
-  const { data: player, isLoading, isError } = usePlayer(slug);
+  const [season, setSeason] = useSeasonParam();
+  const { data: seasons } = useSeasons();
+  const { data: player, isLoading, isError } = usePlayer(slug, season);
+
+  /*
+   * The season's record, worked out from the cards rather than read from
+   * `hrc_player_stats`.
+   *
+   * That table only holds imported seasons, so a player with twenty-four
+   * rubbers entered this year had an empty "Playing record" — the profile
+   * showed which team they were in and nothing about how they had done.
+   * Singles only, which is the league's own rule for averages: the doubles
+   * is a pair's result, not a player's.
+   *
+   * Every hook runs before the guards below, which is not decoration —
+   * `scripts/hook-order.test.ts` exists because a conditional hook here
+   * blanks the whole route rather than degrading.
+   */
+  const record = useMemo(() => {
+    const singles = (player?.rubbers ?? []).filter((rubber) => rubber.kind === "singles");
+    const won = singles.filter((rubber) => rubber.won).length;
+    return {
+      played: singles.length,
+      won,
+      lost: singles.length - won,
+      percentage: singles.length === 0 ? null : Math.round((won / singles.length) * 100),
+    };
+  }, [player]);
 
   if (isLoading) return <Loading what="this player" variant="page" />;
   if (isError || !player) return <ErrorNote what="player profile" />;
 
   const photo = fileUrl(player.photoId, { width: 320, height: 320, fit: "cover" });
+  const shownSeason =
+    player.rubbers[0]?.seasonLabel ??
+    season ??
+    seasons?.find((one) => one.isCurrent)?.label ??
+    "this season";
 
   return (
     <div className="space-y-10">
@@ -404,7 +436,9 @@ export function PlayerPage({ slug }: { slug: string }) {
         subtitle={
           player.joinedYear ? `Playing in the league since ${player.joinedYear}` : "League member"
         }
-      />
+      >
+        <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
+      </PageHeader>
 
       {photo || player.bio || player.isCoach || player.isCommittee ? (
         <div className="flex flex-wrap items-start gap-6">
@@ -492,9 +526,46 @@ export function PlayerPage({ slug }: { slug: string }) {
       ) : null}
 
       {player.rubbers.length > 0 ? (
+        <section aria-labelledby="season-record-heading">
+          <h2 id="season-record-heading" className="mb-3 text-2xl">
+            {shownSeason} record
+          </h2>
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Card>
+              <dd className="text-2xl font-semibold tabular">{record.played}</dd>
+              <dt className="text-ink-muted">singles played</dt>
+            </Card>
+            <Card>
+              <dd className="text-2xl font-semibold tabular text-positive">{record.won}</dd>
+              <dt className="text-ink-muted">won</dt>
+            </Card>
+            <Card>
+              <dd className="text-2xl font-semibold tabular">{record.lost}</dd>
+              <dt className="text-ink-muted">lost</dt>
+            </Card>
+            <Card>
+              <dd className="text-2xl font-semibold tabular">
+                {record.percentage === null ? "—" : `${record.percentage}%`}
+              </dd>
+              <dt className="text-ink-muted">win rate</dt>
+            </Card>
+          </dl>
+          {/*
+            The doubles is excluded from the figures above but kept in the
+            table below, because it is a rubber they played — the league
+            simply does not count it in an average.
+          */}
+          <p className="mt-2 text-ink-muted">
+            Worked out from the match cards. The doubles is listed below but not counted, which is
+            how the league keeps its averages.
+          </p>
+        </section>
+      ) : null}
+
+      {player.rubbers.length > 0 ? (
         <section aria-labelledby="rubbers-heading">
           <h2 id="rubbers-heading" className="mb-3 text-2xl">
-            Every rubber played
+            Every singles and doubles in {shownSeason}
           </h2>
           {/*
             Built from the match cards rather than stored, so it appears
@@ -505,7 +576,10 @@ export function PlayerPage({ slug }: { slug: string }) {
           <TableNote>
             {(() => {
               const won = player.rubbers.filter((rubber) => rubber.won).length;
-              return `${won} won of ${player.rubbers.length}. Game scores are from ${player.displayName ?? player.fullName}'s side.`;
+              // "including the doubles" earns its place: this count sits
+              // directly under a record card that says 13 won, and the
+              // difference between the two numbers is the doubles.
+              return `Won ${won} of the ${player.rubbers.length} played, including the doubles. Game scores are from ${player.displayName ?? player.fullName}'s side.`;
             })()}
           </TableNote>
           <TableScroller>
@@ -565,6 +639,18 @@ export function PlayerPage({ slug }: { slug: string }) {
               ))}
             </tbody>
           </TableScroller>
+        </section>
+      ) : null}
+
+      {player.rubbers.length === 0 ? (
+        <section aria-labelledby="no-rubbers-heading">
+          <h2 id="no-rubbers-heading" className="mb-3 text-2xl">
+            {shownSeason} record
+          </h2>
+          <Empty>
+            No cards have been entered for {player.displayName ?? player.fullName} in {shownSeason}.
+            Games appear here as captains enter their match cards.
+          </Empty>
         </section>
       ) : null}
 

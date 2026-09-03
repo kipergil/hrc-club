@@ -227,20 +227,27 @@ export function checkScorecard(card: ScorecardInput): CardWarning[] {
   const seen = new Set<number>();
   for (const rubber of card.rubbers) {
     if (seen.has(rubber.rubberNumber)) {
-      add("error", rubber.rubberNumber, null, `Rubber ${rubber.rubberNumber} appears twice.`);
+      add("error", rubber.rubberNumber, null, `Match ${rubber.rubberNumber} on the card appears twice.`);
     }
     seen.add(rubber.rubberNumber);
   }
 
   for (let n = 1; n <= RUBBERS_PER_MATCH; n += 1) {
     if (!seen.has(n)) {
-      add("warning", n, null, `Rubber ${n} is missing from the card.`);
+      add("warning", n, null, `Match ${n} on the card has nothing on it.`);
     }
   }
 
   for (const rubber of card.rubbers) {
     const isDoubles = rubber.rubberNumber === DOUBLES_RUBBER;
-    const prefix = isDoubles ? "The doubles" : `Rubber ${rubber.rubberNumber}`;
+    /*
+     * "Match N on the card", not "Rubber N". A rubber is the right word
+     * for one singles inside a team match, but in table tennis it much
+     * more often means the sheet on the bat — and the league's own site
+     * never uses it, so it is jargon this site would be introducing
+     * rather than jargon it is keeping.
+     */
+    const prefix = isDoubles ? "The doubles" : `Match ${rubber.rubberNumber} on the card`;
 
     if (!rubber.homePlayer) {
       add("warning", rubber.rubberNumber, "homePlayer", `${prefix} has no home player named.`);
