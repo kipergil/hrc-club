@@ -121,7 +121,35 @@ anywhere; there is no build step and no back end. It loads with the same demo wo
 `--make-sample` writes (embedded as base64) so it opens on a working example, and reading
 a real file never leaves the browser.
 
-It differs from the console app in two small ways, both forced by the browser:
+### Running it with no network
+
+Opening the file is all it takes, but the page fetches SheetJS from cdnjs on load, so the
+first open needs a connection (offline, it says so instead of hanging). To make it fully
+self-contained, save the library beside the page and point the tag at it:
+
+```bash
+cd tools/excel-hyperlink-extractor/web
+curl -O https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
+```
+
+then in `index.html` change
+
+```html
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+```
+
+to
+
+```html
+<script src="xlsx.full.min.js"></script>
+```
+
+The two files together then work with no network at all. Keep the CDN URL if you publish
+the page anywhere that needs the single-file version.
+
+### Differences from the console app
+
+Two, both forced by the browser:
 
 - SheetJS reads the workbook as saved, so a `=HYPERLINK()` cell that was never
   recalculated has no cached text. The label argument of the formula is used instead,

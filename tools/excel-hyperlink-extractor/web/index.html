@@ -1151,6 +1151,21 @@
     }, function () { /* no host to save through; the copy button still works */ });
   }
 
+  // The reader comes from a CDN, so the very first load needs a connection. Say so plainly
+  // rather than sitting on "Loading…" forever.
+  if (typeof XLSX === "undefined") {
+    showNotice("The spreadsheet reader could not be loaded.");
+    el.report.textContent = "This page reads workbooks with SheetJS, fetched from cdnjs.com on load.\n\n"
+      + "Check your connection and reload. To run with no network at all, save\n"
+      + "xlsx.full.min.js next to this file and point the script tag at it — the\n"
+      + "README has the one-line change.";
+    el.pick.disabled = true;
+    el.copy.disabled = true;
+    el.sheet.disabled = true;
+    el.headerRow.disabled = true;
+    return;
+  }
+
   loadWorkbook(SAMPLE_B64, "base64", SAMPLE_NAME, true);
 })();
 </script>
