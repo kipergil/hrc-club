@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchName, normalise, resolveName, splitPair } from "./name-match.js";
+import { matchName, normalise, resolveName, sameName, splitPair } from "./name-match.js";
 
 const squad = [
   { id: "1", fullName: "Sunil Trakru" },
@@ -153,5 +153,65 @@ describe("splitPair", () => {
 describe("normalise", () => {
   it("is stable for names that differ only in styling", () => {
     expect(normalise("St. Andrews")).toBe(normalise("st andrews"));
+  });
+});
+
+describe("whether two writings of a slot are the same person", () => {
+  /**
+   * Asked of one slot on one card, where the question is not "who is
+   * this?" but "do these two disagree?".
+   *
+   * The review screen was warning that "SANDY NASH" and "SANDY" were a
+   * misreading — on a card where a captain wrote the name in full once and
+   * short thereafter, which is how everybody writes a name they have
+   * already written. A screen that cries wolf on every abbreviated name is
+   * one whose warnings stop being read, which costs more than the warning
+   * was ever worth.
+   */
+  it("takes a given name on its own as the same player", () => {
+    expect(sameName("SANDY NASH", "SANDY")).toBe(true);
+    expect(sameName("SANDY", "SANDY NASH")).toBe(true);
+  });
+
+  it("takes a surname on its own as the same player", () => {
+    expect(sameName("SANDY NASH", "NASH")).toBe(true);
+  });
+
+  it("accepts an initial where the card has already said who that is", () => {
+    expect(sameName("SANDY NASH", "S")).toBe(true);
+    expect(sameName("SANDY NASH", "S. NASH")).toBe(true);
+    expect(sameName("S NASH", "SANDY NASH")).toBe(true);
+  });
+
+  it("ignores case, punctuation and spacing", () => {
+    expect(sameName("Sandy Nash", "  sandy   nash ")).toBe(true);
+    expect(sameName("O'Brien", "obrien")).toBe(true);
+  });
+
+  it("does not mind a middle name", () => {
+    expect(sameName("Sandy J Nash", "Sandy Nash")).toBe(true);
+  });
+
+  it("still reports two different people", () => {
+    // The warning has to survive: this is what the card's fixed playing
+    // order buys, and it is the only check that catches a misread name.
+    expect(sameName("Sandy Nash", "Sandy Smith")).toBe(false);
+    expect(sameName("Sandy Nash", "Tom Nash")).toBe(false);
+    expect(sameName("Sandy", "Sandra")).toBe(false);
+  });
+
+  it("catches a transposed given name rather than waving it through", () => {
+    /*
+     * "Awya X" against "Away X" shares a surname and an initial, and is a
+     * misreading of one name rather than two writings of it. Matching on
+     * the initial alone would have merged them silently — which it did,
+     * until a test that was already here failed.
+     */
+    expect(sameName("Away X", "Awya X")).toBe(false);
+  });
+
+  it("treats a missing name as nothing to disagree with", () => {
+    expect(sameName(null, "Sandy Nash")).toBe(true);
+    expect(sameName("Sandy Nash", "")).toBe(true);
   });
 });
