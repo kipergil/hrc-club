@@ -220,6 +220,9 @@ export const clubsCollection: CollectionDefinition = {
       "Marks the club whose site this is. Exactly one should have it — it is what the home page, the timetable and 'our teams' read.",
     ),
     richTextField("description", { note: "Anything worth saying about the club beyond its address." }),
+    richTextField("visitor_note", {
+      note: "A standing message to visiting teams — hall hours, an earlier start, where to park. Shown on the club's page and on each of its teams' pages, and only when it is filled in. Keep it to the practical: it is read by a captain working out what time to arrive.",
+    }),
     textField("website", { nullable: true }),
     integerField("sort", { defaultValue: 0 }),
     timestampField("last_synced_at", { note: "When the league import last wrote to this club." }),

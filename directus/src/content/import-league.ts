@@ -160,6 +160,13 @@ async function main(): Promise<void> {
         league_ref: ref,
         is_home_club: isHome,
         venue: venueId,
+        /*
+         * Written on every import, `null` included: a club that takes its
+         * note down has said something, and leaving the old one standing
+         * would have the site telling visitors the hall shuts at ten long
+         * after it stopped.
+         */
+        visitor_note: info.visitorNote,
         sort: isHomeClub ? 0 : 1,
         last_synced_at: new Date().toISOString(),
       },

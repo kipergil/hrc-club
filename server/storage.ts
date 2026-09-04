@@ -187,6 +187,7 @@ function toTeam(row: Row): Team {
     seasonLabel: season?.label ?? "",
     clubName: club?.name ?? null,
     clubSlug: club?.slug ?? null,
+    clubVisitorNote: str(club?.visitor_note),
   };
 }
 
@@ -563,6 +564,7 @@ function toClub(row: Row): Club {
     shortName: str(row.short_name),
     isHomeClub: Boolean(row.is_home_club),
     description: str(row.description),
+    visitorNote: str(row.visitor_note),
     website: str(row.website),
     logoId: fileId(row.logo),
     venue: venue ? toVenue(venue) : null,
@@ -680,7 +682,9 @@ export async function getVenue(slug: string): Promise<Venue | null> {
 
 const TEAM_FIELDS = [
   "*",
-  { club: ["id", "name", "slug"] },
+  // `visitor_note` here so a team page can show the club's message to
+  // visiting sides without a second request for the club.
+  { club: ["id", "name", "slug", "visitor_note"] },
   { season: ["id", "label", "slug"] },
   { captain: ["id", "full_name", "display_name", "slug", "photo", "is_coach", "is_committee"] },
   { home_venue: ["*"] },

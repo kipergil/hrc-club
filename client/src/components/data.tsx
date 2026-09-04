@@ -2,10 +2,12 @@ import { Link } from "wouter";
 import type { Fixture, PlayerStat, Standing, TeamFixture, TeamRef } from "@shared/types.js";
 import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
 import {
+  Alert,
   Badge,
   Card,
   Empty,
   Pagination,
+  Prose,
   TableNote,
   TableScroller,
   Td,
@@ -889,5 +891,38 @@ export function SeasonGrid({ segments }: { segments: CalendarSegment[] }) {
         </section>
       ))}
     </div>
+  );
+}
+
+/**
+ * A host club's standing message to visiting teams.
+ *
+ * Two of the ten clubs run one and both are about the hall's hours —
+ * Furneux Pelham asking for a 7pm start, Water Lane explaining that the
+ * hall goes at ten on a Wednesday and nine on a Friday. On the league's
+ * own site these are the loudest thing on the page, in crimson inside a
+ * red-bordered box, and rightly so: they are the difference between a
+ * visiting side arriving in time to finish and not.
+ *
+ * Rendered on the club's page and on each of its teams', because a
+ * visiting captain checking Thursday's match is on the team page, not the
+ * club's. `clubName` is what makes that work — on a team page the note
+ * has to say whose it is, or it reads as the league addressing you.
+ *
+ * Nothing renders without a note, so the eight clubs that have none carry
+ * no empty box.
+ */
+export function VisitorNote({ note, clubName }: { note: string | null; clubName?: string | null }) {
+  if (!note) return null;
+
+  return (
+    <Alert tone="warning" title={clubName ? `A note from ${clubName}` : "Please note"}>
+      {/*
+        Markdown, not plain text: the league bolds the closing time, which
+        is the one fact in the sentence a captain has to act on, and the
+        importer keeps that.
+      */}
+      <Prose markdown={note} className="max-w-readable" />
+    </Alert>
   );
 }
