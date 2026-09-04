@@ -512,7 +512,7 @@ function ScorecardForm({
             {draft.homeTeam.name} v {draft.awayTeam.name}
           </h2>
           <p className="text-ink-muted">
-            The card as it is printed: the six players against their letters, then ten rubbers —
+            The card as it is printed: the six players against their letters, then ten matches —
             nine singles in the league's order, and the doubles.
           </p>
         </div>
@@ -572,7 +572,7 @@ function ScorecardForm({
         <h3 className="text-xl">Who played</h3>
         <p className="mt-1 text-ink-muted">
           The card names three players a side against these letters. The nine singles below are
-          then fixed by the league's printed order — change a player here and their rubbers follow.
+          then fixed by the league's printed order — change a player here and their three matches follow.
         </p>
         <div className="mt-4 grid gap-6 sm:grid-cols-2">
           <LineupBox
@@ -596,190 +596,242 @@ function ScorecardForm({
       </TableNote>
 
       {/*
-       * The rubbers as a table, in the card's own order and shape: number,
-       * who against who, the five game columns as one field, and the sets.
-       * A person checking a photograph reads down a column, so the screen
-       * is a column too.
+       * One card, two shapes.
+       *
+       * The table below is the card's own: number, who against who, the
+       * games, the sets — a person checking a photograph reads down a
+       * column, so on a screen with room the screen is a column too. It is
+       * 46rem wide at its narrowest, which on a phone meant a sideways
+       * scroll through a cropped table while holding the photograph in the
+       * other hand.
+       *
+       * So a phone gets the same ten rubbers as blocks, with the pairing
+       * reading across the way the card says it — "A Sandy Nash v X Tom
+       * Smith" — and the games underneath. Both are built from the same
+       * pieces below, so a change to how a player or a games field behaves
+       * cannot land in one layout and not the other.
        */}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[46rem] border-collapse">
-          <caption className="sr-only">
-            The ten rubbers, in the order the card prints them
-          </caption>
-          <thead>
-            <tr className="border-b border-line-strong text-left">
-              <th scope="col" className="py-2 pr-2 font-semibold">
-                #
-              </th>
-              <th scope="col" className="w-1/4 py-2 pr-2 font-semibold">
-                {draft.homeTeam.name}
-              </th>
-              <th scope="col" className="w-1/4 py-2 pr-2 font-semibold">
-                {draft.awayTeam.name}
-              </th>
-              <th scope="col" className="py-2 pr-2 font-semibold">
-                Games ({draft.homeTeam.name} first)
-              </th>
-              <th scope="col" className="py-2 font-semibold">
-                Sets
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {draft.rubbers.map((rubber, index) => {
-              const entry = parsed[index]!;
-              const outcome = outcomeOf(entry.games);
-              const isDoubles = rubber.rubberNumber === DOUBLES_RUBBER;
-              const slots = slotsForRubber(rubber.rubberNumber);
-              const problems = byRubber.get(rubber.rubberNumber) ?? [];
-              const home = homeBySlot.get(slots?.[0] ?? "");
-              const away = awayBySlot.get(slots?.[1] ?? "");
+      {(() => {
+        const rows = draft.rubbers.map((rubber, index) => {
+          const entry = parsed[index]!;
+          const outcome = outcomeOf(entry.games);
+          const isDoubles = rubber.rubberNumber === DOUBLES_RUBBER;
+          const slots = slotsForRubber(rubber.rubberNumber);
+          const problems = byRubber.get(rubber.rubberNumber) ?? [];
+          const home = homeBySlot.get(slots?.[0] ?? "");
+          const away = awayBySlot.get(slots?.[1] ?? "");
 
-              return (
-                <tr
-                  key={rubber.rubberNumber}
+          /** The two doubles pickers for one side. */
+          const doublesPickers = (side: "home" | "away") => {
+            const teamName = side === "home" ? draft.homeTeam.name : draft.awayTeam.name;
+            const squad = side === "home" ? draft.homeSquad : draft.awaySquad;
+            const first = side === "home" ? "homePlayer" : "awayPlayer";
+            const second = side === "home" ? "homePlayer2" : "awayPlayer2";
+            return (
+              <div className="space-y-2">
+                <PlayerPicker
+                  label={`Doubles, ${teamName} player`}
+                  squad={squad}
+                  id={doubles[`${first}Id`] as string | null}
+                  name={doubles[`${first}Name`] as string | null}
+                  onChange={(id, name) =>
+                    setDoubles((current) => ({
+                      ...current,
+                      [`${first}Id`]: id,
+                      [`${first}Name`]: name,
+                    }))
+                  }
+                />
+                <PlayerPicker
+                  label={`Doubles, ${teamName} partner`}
+                  squad={squad}
+                  id={doubles[`${second}Id`] as string | null}
+                  name={doubles[`${second}Name`] as string | null}
+                  onChange={(id, name) =>
+                    setDoubles((current) => ({
+                      ...current,
+                      [`${second}Id`]: id,
+                      [`${second}Name`]: name,
+                    }))
+                  }
+                />
+              </div>
+            );
+          };
+
+          /*
+           * Read-only for a singles player, and deliberately so: they are
+           * the line-up's answer, and a second place to change it is a
+           * second place for the two to disagree.
+           */
+          const singlesName = (side: "home" | "away") => {
+            const slot = side === "home" ? slots?.[0] : slots?.[1];
+            const entryForSide = side === "home" ? home : away;
+            const squad = side === "home" ? draft.homeSquad : draft.awaySquad;
+            return (
+              <span className="inline-flex items-center gap-2">
+                <SlotLetter letter={slot ?? "?"} />
+                <span className={cn(!entryForSide?.memberId && "text-ink-muted")}>
+                  {slotName(entryForSide, squad)}
+                </span>
+              </span>
+            );
+          };
+
+          /*
+           * Both layouts are in the DOM at once — CSS hides one — so the
+           * field is rendered twice and cannot carry one id. Duplicated,
+           * the label would point at whichever copy came first in the
+           * document, which on a phone is the hidden one: tapping the
+           * label would focus something invisible.
+           */
+          const gamesField = (where: "table" | "block") => (
+            <>
+              <label htmlFor={`games-${where}-${rubber.rubberNumber}`} className="sr-only">
+                Match {rubber.rubberNumber} on the card, games, {draft.homeTeam.name} first
+              </label>
+              <input
+                id={`games-${where}-${rubber.rubberNumber}`}
+                inputMode="numeric"
+                placeholder="11-8, 9-11, 11-6"
+                value={gameText[index]}
+                onChange={(event) =>
+                  setGameText((current) =>
+                    current.map((text, i) => (i === index ? event.target.value : text)),
+                  )
+                }
+                className="min-h-touch w-full rounded-card border border-line-strong bg-surface px-3 text-ink"
+              />
+              {entry.invalid.length > 0 ? (
+                <p className="mt-1 font-semibold text-negative">
+                  ⚠ Could not read: {entry.invalid.join(", ")}
+                </p>
+              ) : null}
+              {problems.length > 0 ? (
+                <ul className="mt-1 space-y-1 text-accent">
+                  {problems.map((problem) => (
+                    <li key={problem}>⚠ {problem}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          );
+
+          const sets = (
+            <>
+              {outcome.homeSets}–{outcome.awaySets}
+              {entry.games.length > 0 && !outcome.complete ? (
+                <span className="block text-ink-muted">unfinished</span>
+              ) : null}
+            </>
+          );
+
+          return { rubber, index, isDoubles, slots, doublesPickers, singlesName, gamesField, sets };
+        });
+
+        return (
+          <>
+            {/*
+              The card's own shape, from 1024px up. Not 768: the table is
+              46rem at its narrowest and the page has padding either side,
+              so a tablet was still scrolling it sideways inside its box —
+              which is the thing this was meant to stop.
+            */}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full min-w-[46rem] border-collapse">
+                <caption className="sr-only">
+                  The ten matches, in the order the card prints them
+                </caption>
+                <thead>
+                  <tr className="border-b border-line-strong text-left">
+                    <th scope="col" className="py-2 pr-2 font-semibold">
+                      #
+                    </th>
+                    <th scope="col" className="w-1/4 py-2 pr-2 font-semibold">
+                      {draft.homeTeam.name}
+                    </th>
+                    <th scope="col" className="w-1/4 py-2 pr-2 font-semibold">
+                      {draft.awayTeam.name}
+                    </th>
+                    <th scope="col" className="py-2 pr-2 font-semibold">
+                      Games ({draft.homeTeam.name} first)
+                    </th>
+                    <th scope="col" className="py-2 font-semibold">
+                      Sets
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr
+                      key={row.rubber.rubberNumber}
+                      className={cn("border-b border-line align-top", row.isDoubles && "bg-brand-soft")}
+                    >
+                      <th scope="row" className="py-3 pr-2 text-left font-semibold tabular">
+                        {row.rubber.rubberNumber}
+                      </th>
+                      <td className={cn("py-3 pr-2", row.isDoubles && "min-w-[13rem]")}>
+                        {row.isDoubles ? row.doublesPickers("home") : row.singlesName("home")}
+                      </td>
+                      <td className={cn("py-3 pr-2", row.isDoubles && "min-w-[13rem]")}>
+                        {row.isDoubles ? row.doublesPickers("away") : row.singlesName("away")}
+                      </td>
+                      <td className="min-w-[12rem] py-3 pr-2">{row.gamesField("table")}</td>
+                      {/* Nowrap: "not finished" broke over three lines and made
+                          every unfinished rubber twice the height of a done one. */}
+                      <td className="whitespace-nowrap py-3 tabular">{row.sets}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* A phone: the same ten, each one block, nothing off-screen. */}
+            <ol className="space-y-3 lg:hidden">
+              {rows.map((row) => (
+                <li
+                  key={row.rubber.rubberNumber}
                   className={cn(
-                    "border-b border-line align-top",
-                    isDoubles && "bg-brand-soft",
+                    "space-y-2 rounded-card border border-line bg-surface p-3",
+                    row.isDoubles && "border-brand bg-brand-soft",
                   )}
                 >
-                  <th scope="row" className="py-3 pr-2 text-left font-semibold tabular">
-                    {rubber.rubberNumber}
-                  </th>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="font-semibold">
+                      <span className="tabular">{row.rubber.rubberNumber}.</span>{" "}
+                      {row.isDoubles
+                        ? "Doubles"
+                        : `${row.slots?.[0] ?? "?"} v ${row.slots?.[1] ?? "?"}`}
+                    </span>
+                    <span className="tabular text-right">{row.sets}</span>
+                  </div>
 
-                  {isDoubles ? (
-                    <>
-                      <td className="min-w-[13rem] py-3 pr-2">
-                        <div className="space-y-2">
-                          <PlayerPicker
-                            label={`Doubles, ${draft.homeTeam.name} player`}
-                            squad={draft.homeSquad}
-                            id={doubles.homePlayerId}
-                            name={doubles.homePlayerName}
-                            onChange={(id, name) =>
-                              setDoubles((current) => ({
-                                ...current,
-                                homePlayerId: id,
-                                homePlayerName: name,
-                              }))
-                            }
-                          />
-                          <PlayerPicker
-                            label={`Doubles, ${draft.homeTeam.name} partner`}
-                            squad={draft.homeSquad}
-                            id={doubles.homePlayer2Id}
-                            name={doubles.homePlayer2Name}
-                            onChange={(id, name) =>
-                              setDoubles((current) => ({
-                                ...current,
-                                homePlayer2Id: id,
-                                homePlayer2Name: name,
-                              }))
-                            }
-                          />
-                        </div>
-                      </td>
-                      <td className="min-w-[13rem] py-3 pr-2">
-                        <div className="space-y-2">
-                          <PlayerPicker
-                            label={`Doubles, ${draft.awayTeam.name} player`}
-                            squad={draft.awaySquad}
-                            id={doubles.awayPlayerId}
-                            name={doubles.awayPlayerName}
-                            onChange={(id, name) =>
-                              setDoubles((current) => ({
-                                ...current,
-                                awayPlayerId: id,
-                                awayPlayerName: name,
-                              }))
-                            }
-                          />
-                          <PlayerPicker
-                            label={`Doubles, ${draft.awayTeam.name} partner`}
-                            squad={draft.awaySquad}
-                            id={doubles.awayPlayer2Id}
-                            name={doubles.awayPlayer2Name}
-                            onChange={(id, name) =>
-                              setDoubles((current) => ({
-                                ...current,
-                                awayPlayer2Id: id,
-                                awayPlayer2Name: name,
-                              }))
-                            }
-                          />
-                        </div>
-                      </td>
-                    </>
+                  {row.isDoubles ? (
+                    <div className="space-y-2">
+                      {row.doublesPickers("home")}
+                      {row.doublesPickers("away")}
+                    </div>
                   ) : (
-                    <>
-                      {/*
-                       * Read-only, and deliberately so: a singles player is
-                       * the line-up's answer, and a second place to change
-                       * it is a second place for the two to disagree.
-                       */}
-                      <td className="py-3 pr-2">
-                        <div className="flex items-center gap-2">
-                          <SlotLetter letter={slots?.[0] ?? "?"} />
-                          <span className={cn(!home?.memberId && "text-ink-muted")}>
-                            {slotName(home, draft.homeSquad)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-2">
-                        <div className="flex items-center gap-2">
-                          <SlotLetter letter={slots?.[1] ?? "?"} />
-                          <span className={cn(!away?.memberId && "text-ink-muted")}>
-                            {slotName(away, draft.awaySquad)}
-                          </span>
-                        </div>
-                      </td>
-                    </>
+                    /*
+                     * The pairing across one line, the way the card says
+                     * it. `flex-wrap` rather than a fixed two columns: two
+                     * long names at 320px need the second row, and a name
+                     * cut in half is worse than a name that wrapped.
+                     */
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {row.singlesName("home")}
+                      <span className="text-ink-muted">v</span>
+                      {row.singlesName("away")}
+                    </div>
                   )}
 
-                  <td className="py-3 pr-2">
-                    <label htmlFor={`games-${rubber.rubberNumber}`} className="sr-only">
-                      Match {rubber.rubberNumber} on the card, games, {draft.homeTeam.name} first
-                    </label>
-                    <input
-                      id={`games-${rubber.rubberNumber}`}
-                      inputMode="numeric"
-                      placeholder="11-8, 9-11, 11-6"
-                      value={gameText[index]}
-                      onChange={(event) =>
-                        setGameText((current) =>
-                          current.map((text, i) => (i === index ? event.target.value : text)),
-                        )
-                      }
-                      className="min-h-touch w-full min-w-[12rem] rounded-card border border-line-strong bg-surface px-3 text-ink"
-                    />
-                    {entry.invalid.length > 0 ? (
-                      <p className="mt-1 font-semibold text-negative">
-                        ⚠ Could not read: {entry.invalid.join(", ")}
-                      </p>
-                    ) : null}
-                    {problems.length > 0 ? (
-                      <ul className="mt-1 space-y-1 text-accent">
-                        {problems.map((problem) => (
-                          <li key={problem}>⚠ {problem}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </td>
-
-                  {/* Nowrap: "not finished" broke over three lines and made
-                      every unfinished rubber twice the height of a done one. */}
-                  <td className="whitespace-nowrap py-3 tabular">
-                    {outcome.homeSets}–{outcome.awaySets}
-                    {entry.games.length > 0 && !outcome.complete ? (
-                      <span className="block text-ink-muted">unfinished</span>
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  <div>{row.gamesField("block")}</div>
+                </li>
+              ))}
+            </ol>
+          </>
+        );
+      })()}
 
       <Panel className="sticky bottom-0 flex flex-wrap items-center justify-between gap-4">
         <p className="text-lg">

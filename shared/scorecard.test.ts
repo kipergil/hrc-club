@@ -243,6 +243,36 @@ describe("checkPairings", () => {
     expect(warnings[0]!.message).toContain("misread");
   });
 
+  it("does not call an abbreviated name a misreading", () => {
+    /*
+     * The false alarm this replaced: the line-up box said "SANDY NASH" and
+     * a row said "SANDY", and the screen reported one of the two as
+     * misread. Captains write a name in full once and short thereafter, so
+     * this fired on ordinary cards — and a review screen whose warnings
+     * are usually wrong is one whose warnings stop being read.
+     */
+    for (const written of ["Away X", "AWAY", "X", "A. X", "Away J X"]) {
+      const shortened = card();
+      shortened.rubbers[3]!.awayPlayer = written;
+      expect(checkPairings(shortened).warnings, `"${written}" should be no disagreement`).toEqual(
+        [],
+      );
+    }
+  });
+
+  it("keeps the fuller writing of a name when the rows disagree in length", () => {
+    // With no line-up box the slot is whatever the first row called them.
+    // "Away" is worth replacing with "Away X" the moment a row supplies it.
+    const noBox = card();
+    noBox.awayPlayers = { X: null, Y: null, Z: null };
+    noBox.rubbers[0]!.awayPlayer = "Away";
+    noBox.rubbers[3]!.awayPlayer = "Away X";
+
+    const { awaySlots, warnings } = checkPairings(noBox);
+    expect(warnings).toEqual([]);
+    expect(awaySlots.X).toBe("Away X");
+  });
+
   it("ignores case, because a card written in capitals is not a disagreement", () => {
     const shouty = card();
     shouty.rubbers[3]!.awayPlayer = "AWAY X";

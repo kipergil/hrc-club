@@ -157,6 +157,70 @@ export function resolveName(
   ) ?? NOTHING;
 }
 
+/**
+ * Could these two writings be the same person?
+ *
+ * Asked of one slot on one card, where the question is not "who is this?"
+ * but "do these two disagree?". The line-up box says **SANDY NASH** and
+ * row five says **SANDY**; that is one player written twice, the way
+ * everybody writes a name they have already written once. Reported as a
+ * misreading it is a false alarm — and a review screen that cries wolf on
+ * every abbreviated name is one whose warnings stop being read, which
+ * costs far more than the warning was ever worth.
+ *
+ * So only a genuine disagreement counts: a given name that is not the
+ * given name, a surname that is not the surname. Everything short of that
+ * is the same player, more or less fully written:
+ *
+ *  - "SANDY" against "SANDY NASH" — the given name on its own.
+ *  - "NASH" against "SANDY NASH" — the surname on its own.
+ *  - "S" against "SANDY NASH" — an initial. Weak in general, but this is
+ *    one slot on one card, and the card has already said who that is.
+ *  - "S. NASH" against "SANDY NASH" — an initial and a surname.
+ *  - "SANDY J NASH" against "SANDY NASH" — a middle name.
+ *
+ * And "SANDY NASH" against "SANDY SMITH" is two different people, which is
+ * exactly what the warning is for.
+ */
+export function sameName(a: string | null | undefined, b: string | null | undefined): boolean {
+  const left = normalise(a ?? "");
+  const right = normalise(b ?? "");
+  // Nothing written is not a disagreement with anything.
+  if (!left || !right) return true;
+  if (left === right) return true;
+
+  const leftWords = parts(left);
+  const rightWords = parts(right);
+  const [short, long] =
+    leftWords.length <= rightWords.length ? [leftWords, rightWords] : [rightWords, leftWords];
+
+  if (short.length === 1) {
+    const word = short[0]!;
+    if (word === long[0] || word === long[long.length - 1]) return true;
+    // A bare initial against the given name it stands for.
+    return word.length === 1 && word === long[0]![0];
+  }
+
+  /*
+   * Two or more words each. The surname has to agree, and so does the
+   * given name — unless one side gave only an initial, which is the whole
+   * reason this case exists.
+   *
+   * Matching on the initial alone would be too generous here: "Awya X"
+   * and "Away X" share a surname and an A, and are a transposed misreading
+   * of one name rather than two writings of it. Where both sides spelled
+   * the given name out, a difference between them is a real difference —
+   * that is precisely the disagreement the fixed playing order buys.
+   */
+  if (short[short.length - 1] !== long[long.length - 1]) return false;
+
+  const shortGiven = short[0]!;
+  const longGiven = long[0]!;
+  if (shortGiven === longGiven) return true;
+  const abbreviated = shortGiven.length === 1 || longGiven.length === 1;
+  return abbreviated && shortGiven[0] === longGiven[0];
+}
+
 export interface NameMatch {
   id: string;
   how: MatchStrategy;
