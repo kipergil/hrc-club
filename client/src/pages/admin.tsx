@@ -833,7 +833,15 @@ function ScorecardForm({
         );
       })()}
 
-      <Panel className="sticky bottom-0 flex flex-wrap items-center justify-between gap-4">
+      {/*
+        Not sticky. It was, on the theory that saving should always be to
+        hand — but a card is checked from the top down and saved once at
+        the end, so what it actually did was hold a band of the screen for
+        a button nobody wanted yet, and on a phone that band covered the
+        rubbers being read. The end of the form is where the end of the job
+        is.
+      */}
+      <Panel className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-lg">
           <span className="font-semibold">
             {draft.homeTeam.name} {score.home} – {score.away} {draft.awayTeam.name}
