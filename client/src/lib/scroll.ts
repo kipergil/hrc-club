@@ -148,3 +148,46 @@ function focusMain(): void {
   const main = document.getElementById("main");
   if (main instanceof HTMLElement) main.focus({ preventScroll: true });
 }
+
+/**
+ * Hold the page still while something is open on top of it.
+ *
+ * The menu panel is positioned against the header, and the header scrolls
+ * with the page: open the menu, flick the screen, and the menu travels off
+ * the top while the fixture list slides past underneath it. It is still
+ * open — the button still says so — but there is nothing on screen to
+ * choose from and no obvious way back to it. That is the failure that
+ * reads as "scrolling doesn't show the menu".
+ *
+ * `overflow: hidden` on the root element rather than on `<body>` alone:
+ * body-only is the version that does nothing on iOS, and this site's
+ * readers are largely on iPads. Neither moves the document, so the reader
+ * is exactly where they were when it is released.
+ *
+ * The padding replaces the width a classic scrollbar was taking up. Without
+ * it the page silently widens by fifteen pixels as the menu opens, and
+ * every line of text on it reflows.
+ *
+ * Returns the release.
+ */
+export function lockPageScroll(): () => void {
+  const root = document.documentElement;
+  const { body } = document;
+  const gap = window.innerWidth - root.clientWidth;
+
+  const previous = {
+    rootOverflow: root.style.overflow,
+    bodyOverflow: body.style.overflow,
+    bodyPadding: body.style.paddingRight,
+  };
+
+  root.style.overflow = "hidden";
+  body.style.overflow = "hidden";
+  if (gap > 0) body.style.paddingRight = `${gap}px`;
+
+  return () => {
+    root.style.overflow = previous.rootOverflow;
+    body.style.overflow = previous.bodyOverflow;
+    body.style.paddingRight = previous.bodyPadding;
+  };
+}
