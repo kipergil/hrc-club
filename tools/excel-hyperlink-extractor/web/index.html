@@ -544,7 +544,7 @@
 
         <div class="checks">
           <label class="check"><input type="checkbox" id="row-number" checked> Use the row number as the id</label>
-          <label class="check"><input type="checkbox" id="include-empty"> List rows with no link too</label>
+          <label class="check"><input type="checkbox" id="links-only"> Only rows that have a link</label>
         </div>
       </div>
     </section>
@@ -577,8 +577,10 @@
 
   <p class="colophon">
     Reads <code>.xlsx</code> and <code>.xlsm</code>; re-save a legacy <code>.xls</code> from Excel first.
-    Columns are matched by header where there is one, and by letter where there isn't. TSV and CSV give one
-    line per link &mdash; row, id, column, cell, text, link, source &mdash; to paste back into a spreadsheet.
+    Columns are matched by header where there is one, and by letter where there isn't. Every row of the
+    sheet's data range is reported, with empty values where a row has no link, so the output stays
+    row-for-row with the sheet. TSV and CSV give one line per row &mdash; row, id, then a text and link
+    pair per chosen column &mdash; to paste back beside the original.
   </p>
 
 </div>
@@ -605,7 +607,7 @@
     headerRow: 1,
     idColumn: null,      // 0-based column index, or null for "row number"
     linkColumns: [],     // 0-based column indexes
-    includeEmpty: false,
+    linksOnly: false,   // off: every row of the data range is reported
     format: "text",
     layout: null,
     result: null,        // cached extraction, dropped whenever the columns or sheet change
@@ -622,7 +624,7 @@
     headerRow: document.getElementById("header-row"),
     colRows: document.getElementById("col-rows"),
     rowNumber: document.getElementById("row-number"),
-    includeEmpty: document.getElementById("include-empty"),
+    linksOnly: document.getElementById("links-only"),
     rangeNote: document.getElementById("range-note"),
     report: document.getElementById("report"),
     notice: document.getElementById("notice"),
@@ -875,7 +877,9 @@
         entries.push({ column: column, address: address(r, column.index), link: link });
       }
 
-      if (hasLink || id) rows.push({ number: r + 1, id: id, entries: entries, hasLink: hasLink });
+      // Every row in the data range is reported, whether or not anything was found in it,
+      // so the output lines up with the sheet it came from.
+      rows.push({ number: r + 1, id: id, entries: entries, hasLink: hasLink });
     }
 
     return { rows: rows, idColumn: idColumn, columns: picked, links: links };
@@ -889,7 +893,7 @@
   }
 
   function listedRows(result) {
-    return state.includeEmpty ? result.rows : result.rows.filter(function (row) { return row.hasLink; });
+    return state.linksOnly ? result.rows.filter(function (row) { return row.hasLink; }) : result.rows;
   }
 
   // ---------- rendering the report ----------
@@ -898,6 +902,15 @@
   // putting that in the page costs far more than building it. Copy and Download build the
   // full thing on demand.
   var PREVIEW_ROWS = 400;
+
+  // Says plainly whether the report covers every row of the sheet's data range.
+  function rowsLine(result, listed) {
+    var span = "rows " + (state.layout.firstDataRow + 1) + "–" + (state.layout.lastRow + 1);
+    return listed.length === result.rows.length
+      ? listed.length.toLocaleString() + " — every row of " + span
+      : listed.length.toLocaleString() + " of " + result.rows.length.toLocaleString() +
+        " (" + span + "), the rows that have a link";
+  }
 
   function truncationNote(listed, limit) {
     var hidden = listed.length - limit;
@@ -915,12 +928,14 @@
       "Sheet  : " + state.sheetName,
       "Id     : " + (result.idColumn ? columnLabel(result.idColumn) : "row number"),
       "Links  : " + result.columns.map(columnLabel).join(", "),
-      "Rows   : " + listed.length + " listed of " + result.rows.length + " with data",
+      "Rows   : " + rowsLine(result, listed),
       ""
     ];
 
     if (!listed.length) {
-      lines.push("No hyperlinks found. Tick “List rows with no link too” to list the rows anyway.");
+      lines.push(state.linksOnly
+        ? "No row in this sheet has a link in the chosen columns. Untick “Only rows that have a link” to list them all."
+        : "This sheet has no data rows.");
       return lines.join("\n");
     }
 
@@ -955,22 +970,27 @@
     }
 
     var shown = Math.min(listed.length, limit);
-    var lines = [["Row", "Id", "Column", "Cell", "Text", "Link", "Source"].map(field).join(separator)];
+
+    // One line per worksheet row, with a text/link pair per chosen column, so the export
+    // stays row-for-row with the sheet and can be pasted back beside it.
+    var heading = ["Row", "Id"];
+    result.columns.forEach(function (column) {
+      var name = column.header || column.letter;
+      heading.push(name + " text", name + " link");
+    });
+
+    var lines = [heading.map(field).join(separator)];
 
     for (var i = 0; i < shown; i++) {
       var row = listed[i];
+      var values = [row.number, row.id];
+
       for (var e = 0; e < row.entries.length; e++) {
         var entry = row.entries[e];
-        lines.push([
-          row.number,
-          row.id,
-          entry.column.header || entry.column.letter,
-          entry.address,
-          entry.link.text,
-          entry.link.target || "",
-          entry.link.source || ""
-        ].map(field).join(separator));
+        values.push(entry.link.text, entry.link.target || "");
       }
+
+      lines.push(values.map(field).join(separator));
     }
 
     return lines.concat(truncationNote(listed, shown)).join("\n") + "\n";
@@ -1250,8 +1270,8 @@
     refresh();
   });
 
-  el.includeEmpty.addEventListener("change", function () {
-    state.includeEmpty = el.includeEmpty.checked;
+  el.linksOnly.addEventListener("change", function () {
+    state.linksOnly = el.linksOnly.checked;
     renderReport();
   });
 

@@ -76,13 +76,15 @@ internal static class Program
         var linkColumns = ResolveLinkColumns(layout, options, linkyColumns);
 
         var rows = HyperlinkExtractor.Extract(sheet, layout.FirstDataRow, layout.LastRow, idColumn, linkColumns);
-        var scanned = rows.Count;
-        if (!options.IncludeRowsWithoutLinks)
+        var rowsInRange = rows.Count;
+        if (options.LinksOnly)
         {
             rows = rows.Where(r => r.HasAnyLink).ToList();
         }
 
-        var context = new ReportContext(Path.GetFullPath(path), sheet.Name, headerRow, idColumn, linkColumns, scanned);
+        var context = new ReportContext(
+            Path.GetFullPath(path), sheet.Name, headerRow, idColumn, linkColumns,
+            rowsInRange, layout.FirstDataRow, layout.LastRow, options.LinksOnly);
         var report = ReportWriter.Build(context, rows, options.Format);
 
         Console.Out.Write(report);

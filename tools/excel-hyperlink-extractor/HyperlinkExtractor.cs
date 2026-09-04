@@ -78,13 +78,9 @@ internal static class HyperlinkExtractor
                 entries.Add(new LinkEntry(column, cell.Address.ToStringRelative(), ReadLink(cell)));
             }
 
-            var result = new RowResult(row, id, entries);
-
-            // A row with neither an id nor a single link is just trailing blank space.
-            if (result.HasAnyLink || !string.IsNullOrWhiteSpace(id))
-            {
-                results.Add(result);
-            }
+            // Every row in the data range is reported, whether or not anything was found in
+            // it, so the output lines up with the sheet it came from.
+            results.Add(new RowResult(row, id, entries));
         }
 
         return results;

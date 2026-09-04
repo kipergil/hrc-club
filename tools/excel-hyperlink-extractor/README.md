@@ -83,7 +83,7 @@ dotnet run -- parts.xlsx -i A -l C,D --format tsv -y > links.tsv
 | `-l, --link-columns <c,c>` | Columns to pull hyperlinks from. Repeatable and comma-separated. |
 | `-o, --out <path>` | Also write the report to a UTF-8 file. |
 | `--format <fmt>` | `text` (default), `tsv` or `csv`. |
-| `--all` | Include rows where no hyperlink was found. |
+| `--links-only` | Leave out rows where no hyperlink was found. |
 | `-y, --yes` | Never prompt; fail if something required is missing. |
 | `--make-sample <path>` | Write a small demo workbook and exit. |
 
@@ -92,8 +92,8 @@ prefix), then as a column letter — `"Part No"`, `Datasheet` and `C` all work.
 
 The report goes to stdout and the prompts and progress notes to stderr, so
 `> links.tsv` captures the data and nothing else. With `--format tsv` (or `csv`)
-each row is one line per hyperlink column: `Row, Id, Column, Cell, Text, Link,
-Source` — paste straight back into a spreadsheet.
+you get one line per worksheet row — `Row, Id`, then a `text` and `link` pair per
+chosen column — so it pastes back beside the original rows.
 
 ## What counts as a hyperlink
 
@@ -109,7 +109,18 @@ used when it isn't the obvious case:
 3. **A URL sitting in the cell as plain text** — `https://`, `ftp://`, `mailto:`,
    `file://`, `www.` or a UNC path.
 
-Rows with no hyperlink in any chosen column are left out unless you pass `--all`.
+## One record in, one record out
+
+Every row of the sheet's data range is reported, in order, whether or not a link
+was found in it — a row with nothing to show still appears, with `(none)` for the
+link in the text report and empty fields in TSV and CSV. So the extract has
+exactly as many records as the sheet has data rows, and lines up with it
+row-for-row.
+
+The header line says so outright: `Rows   : 20,000 — every row of rows 2–20001`.
+
+Pass `--links-only` (or tick *Only rows that have a link* in the browser) when you
+want just the rows that found something; the header line then reports both counts.
 
 Reading is done with [ClosedXML](https://github.com/ClosedXML/ClosedXML), so
 `.xlsx` and `.xlsm` work; a legacy `.xls` has to be re-saved as `.xlsx` first.
@@ -153,18 +164,20 @@ Measured in Chromium on two generated workbooks of 1.2 million cells each:
 
 | Workbook | Open it | Switch format |
 | --- | --- | --- |
-| 20,000 rows × 60 columns (14 MB) | ~6s | ~0.1s |
-| 100,000 rows × 12 columns (26 MB) | ~9s | ~0.1s |
+| 20,000 rows × 60 columns (14 MB) | 7.6–8.4s | ~0.1s |
+| 100,000 rows × 12 columns (26 MB) | 9.3–10.2s | ~0.1s |
 
-Most of that is SheetJS parsing the file; the extraction itself is a fraction of a second.
-The page says what it is doing while it works rather than sitting frozen.
+Ranges are three runs each; a single reading swings by a couple of seconds. Roughly half
+of the earlier 16–22s, while reporting ~10% more rows than it used to. Most of what is
+left is SheetJS parsing the file — the extraction itself is a fraction of a second. The
+page says what it is doing while it works rather than sitting frozen.
 
 Three things make that hold up, and they are worth knowing about:
 
 - **The report on screen stops at 400 rows**, with a note saying how many were left out.
   The count beside the buttons is always the true total, and **Copy** and **Download**
-  build the whole report — a 20k-row extract is a 10 MB text file, which is fine to copy
-  and slow to render. 
+  build the whole report — every row, a 10 MB text file for a 20k-row sheet, which is
+  fine to copy and slow to render. The cap is a display limit, never a filter.
 - **Links are counted by walking the cells the sheet actually holds**, not every
   row × column coordinate in its used range. On a wide sheet most of that rectangle is
   empty, and looking each one up costs more than the whole rest of the pass.

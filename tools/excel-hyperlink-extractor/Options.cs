@@ -19,7 +19,7 @@ internal sealed class Options
     public List<string> LinkColumns { get; } = new();
     public string? OutPath { get; set; }
     public OutputFormat Format { get; set; } = OutputFormat.Text;
-    public bool IncludeRowsWithoutLinks { get; set; }
+    public bool LinksOnly { get; set; }
     public bool NonInteractive { get; set; }
     public bool ShowHelp { get; set; }
     public string? MakeSamplePath { get; set; }
@@ -87,8 +87,8 @@ internal sealed class Options
                         _ => throw new OptionException($"Unknown format '{formatText}'. Use text, tsv or csv."),
                     };
                     break;
-                case "--all":
-                    options.IncludeRowsWithoutLinks = true;
+                case "--links-only":
+                    options.LinksOnly = true;
                     break;
                 case "-y":
                 case "--yes":
@@ -138,7 +138,7 @@ internal sealed class Options
                                    comma-separated, header names or column letters.
           -o, --out <path>         Also write the report to this file (UTF-8).
               --format <fmt>       text (default), tsv or csv.
-              --all                Include rows where no hyperlink was found.
+              --links-only         Leave out rows where no hyperlink was found.
           -y, --yes                Never prompt; fail if something required is missing.
               --make-sample <path> Write a small demo workbook and exit.
           -h, --help               Show this help.
@@ -146,6 +146,10 @@ internal sealed class Options
         Columns are matched against the header text first (case-insensitive), then
         as a column letter. Hyperlinks are read from real embedded links first,
         then HYPERLINK() formulas, then cells whose text is itself a URL.
+
+        Every row of the sheet's data range is reported, with empty values where a
+        row has no link, so the output stays row-for-row with the sheet. TSV and CSV
+        give one line per row: row, id, then a text and link pair per column.
 
         Examples:
           xlhyperlinks parts.xlsx

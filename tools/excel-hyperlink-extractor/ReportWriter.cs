@@ -8,14 +8,17 @@ internal sealed record ReportContext(
     int HeaderRow,
     ColumnRef? IdColumn,
     IReadOnlyList<ColumnRef> LinkColumns,
-    int RowsScanned);
+    int RowsInRange,
+    int FirstDataRow,
+    int LastRow,
+    bool LinksOnly);
 
 internal static class ReportWriter
 {
     public static string Build(ReportContext context, IReadOnlyList<RowResult> rows, OutputFormat format) => format switch
     {
-        OutputFormat.Tsv => BuildDelimited(rows, "\t", quote: false),
-        OutputFormat.Csv => BuildDelimited(rows, ",", quote: true),
+        OutputFormat.Tsv => BuildDelimited(context, rows, "\t", quote: false),
+        OutputFormat.Csv => BuildDelimited(context, rows, ",", quote: true),
         _ => BuildText(context, rows),
     };
 
@@ -27,12 +30,14 @@ internal static class ReportWriter
         report.AppendLine($"Sheet  : {context.SheetName}");
         report.AppendLine($"Id     : {(context.IdColumn is null ? "row number" : context.IdColumn.Label)}");
         report.AppendLine($"Links  : {string.Join(", ", context.LinkColumns.Select(c => c.Label))}");
-        report.AppendLine($"Rows   : {rows.Count} listed of {context.RowsScanned} with data");
+        report.AppendLine($"Rows   : {RowsLine(context, rows.Count)}");
         report.AppendLine();
 
         if (rows.Count == 0)
         {
-            report.AppendLine("No hyperlinks found. Re-run with --all to list the rows anyway.");
+            report.AppendLine(context.LinksOnly
+                ? "No row in this sheet has a link in the chosen columns. Drop --links-only to list them all."
+                : "This sheet has no data rows.");
             return report.ToString();
         }
 
@@ -62,31 +67,45 @@ internal static class ReportWriter
         return report.ToString();
     }
 
-    private static string BuildDelimited(IReadOnlyList<RowResult> rows, string separator, bool quote)
+    /// <summary>
+    /// One line per worksheet row, with a text/link pair per chosen column, so the export stays
+    /// row-for-row with the sheet and can be pasted back beside it.
+    /// </summary>
+    private static string BuildDelimited(ReportContext context, IReadOnlyList<RowResult> rows, string separator, bool quote)
     {
         var report = new StringBuilder();
-        var header = new[] { "Row", "Id", "Column", "Cell", "Text", "Link", "Source" };
+
+        var header = new List<string> { "Row", "Id" };
+        foreach (var column in context.LinkColumns)
+        {
+            var name = column.Header is { Length: > 0 } h ? h : column.Letter;
+            header.Add($"{name} text");
+            header.Add($"{name} link");
+        }
+
         report.AppendLine(string.Join(separator, header.Select(h => Field(h, separator, quote))));
 
         foreach (var row in rows)
         {
+            var fields = new List<string> { row.RowNumber.ToString(), row.Id };
             foreach (var entry in row.Entries)
             {
-                var fields = new[]
-                {
-                    row.RowNumber.ToString(),
-                    row.Id,
-                    entry.Column.Header is { Length: > 0 } h ? h : entry.Column.Letter,
-                    entry.CellAddress,
-                    entry.Link.Text,
-                    entry.Link.Address ?? string.Empty,
-                    entry.Link.Source == LinkSource.None ? string.Empty : entry.Link.SourceLabel,
-                };
-                report.AppendLine(string.Join(separator, fields.Select(f => Field(f, separator, quote))));
+                fields.Add(entry.Link.Text);
+                fields.Add(entry.Link.Address ?? string.Empty);
             }
+
+            report.AppendLine(string.Join(separator, fields.Select(f => Field(f, separator, quote))));
         }
 
         return report.ToString();
+    }
+
+    private static string RowsLine(ReportContext context, int listed)
+    {
+        var span = $"rows {context.FirstDataRow}–{context.LastRow}";
+        return listed == context.RowsInRange
+            ? $"{listed} — every row of {span}"
+            : $"{listed} of {context.RowsInRange} ({span}), the rows that have a link";
     }
 
     private static string Field(string value, string separator, bool quote)
