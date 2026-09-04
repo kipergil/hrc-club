@@ -551,6 +551,13 @@ export interface ScorecardDraftRubber {
  */
 export interface ScorecardDraft {
   fixtureId: string;
+  /**
+   * The `hrc_scorecards` row holding the photograph this draft was read
+   * from, so saving the checked card can mark that row applied and leave
+   * the picture attached to the result it produced. Null for a card being
+   * typed in, which has no photograph to attach.
+   */
+  scorecardId: string | null;
   homeTeam: TeamRef;
   awayTeam: TeamRef;
   playedOn: string | null;

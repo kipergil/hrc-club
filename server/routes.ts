@@ -5,6 +5,7 @@ import { CACHE, cache, handler, notFound, ok, param } from "./lib/http.js";
 import {
   adminRateLimiter,
   enquiryRateLimiter,
+  entrantOf,
   requireAdmin,
   requireWebhookSecret,
 } from "./lib/security.js";
@@ -348,7 +349,18 @@ export function registerRoutes(app: Express): void {
     requireAdmin(),
     handler(async (_req, res) => {
       cache(res, CACHE.none);
-      ok(res, { ai: aiConfigured() });
+      const entrant = entrantOf(res);
+      ok(res, {
+        ai: aiConfigured(),
+        name: entrant.name,
+        /*
+         * False while nobody is ticked in Directus, which is the state a
+         * fresh deployment starts in. Reported rather than hidden: a
+         * committee that thinks it has switched this on and has not should
+         * be able to see that from the screen.
+         */
+        allowList: (await storage.countResultEntrants()) > 0,
+      });
     }),
   );
 
@@ -444,7 +456,7 @@ export function registerRoutes(app: Express): void {
 
         // Recorded whether or not it is ever saved, so a bad parse can be
         // looked at afterwards rather than only complained about.
-        await storage.recordScorecardUpload({
+        const upload = await storage.recordScorecardUpload({
           fixtureId,
           imageId,
           status: "parsed",
@@ -453,9 +465,16 @@ export function registerRoutes(app: Express): void {
           model: parsed.model,
           inputTokens: parsed.inputTokens,
           outputTokens: parsed.outputTokens,
+          uploadedBy: entrantOf(res).name,
         });
 
-        ok(res, draft);
+        /*
+         * The draft carries the row its photograph was filed as, so that
+         * saving can come back and mark it applied. Without this the
+         * picture and the result it produced live in the same table and
+         * never refer to one another.
+         */
+        ok(res, { ...draft, scorecardId: upload.id || null });
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "The card could not be read.";
@@ -467,7 +486,13 @@ export function registerRoutes(app: Express): void {
          * leak the no-key check above was moved to prevent, reappearing
          * the first time a key turned out to be misconfigured.
          */
-        await storage.recordScorecardUpload({ fixtureId, imageId, status: "failed", error: message });
+        await storage.recordScorecardUpload({
+          fixtureId,
+          imageId,
+          status: "failed",
+          error: message,
+          uploadedBy: entrantOf(res).name,
+        });
 
         if (error instanceof ScorecardAiUnavailable) {
           /*
@@ -510,6 +535,10 @@ export function registerRoutes(app: Express): void {
         fixtureId: parsed.data.fixtureId,
         playedOn: parsed.data.playedOn ?? null,
         rubbers: parsed.data.rubbers,
+        // From the request, never from the body: a name the caller could
+        // choose is not attribution.
+        scorecardId: parsed.data.scorecardId ?? null,
+        savedBy: entrantOf(res).name ?? entrantOf(res).email,
       });
       ok(res, saved);
     }),

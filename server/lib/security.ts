@@ -3,6 +3,7 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import type { RequestHandler } from "express";
 import { env } from "./env.js";
+import * as storage from "../storage.js";
 
 /**
  * Applies only to what Express serves. On Vercel that is `/api/*` and
@@ -108,26 +109,89 @@ export const enquiryRateLimiter = rateLimit({
  */
 export function requireAdmin(): RequestHandler {
   return (req, res, next) => {
-    if (!env.ADMIN_TOKEN) {
-      res.status(503).json({
-        message: "Result entry is not configured on this deployment (no ADMIN_TOKEN is set).",
-      });
-      return;
-    }
+    void (async () => {
+      if (!env.ADMIN_TOKEN) {
+        res.status(503).json({
+          message: "Result entry is not configured on this deployment (no ADMIN_TOKEN is set).",
+        });
+        return;
+      }
 
-    const offered = req.get("x-admin-token") ?? "";
-    const expected = env.ADMIN_TOKEN;
-    const a = Buffer.from(offered);
-    const b = Buffer.from(expected);
-    // Compare equal-length buffers so the comparison itself cannot leak
-    // the length; a mismatched length is simply not the secret.
-    const ok = a.length === b.length && timingSafeEqual(a, b);
-    if (!ok) {
-      res.status(401).json({ message: "That password was not right." });
-      return;
-    }
-    next();
+      const offered = req.get("x-admin-token") ?? "";
+      const expected = env.ADMIN_TOKEN;
+      const a = Buffer.from(offered);
+      const b = Buffer.from(expected);
+      // Compare equal-length buffers so the comparison itself cannot leak
+      // the length; a mismatched length is simply not the secret.
+      const ok = a.length === b.length && timingSafeEqual(a, b);
+      if (!ok) {
+        res.status(401).json({ message: "That password was not right." });
+        return;
+      }
+
+      /*
+       * Who, as well as whether.
+       *
+       * The password is the gate and remains the gate. This is not a second
+       * one: anybody holding the shared password could type anybody's
+       * address, and pretending otherwise would be worse than not doing it.
+       * What it buys is real all the same — every saved card carries a name,
+       * and a captain who stands down can be turned off on their own record
+       * without changing the password every other captain is using.
+       *
+       * While nobody at all is ticked the password alone still works.
+       * The alternative is that deploying this locks every captain out of a
+       * volunteer-run site until somebody finds the right box in Directus,
+       * which is how a good idea gets reverted in a hurry. The first tick
+       * closes it, and the screen says which state it is in rather than
+       * leaving the committee to guess.
+       */
+      const email = (req.get("x-admin-email") ?? "").trim();
+      const entrants = await storage.countResultEntrants();
+
+      if (entrants === 0) {
+        res.locals.entrant = { id: null, name: null, email: email || null };
+        next();
+        return;
+      }
+
+      if (!email) {
+        res.status(401).json({
+          message: "Please give the email address the committee holds for you.",
+        });
+        return;
+      }
+
+      const entrant = await storage.findResultEntrant(email);
+      if (!entrant) {
+        /*
+         * Deliberately the same answer for "not on the list", "not a member"
+         * and "on two records": behind the password this is not much of a
+         * secret, but an endpoint that distinguishes them is still an
+         * endpoint that tells you which addresses the league holds.
+         */
+        res.status(403).json({
+          message:
+            "That email address is not set up to enter results. Ask the match secretary to add it to your record.",
+        });
+        return;
+      }
+
+      res.locals.entrant = { id: entrant.id, name: entrant.name, email };
+      next();
+    })().catch(next);
   };
+}
+
+/** Who the current request says it is, as `requireAdmin` established it. */
+export interface Entrant {
+  id: string | null;
+  name: string | null;
+  email: string | null;
+}
+
+export function entrantOf(res: { locals: Record<string, unknown> }): Entrant {
+  return (res.locals.entrant as Entrant | undefined) ?? { id: null, name: null, email: null };
 }
 
 /** Result entry is a handful of people a week, not a public form. */

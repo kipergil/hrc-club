@@ -65,7 +65,12 @@ export const saveScorecardSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-09-23.")
     .nullable()
     .optional(),
-  savedBy: z.string().trim().max(80).optional(),
+  /*
+   * The evidence row this card was read from, echoed back from the draft.
+   * Who saved it is deliberately *not* here: the server knows that from
+   * the request, and a name the client could choose is not attribution.
+   */
+  scorecardId: z.string().min(1).nullable().optional(),
   rubbers: z
     .array(
       z.object({

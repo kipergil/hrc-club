@@ -74,6 +74,19 @@ const MEMBER_PUBLIC_FIELDS = [
   // on a field the policy cannot read.
   "club",
   "clerk_user_id",
+  /*
+   * Who may enter results, and the address they say so with.
+   *
+   * `result_entry_email` exists rather than reusing `email` precisely so
+   * that this list can stay as it is: Directus refuses to filter on a
+   * field the policy cannot read, so matching on the contact address
+   * would mean granting read on every member's contact address. This way
+   * the readable set is the handful of people who opted in to entering
+   * results, and the other 165 members' details stay unreachable through
+   * this token however a route handler is written.
+   */
+  "can_enter_results",
+  "result_entry_email",
   "date_created",
   "date_updated",
 ];

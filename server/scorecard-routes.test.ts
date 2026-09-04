@@ -21,13 +21,23 @@ import { ScorecardAiUnavailable } from "./lib/scorecard-ai.js";
 // `vi.hoisted`, because `vi.mock` is lifted above every other statement in
 // the file and its factories would otherwise close over uninitialised
 // bindings.
-const { storeScorecardImage, recordScorecardUpload, parseScorecardImage } = vi.hoisted(() => ({
+const {
+  storeScorecardImage,
+  recordScorecardUpload,
+  parseScorecardImage,
+  countResultEntrants,
+  findResultEntrant,
+} = vi.hoisted(() => ({
   storeScorecardImage: vi.fn(async (_image: unknown) => "file-1"),
   // The parameter is declared so the recorded call is typed: without it
   // `mock.calls[0]` is an empty tuple and the assertions below cannot
   // reach the argument they are about.
   recordScorecardUpload: vi.fn(async (_upload: Record<string, unknown>) => ({ id: "upload-1" })),
   parseScorecardImage: vi.fn(),
+  // Nobody ticked, which is the state a fresh deployment starts in: the
+  // password alone still works. The allow-list tests below change it.
+  countResultEntrants: vi.fn(async () => 0),
+  findResultEntrant: vi.fn(async (_email: string) => null as { id: string; name: string } | null),
 }));
 
 vi.mock("./storage.js", () => ({
@@ -43,6 +53,8 @@ vi.mock("./storage.js", () => ({
   }),
   storeScorecardImage,
   recordScorecardUpload,
+  countResultEntrants,
+  findResultEntrant,
 }));
 
 vi.mock("./lib/scorecard-ai.js", async () => {
@@ -134,5 +146,106 @@ describe("the gate", () => {
     expect(response.status).toBe(401);
     expect(storeScorecardImage).not.toHaveBeenCalled();
     expect(parseScorecardImage).not.toHaveBeenCalled();
+  });
+});
+
+describe("who may enter a result", () => {
+  /**
+   * An allow-list on top of the shared password: it says *who* may use it,
+   * puts a name on every card, and lets a captain be stood down without
+   * changing the password everyone else uses.
+   *
+   * The two states have to be got right in opposite directions. Nobody
+   * ticked has to stay open, or deploying this locks a volunteer-run
+   * league out of its own results until somebody finds a checkbox in
+   * Directus. Somebody ticked has to close, or the feature is decoration.
+   */
+  beforeEach(() => {
+    // Cleared, not just re-stubbed: the "never called" assertion below is
+    // about this request and would otherwise be answered by an earlier one.
+    countResultEntrants.mockClear();
+    findResultEntrant.mockClear();
+    recordScorecardUpload.mockClear();
+    countResultEntrants.mockResolvedValue(0);
+    findResultEntrant.mockResolvedValue(null);
+  });
+
+  it("still lets the password through while nobody is on the list", async () => {
+    const response = await request(app)
+      .get("/api/admin/scorecards/capability")
+      .set("x-admin-token", PASSWORD);
+
+    expect(response.status).toBe(200);
+    // And says so, so a committee that thinks it has switched the list on
+    // can see from the screen that it has not.
+    expect(response.body.data.allowList).toBe(false);
+  });
+
+  it("closes as soon as one member is ticked", async () => {
+    countResultEntrants.mockResolvedValue(1);
+
+    const response = await request(app)
+      .get("/api/admin/scorecards/capability")
+      .set("x-admin-token", PASSWORD)
+      .set("x-admin-email", "stranger@example.com");
+
+    expect(response.status).toBe(403);
+    expect(response.body.message).toContain("not set up to enter results");
+  });
+
+  it("asks for the address rather than silently refusing when it is missing", async () => {
+    countResultEntrants.mockResolvedValue(1);
+
+    const response = await request(app)
+      .get("/api/admin/scorecards/capability")
+      .set("x-admin-token", PASSWORD);
+
+    expect(response.status).toBe(401);
+    expect(response.body.message).toContain("email address");
+  });
+
+  it("lets a ticked member through, and greets them by name", async () => {
+    countResultEntrants.mockResolvedValue(2);
+    findResultEntrant.mockResolvedValue({ id: "member-1", name: "Gary Thurston" });
+
+    const response = await request(app)
+      .get("/api/admin/scorecards/capability")
+      .set("x-admin-token", PASSWORD)
+      .set("x-admin-email", "gary@example.com");
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.name).toBe("Gary Thurston");
+    expect(response.body.data.allowList).toBe(true);
+  });
+
+  it("puts the entrant's name on the card that gets filed", async () => {
+    countResultEntrants.mockResolvedValue(1);
+    findResultEntrant.mockResolvedValue({ id: "member-1", name: "Gary Thurston" });
+    parseScorecardImage.mockRejectedValue(new Error("The card could not be read."));
+
+    await request(app)
+      .post("/api/admin/scorecards/parse")
+      .set("x-admin-token", PASSWORD)
+      .set("x-admin-email", "gary@example.com")
+      .send(body);
+
+    // A failed read is exactly the one somebody may need to ask about, so
+    // the name goes on the attempt and not only on the save.
+    const recorded = recordScorecardUpload.mock.calls.at(-1)?.[0];
+    expect(recorded?.uploadedBy).toBe("Gary Thurston");
+  });
+
+  it("never lets a wrong password through, ticked address or not", async () => {
+    countResultEntrants.mockResolvedValue(1);
+    findResultEntrant.mockResolvedValue({ id: "member-1", name: "Gary Thurston" });
+
+    const response = await request(app)
+      .get("/api/admin/scorecards/capability")
+      .set("x-admin-token", "wrong")
+      .set("x-admin-email", "gary@example.com");
+
+    // The list says who may use the password. It is not a way past it.
+    expect(response.status).toBe(401);
+    expect(findResultEntrant).not.toHaveBeenCalled();
   });
 });
