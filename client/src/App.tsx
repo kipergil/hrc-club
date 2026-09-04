@@ -32,6 +32,7 @@ import {
   NewsItemPage,
   NewsPage,
   NewslettersPage,
+  WhatsNewPage,
 } from "@/pages/news";
 import {
   CommitteePage,
@@ -77,7 +78,11 @@ export default function App() {
         {/* News and media */}
         <Route path="/news" component={NewsPage} />
         <Route path="/newsletters" component={NewslettersPage} />
+        <Route path="/whats-new" component={WhatsNewPage} />
         <Route path="/news/:slug">{(params) => <NewsItemPage slug={params.slug} />}</Route>
+        {/* Feature posts read here so the trail above them says where they
+            came from, rather than filing them under the committee's notices. */}
+        <Route path="/whats-new/:slug">{(params) => <NewsItemPage slug={params.slug} />}</Route>
         <Route path="/events" component={EventsPage} />
         <Route path="/events/:slug">{(params) => <EventPage slug={params.slug} />}</Route>
         <Route path="/gallery" component={GalleryPage} />

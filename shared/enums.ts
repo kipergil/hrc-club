@@ -180,7 +180,16 @@ export const FIXTURE_RESULT_LABELS: Record<FixtureResult, string> = {
   draw: "Drawn",
 };
 
-export const NEWS_CATEGORY = ["news", "match_report", "notice", "newsletter"] as const;
+/**
+ * `feature` is the site explaining itself — a short post about something
+ * the site can now do, filed apart from the committee's own words.
+ *
+ * It has its own category rather than sitting under `news` because the
+ * two must not share a list. A notice about a postponed match and a note
+ * about a new filter are addressed to the same people for completely
+ * different reasons, and ten of the latter would bury the former.
+ */
+export const NEWS_CATEGORY = ["news", "match_report", "notice", "newsletter", "feature"] as const;
 export type NewsCategory = (typeof NEWS_CATEGORY)[number];
 
 export const EVENT_STATUS = ["scheduled", "cancelled", "completed"] as const;

@@ -68,6 +68,7 @@ export const NAV: readonly [NavGroup, NavGroup, NavGroup, NavGroup, NavGroup] = 
     href: "/news",
     links: [
       { href: "/news", title: "Special notices", subtitle: "Announcements from the committee" },
+      { href: "/whats-new", title: "What's new", subtitle: "Short guides to what this site can do" },
       { href: "/newsletters", title: "Newsletters", subtitle: "Every newsletter the league has sent" },
       { href: "/honours", title: "Roll of honour", subtitle: "Champions and cup winners, back to 1950" },
       { href: "/documents", title: "Forms and documents", subtitle: "Constitution, handbook, scorecards and forms" },

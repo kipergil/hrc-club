@@ -168,6 +168,12 @@ async function collectRoutes(): Promise<RouteSpec[]> {
         queryFn: () => storage.getNews("newsletter"),
       });
     }),
+    route("/whats-new", async (client) => {
+      await client.prefetchQuery({
+        queryKey: keys.news("feature"),
+        queryFn: () => storage.getNews("feature"),
+      });
+    }),
     route("/events", async (client) => {
       await client.prefetchQuery({ queryKey: keys.events, queryFn: () => storage.getEvents() });
     }),
@@ -223,8 +229,12 @@ async function collectRoutes(): Promise<RouteSpec[]> {
   }
 
   for (const item of news) {
+    // One address per article. A feature post reads under `/whats-new`, so
+    // prerendering it at `/news/…` as well would put the same words at two
+    // URLs and file it under the committee's notices in the trail.
+    const base = item.category === "feature" ? "/whats-new" : "/news";
     routes.push(
-      route(`/news/${item.slug}`, async (client) => {
+      route(`${base}/${item.slug}`, async (client) => {
         await client.prefetchQuery({
           queryKey: keys.newsItem(item.slug),
           queryFn: () => storage.getNewsItem(item.slug),

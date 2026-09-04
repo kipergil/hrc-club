@@ -23,7 +23,8 @@
     "directus:import:content": "npm --prefix directus run import:content",
     "directus:import:archive": "npm --prefix directus run import:archive",
     "directus:geocode:venues": "npm --prefix directus run geocode:venues",
-    "directus:sample:results": "npm --prefix directus run sample:results"
+    "directus:sample:results": "npm --prefix directus run sample:results",
+    "directus:write:features": "npm --prefix directus run write:features"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
