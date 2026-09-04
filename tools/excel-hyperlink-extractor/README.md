@@ -147,6 +147,34 @@ to
 The two files together then work with no network at all. Keep the CDN URL if you publish
 the page anywhere that needs the single-file version.
 
+### Large workbooks
+
+Measured in Chromium on two generated workbooks of 1.2 million cells each:
+
+| Workbook | Open it | Switch format |
+| --- | --- | --- |
+| 20,000 rows × 60 columns (14 MB) | ~6s | ~0.1s |
+| 100,000 rows × 12 columns (26 MB) | ~9s | ~0.1s |
+
+Most of that is SheetJS parsing the file; the extraction itself is a fraction of a second.
+The page says what it is doing while it works rather than sitting frozen.
+
+Three things make that hold up, and they are worth knowing about:
+
+- **The report on screen stops at 400 rows**, with a note saying how many were left out.
+  The count beside the buttons is always the true total, and **Copy** and **Download**
+  build the whole report — a 20k-row extract is a 10 MB text file, which is fine to copy
+  and slow to render. 
+- **Links are counted by walking the cells the sheet actually holds**, not every
+  row × column coordinate in its used range. On a wide sheet most of that rectangle is
+  empty, and looking each one up costs more than the whole rest of the pass.
+- **Merges are indexed by row when the file is opened.** Checking a cell against every
+  merge in the sheet turns a few thousand merges into millions of comparisons.
+
+Very large files are still bounded by browser memory: the workbook, the parsed cells and
+the report all live in the tab at once. A sheet in the millions of rows is better handled
+by the console app, which is not competing with a renderer for the same address space.
+
 ### Differences from the console app
 
 Two, both forced by the browser:
