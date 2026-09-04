@@ -40,6 +40,13 @@ import * as storage from "../storage.js";
 export async function buildDraft(
   fixtureId: string,
   card: ScorecardInput | null,
+  /**
+   * The `hrc_scorecards` row the photograph was filed as, where there was
+   * one. Carried through so that saving the checked card can mark that row
+   * applied and leave the picture attached to the result it produced —
+   * otherwise the evidence and the result it justifies never meet.
+   */
+  scorecardId: string | null = null,
 ): Promise<ScorecardDraft | null> {
   const { fixture, homeSquad, awaySquad } = await storage.getFixtureSquads(fixtureId);
   if (!fixture) return null;
@@ -188,6 +195,7 @@ export async function buildDraft(
 
   return {
     fixtureId,
+    scorecardId,
     homeTeam: fixture.homeTeam,
     awayTeam: fixture.awayTeam,
     playedOn: card?.playedOn ?? fixture.playedOn,

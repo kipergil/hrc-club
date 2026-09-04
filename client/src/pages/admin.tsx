@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Upload, X } from "lucide-react";
 import type {
@@ -31,7 +31,16 @@ import {
   TableNote,
 } from "@/components/ui";
 import { useFixtures } from "@/lib/queries";
-import { adminFetch, fileToBase64, useAdminToken, type AdminError } from "@/lib/admin";
+import {
+  PARSE_TIMEOUT_MS,
+  adminFetch,
+  useAdminSession,
+  type AdminError,
+  type AdminSession,
+} from "@/lib/admin";
+import { prepareCardImage } from "@/lib/image";
+import { CardPhoto } from "@/components/card-photo";
+import { ReadingProgress } from "@/components/reading-progress";
 import { cn, formatDateShort } from "@/lib/utils";
 
 /**
@@ -57,21 +66,28 @@ function isAdminError(error: unknown): error is AdminError {
 
 // ---------------------------------------------------------------------------
 
-function SignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
-  const [value, setValue] = useState("");
+function SignIn({ onSignedIn }: { onSignedIn: (session: AdminSession) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [field, setField] = useState<"email" | "password">("password");
   const [busy, setBusy] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
+    const session = { email: email.trim(), password };
     try {
-      // The capability endpoint doubles as the password check: it is
-      // behind the same gate and returns something the next screen needs.
-      await adminFetch("/api/admin/scorecards/capability", value);
-      onSignedIn(value);
+      // The capability endpoint doubles as the check: it is behind the same
+      // gate and returns something the next screen needs.
+      await adminFetch("/api/admin/scorecards/capability", session);
+      onSignedIn(session);
     } catch (caught) {
+      const status = isAdminError(caught) ? caught.status : 0;
+      // 403 is "the password was right, you are not on the list", so the
+      // message belongs under the address rather than under the password.
+      setField(status === 403 ? "email" : "password");
       setError(isAdminError(caught) ? caught.message : "That did not work.");
     } finally {
       setBusy(false);
@@ -80,16 +96,31 @@ function SignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
 
   return (
     <div className="max-w-prose">
-      <PageHeader
-        title="Enter a result"
-        subtitle="For the committee and team captains"
-      />
+      <PageHeader title="Enter a result" subtitle="For the committee and team captains" />
       <Card>
         <form onSubmit={submit} className="space-y-5">
           <Field
+            label="Your email address"
+            hint="The address the league holds for you. It goes on every card you save, so the committee can see who entered what."
+            error={field === "email" ? (error ?? undefined) : undefined}
+            required
+          >
+            {(props) => (
+              <input
+                {...props}
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            )}
+          </Field>
+
+          <Field
             label="Result-entry password"
             hint="The shared password the committee uses. Ask the match secretary if you need it."
-            error={error ?? undefined}
+            error={field === "password" ? (error ?? undefined) : undefined}
             required
           >
             {(props) => (
@@ -97,12 +128,13 @@ function SignIn({ onSignedIn }: { onSignedIn: (token: string) => void }) {
                 {...props}
                 type="password"
                 autoComplete="current-password"
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
               />
             )}
           </Field>
-          <Button type="submit" disabled={busy || value.length === 0}>
+
+          <Button type="submit" disabled={busy || password.length === 0 || email.trim().length === 0}>
             {busy ? "Checking…" : "Continue"}
           </Button>
         </form>
@@ -298,12 +330,21 @@ function slotName(slot: ScorecardLineupSlot | undefined, squad: MemberSummary[])
 
 function ScorecardForm({
   draft,
-  token,
+  session,
+  photo,
   onSaved,
   onBack,
 }: {
   draft: ScorecardDraft;
-  token: string;
+  session: AdminSession;
+  /**
+   * The photograph this draft was read from, where there was one.
+   * Checking a read card is a comparison, and it needs both things on the
+   * same screen — this used to unmount with the upload step, leaving the
+   * reviewer confirming forty numbers against a card they could no longer
+   * see.
+   */
+  photo: string | null;
   onSaved: (result: { homeScore: number; awayScore: number }) => void;
   onBack: () => void;
 }) {
@@ -396,10 +437,17 @@ function ScorecardForm({
 
       const result = await adminFetch<{ homeScore: number; awayScore: number }>(
         "/api/admin/scorecards",
-        token,
+        session,
         {
           method: "POST",
-          body: { fixtureId: draft.fixtureId, playedOn: playedOn || null, rubbers },
+          body: {
+            fixtureId: draft.fixtureId,
+            playedOn: playedOn || null,
+            rubbers,
+            // Sent back so the photograph this was read from is marked as
+            // the evidence for the result it produced.
+            scorecardId: draft.scorecardId,
+          },
         },
       );
       onSaved(result);
@@ -495,6 +543,24 @@ function ScorecardForm({
           )}
         </Field>
       </div>
+
+      {/*
+        The card itself, at the top of the thing being checked against it.
+        Small here because a phone photograph of A4 is unreadable at any
+        size that fits beside a form — the enlarge opens a view that can be
+        dragged and zoomed, which is where the actual checking happens.
+      */}
+      {photo ? (
+        <Card className="space-y-3">
+          <div>
+            <h3 className="text-xl">The card you photographed</h3>
+            <p className="mt-1 text-ink-muted">
+              Check every line below against it. Nothing is saved until you press save.
+            </p>
+          </div>
+          <CardPhoto src={photo} />
+        </Card>
+      ) : null}
 
       {/*
        * The line-up box, first, exactly as it sits on the sheet. Getting
@@ -739,54 +805,70 @@ function ScorecardForm({
 
 function CardUpload({
   fixture,
-  token,
+  session,
   aiAvailable,
+  photo,
+  onPhoto,
   onDraft,
 }: {
   fixture: Fixture;
-  token: string;
+  session: AdminSession;
   aiAvailable: boolean;
+  photo: string | null;
+  onPhoto: (url: string | null) => void;
   onDraft: (draft: ScorecardDraft) => void;
 }) {
   const [busy, setBusy] = useState(false);
   /*
-   * The status is kept alongside the message, because the two failures
-   * read completely differently to the person holding the card.
+   * The status is kept alongside the message, because the failures read
+   * completely differently to the person holding the card.
    *
    * A 503 means the reading could not be attempted at all — no key, a key
    * the API rejects, a workspace it will not infer, an outage. Nothing
    * about the photograph would change it. Titling that "That did not work"
    * blames the captain for the server's configuration and sends them off
    * to take a better photograph of a card that was never the problem.
+   *
+   * 408 and 0 are the wait running out and the connection dropping, which
+   * are the two this screen used to report as nothing at all.
    */
   const [error, setError] = useState<{ message: string; status: number } | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-
-  // The object URL is a resource, not a value; leaking one per photograph
-  // is a slow leak on a screen somebody enters twenty cards on.
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  // Held so pressing Stop actually stops it, rather than leaving a request
+  // running against a screen that has moved on.
+  const abort = useRef<AbortController | null>(null);
 
   async function readCard(file: File) {
     setBusy(true);
     setError(null);
-    setPreview((old) => {
-      if (old) URL.revokeObjectURL(old);
-      return URL.createObjectURL(file);
-    });
+    onPhoto(URL.createObjectURL(file));
+
+    const controller = new AbortController();
+    abort.current = controller;
     try {
-      const image = await fileToBase64(file);
-      const draft = await adminFetch<ScorecardDraft>("/api/admin/scorecards/parse", token, {
+      /*
+       * Shrunk before it is sent. A phone photograph is four to eight
+       * megabytes, which base64 inflates by a third again — past the body
+       * limit the platform enforces at the edge, where the request is
+       * refused before this app ever sees it and there is nothing to
+       * report. That is the "it just gets cancelled" this fixes.
+       */
+      const image = await prepareCardImage(file);
+      const draft = await adminFetch<ScorecardDraft>("/api/admin/scorecards/parse", session, {
         method: "POST",
-        body: { fixtureId: fixture.id, mediaType: file.type, image },
+        body: { fixtureId: fixture.id, mediaType: image.mediaType, image: image.data },
+        timeoutMs: PARSE_TIMEOUT_MS,
+        signal: controller.signal,
       });
       onDraft(draft);
     } catch (caught) {
-      setError(
-        isAdminError(caught)
-          ? { message: caught.message, status: caught.status }
-          : { message: "The card could not be read.", status: 0 },
-      );
+      const failure = isAdminError(caught)
+        ? { message: caught.message, status: caught.status }
+        : { message: "The card could not be read.", status: 0 };
+      // Stopping is not a failure, and reporting it as one would leave an
+      // alert on screen for something the reader did on purpose.
+      if (failure.status !== 499) setError(failure);
     } finally {
+      abort.current = null;
       setBusy(false);
     }
   }
@@ -796,7 +878,7 @@ function CardUpload({
     setError(null);
     try {
       onDraft(
-        await adminFetch<ScorecardDraft>(`/api/admin/scorecards/blank/${fixture.id}`, token),
+        await adminFetch<ScorecardDraft>(`/api/admin/scorecards/blank/${fixture.id}`, session),
       );
     } catch (caught) {
       setError(
@@ -836,30 +918,23 @@ function CardUpload({
             {error.message}
           </Alert>
         ) : (
-          <Alert tone="warning" title="That card could not be read">
+          <Alert
+            tone="warning"
+            title={
+              error.status === 408 || error.status === 0
+                ? "That did not get through"
+                : "That card could not be read"
+            }
+          >
             {error.message}
           </Alert>
         )
       ) : null}
 
-      {preview ? (
-        <div className="relative">
-          {/* The photograph stays on screen while the card is checked
-              against it — that comparison is the whole review. */}
-          <img
-            src={preview}
-            alt="The scorecard you uploaded"
-            className="max-h-96 w-full rounded-card border border-line object-contain"
-          />
-          <button
-            type="button"
-            onClick={() => setPreview(null)}
-            className="absolute right-2 top-2 flex size-11 items-center justify-center rounded-card border border-line bg-surface"
-          >
-            <X aria-hidden="true" className="size-5" />
-            <span className="sr-only">Remove this photograph</span>
-          </button>
-        </div>
+      {busy ? <ReadingProgress /> : null}
+
+      {photo ? (
+        <CardPhoto src={photo} onRemove={busy ? undefined : () => onPhoto(null)} />
       ) : null}
 
       <div className="flex flex-wrap gap-3">
@@ -872,7 +947,7 @@ function CardUpload({
           )}
         >
           <Upload aria-hidden="true" className="size-5" />
-          {busy ? "Reading the card…" : "Choose a photograph"}
+          {busy ? "Reading the card…" : photo ? "Choose a different photograph" : "Choose a photograph"}
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp"
@@ -880,14 +955,25 @@ function CardUpload({
             disabled={!aiAvailable || busy}
             onChange={(event) => {
               const file = event.target.files?.[0];
+              // Cleared so choosing the same file twice — after a failure,
+              // which is exactly when somebody would — fires again.
+              event.target.value = "";
               if (file) void readCard(file);
             }}
           />
         </label>
 
-        <Button variant="secondary" onClick={blank} disabled={busy}>
-          Type the card in instead
-        </Button>
+        {busy ? (
+          // A wait with no way out is a trap. Half a minute is a long time
+          // to discover you picked the wrong match.
+          <Button variant="secondary" onClick={() => abort.current?.abort()}>
+            Stop
+          </Button>
+        ) : (
+          <Button variant="secondary" onClick={blank} disabled={busy}>
+            Type the card in instead
+          </Button>
+        )}
       </div>
     </Card>
   );
@@ -896,20 +982,42 @@ function CardUpload({
 // ---------------------------------------------------------------------------
 
 export function AdminScorecardsPage() {
-  const [token, setToken] = useAdminToken();
+  const [session, setSession] = useAdminSession();
   const [fixture, setFixture] = useState<Fixture | null>(null);
   const [draft, setDraft] = useState<ScorecardDraft | null>(null);
   const [saved, setSaved] = useState<{ homeScore: number; awayScore: number } | null>(null);
-  const [aiAvailable, setAiAvailable] = useState(false);
+  const [capability, setCapability] = useState<{ ai: boolean; name: string | null; allowList: boolean }>(
+    { ai: false, name: null, allowList: false },
+  );
+  /*
+   * The photograph lives here rather than inside the upload step, which
+   * unmounts the moment a draft arrives. Held one level up, it survives
+   * into the review — where it is the only way to check what was read.
+   */
+  const [photo, setPhoto] = useState<string | null>(null);
+
+  // An object URL is a resource, not a value. Twenty cards in an evening is
+  // twenty leaks if the old one is not released when it is replaced.
+  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo); }, [photo]);
+
+  function replacePhoto(next: string | null) {
+    setPhoto((old) => {
+      if (old && old !== next) URL.revokeObjectURL(old);
+      return next;
+    });
+  }
 
   useEffect(() => {
-    if (!token) return;
-    adminFetch<{ ai: boolean }>("/api/admin/scorecards/capability", token)
-      .then((capability) => setAiAvailable(capability.ai))
-      .catch(() => setToken(null));
-  }, [token, setToken]);
+    if (!session) return;
+    adminFetch<{ ai: boolean; name: string | null; allowList: boolean }>(
+      "/api/admin/scorecards/capability",
+      session,
+    )
+      .then(setCapability)
+      .catch(() => setSession(null));
+  }, [session, setSession]);
 
-  if (!token) return <SignIn onSignedIn={setToken} />;
+  if (!session) return <SignIn onSignedIn={setSession} />;
 
   if (saved && draft) {
     return (
@@ -929,6 +1037,7 @@ export function AdminScorecardsPage() {
               setSaved(null);
               setDraft(null);
               setFixture(null);
+              replacePhoto(null);
             }}
           >
             Enter another card
@@ -944,39 +1053,67 @@ export function AdminScorecardsPage() {
         title="Enter a result"
         subtitle="Photograph the card, check what it says, and save it."
         actions={
-          <Button variant="quiet" onClick={() => setToken(null)}>
+          <Button variant="quiet" onClick={() => setSession(null)}>
             Sign out
           </Button>
         }
-      />
+      >
+        <p className="text-ink-muted">
+          Signed in as <strong className="text-ink">{capability.name ?? session.email}</strong>.
+          {/*
+            Said out loud rather than left to be discovered. Until somebody
+            is ticked in Directus the password alone still works, and a
+            committee that believes it has switched the list on and has not
+            should be able to see that here.
+          */}
+          {!capability.allowList ? (
+            <>
+              {" "}
+              No members are marked as able to enter results yet, so the password alone is the only
+              check. Tick <em>Can enter results</em> on a member to change that.
+            </>
+          ) : null}
+        </p>
+      </PageHeader>
 
       {!fixture ? (
         <FixturePicker
           onPick={(picked) => {
             setFixture(picked);
             setDraft(null);
+            replacePhoto(null);
           }}
         />
       ) : !draft ? (
         <>
-          <Button variant="quiet" onClick={() => setFixture(null)}>
+          <Button
+            variant="quiet"
+            onClick={() => {
+              setFixture(null);
+              replacePhoto(null);
+            }}
+          >
             ← Pick a different match
           </Button>
           <CardUpload
             fixture={fixture}
-            token={token}
-            aiAvailable={aiAvailable}
+            session={session}
+            aiAvailable={capability.ai}
+            photo={photo}
+            onPhoto={replacePhoto}
             onDraft={setDraft}
           />
         </>
       ) : (
         <ScorecardForm
           draft={draft}
-          token={token}
+          session={session}
+          photo={photo}
           onSaved={setSaved}
           onBack={() => {
             setDraft(null);
             setFixture(null);
+            replacePhoto(null);
           }}
         />
       )}

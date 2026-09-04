@@ -232,8 +232,20 @@ never hold — the same fallback shape the league tables use.
   a real request on the wire against a stand-in for the API (`server/scorecard-ai.test.ts`).
   What remains unexercised is the model's actual reading of a card. Treat the first successful
   one as a test, not a migration.
-- **A saved card does not mark its upload `applied`.** `hrc_scorecards` records the parse; the
-  save writes rubbers. Joining the two would let the review screen show a card's history.
+- ~~**A saved card does not mark its upload `applied`.**~~ Done. The draft carries the id of the
+  `hrc_scorecards` row its photograph was filed as, the save sends it back, and `saveScorecard`
+  stamps `status`, `applied_at` and `applied_by`. The stamp is wrapped in its own try/catch: the
+  rubbers are already written by then, and a Directus hiccup on the bookkeeping is not a reason to
+  tell a captain their card did not save.
+- **The allow-list is fail-open until somebody is ticked.** `can_enter_results` on a member decides
+  who may use the shared password, but while *no* member is ticked the password alone still works.
+  That is deliberate — the alternative is that deploying it locks a volunteer-run league out of its
+  own results until somebody finds the checkbox — and the result-entry screen says which state it is
+  in. The first tick closes it.
+- **Identification, not authentication.** The email is checked against `result_entry_email` on a
+  flagged member, which is what puts a name on every card and lets a captain be stood down without
+  changing the password. It is not a second password: anybody holding the shared one could type
+  somebody else's address.
 - **Handicaps are still not derived.** They are set by the match secretary rather than computed
   from play, so unlike averages they cannot come out of the cards — `/handicaps` needs an import
   or an entry screen of its own.

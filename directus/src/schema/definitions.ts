@@ -166,6 +166,16 @@ export const membersCollection: CollectionDefinition = {
     ),
     booleanField("is_coach", false),
     booleanField("is_committee", false, "Convenience flag; the actual roles live in hrc_committee_roles."),
+    booleanField(
+      "can_enter_results",
+      false,
+      "Lets this member enter match results. The shared password is still required — this decides who may use it, and puts their name on every card they save. Untick it to stand a captain down without changing the password everybody else uses. While nobody at all is ticked, the password alone still works, so switching this on is a deliberate act rather than something that locks the league out the day it ships.",
+    ),
+    textField("result_entry_email", {
+      nullable: true,
+      note:
+        "The address this member types on the result-entry screen. Usually the same as their contact email, but a separate field on purpose: matching on a field means the app's token must be able to read it, and `email` is deliberately unreadable so that no bug in a route handler can return 165 members' addresses. Only the handful of people who enter results need one here.",
+    }),
     // Contact details: held so the club can run itself, never served publicly.
     // The service policy's read rule on this collection excludes them.
     textField("email", { nullable: true, note: "PRIVATE — never returned by the public API." }),

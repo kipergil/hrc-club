@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CSP_DIRECTIVES } from "../server/lib/security.js";
+import { PARSE_TIMEOUT_MS } from "../client/src/lib/admin.js";
 
 /**
  * `vercel.json` is validated against a schema at deploy time, and the
@@ -97,5 +98,33 @@ describe("vercel.json", () => {
 
     const listed = imgSrc!.slice("img-src ".length).split(/\s+/).sort();
     expect(listed).toEqual([...CSP_DIRECTIVES.imgSrc].sort());
+  });
+});
+
+describe("the API function's budget", () => {
+  /**
+   * Reading a photographed card is a vision call: twenty to forty seconds
+   * is ordinary. The platform's default ceiling is well under that, and
+   * when it trips the request is killed at the edge — no error reaches the
+   * app, nothing is logged, and the captain sees the upload stop for no
+   * stated reason. That is the failure this value exists to prevent, and
+   * nothing else in the build would notice it going away.
+   */
+  it("gives the API long enough to read a card", () => {
+    const functions = config.functions as Record<string, { maxDuration?: number }> | undefined;
+    expect(functions, "no functions block — the API gets the short default ceiling").toBeTruthy();
+
+    const api = functions!["api/index.ts"];
+    expect(api, "no entry for the API function").toBeTruthy();
+    expect(api!.maxDuration ?? 0).toBeGreaterThanOrEqual(60);
+  });
+
+  it("does not promise the browser more patience than the server has", () => {
+    // The client gives up at PARSE_TIMEOUT_MS. Set beyond the server's own
+    // ceiling, the reader would sit watching a spinner for a minute after
+    // the work had already been killed.
+    const functions = config.functions as Record<string, { maxDuration?: number }>;
+    const seconds = functions["api/index.ts"]!.maxDuration!;
+    expect(PARSE_TIMEOUT_MS / 1000).toBeLessThanOrEqual(seconds + 30);
   });
 });

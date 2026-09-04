@@ -1354,6 +1354,78 @@ const MEMBER_PUBLIC_FIELDS = [
   "is_committee",
 ] as const;
 
+/**
+ * Who is allowed to enter results, looked up by the address they gave.
+ *
+ * Matched against `result_entry_email`, never against the member's contact
+ * `email`. That is not tidiness: Directus refuses to filter on a field the
+ * policy cannot read, so matching on the contact address would mean giving
+ * this token read access to all 165 members' addresses in order to check
+ * one. The separate field keeps the readable set to the handful of people
+ * who opted in.
+ *
+ * Returns a name and an id — never the address it was given, and never a
+ * list of who else is on it. Asking "is this address allowed?" must not be
+ * a way of finding out whose addresses are.
+ *
+ * Matched case-insensitively and trimmed, because it is typed by hand on a
+ * phone in a sports hall.
+ */
+export async function findResultEntrant(
+  email: string,
+): Promise<{ id: string; name: string } | null> {
+  const wanted = email.trim().toLowerCase();
+  if (!wanted) return null;
+
+  const client = await directus();
+  const rows = (await client.request(
+    readItems("hrc_members", {
+      fields: ["id", "full_name", "display_name", "result_entry_email"],
+      filter: {
+        _and: [
+          { can_enter_results: { _eq: true } },
+          // Directus's `_eq` on a string is case-sensitive on some
+          // databases and not others; `_icontains` does not depend on
+          // which. The exact re-check below is what makes it an equality:
+          // without it "gary@x.com" would be matched by "gary@x.como".
+          { result_entry_email: { _icontains: wanted } },
+        ],
+      },
+      limit: 2,
+    }),
+  )) as Row[];
+
+  // Two matches means one address is on two records, which is a data
+  // problem the committee should fix rather than one this should guess at.
+  if (rows.length !== 1) return null;
+
+  const row = rows[0]!;
+  // `_icontains` is a substring match; this is the equality it stood in for.
+  if ((str(row.result_entry_email) ?? "").trim().toLowerCase() !== wanted) return null;
+
+  return { id: row.id, name: str(row.display_name) ?? str(row.full_name) ?? "" };
+}
+
+/**
+ * How many members are allowed to enter results.
+ *
+ * Nobody ticked means the feature has not been switched on yet, and the
+ * password alone still works — otherwise deploying this would lock every
+ * captain out of a volunteer-run site until somebody found the right box
+ * in Directus. One tick closes it. `requireAdmin` explains the trade.
+ */
+export async function countResultEntrants(): Promise<number> {
+  const client = await directus();
+  const rows = (await client.request(
+    readItems("hrc_members", {
+      fields: ["id"],
+      filter: { can_enter_results: { _eq: true } },
+      limit: -1,
+    }),
+  )) as Row[];
+  return rows.length;
+}
+
 export async function getMembers(): Promise<MemberSummary[]> {
   const client = await directus();
   const homeClub = await getHomeClub();
@@ -1749,6 +1821,9 @@ async function squadFor(
 export async function saveScorecard(input: {
   fixtureId: string;
   playedOn: string | null;
+  /** The evidence row this card came from, where it came from a photograph. */
+  scorecardId?: string | null;
+  savedBy?: string | null;
   rubbers: Array<{
     rubberNumber: number;
     kind: string;
@@ -1808,6 +1883,35 @@ export async function saveScorecard(input: {
     }),
   );
 
+  /*
+   * The photograph and the result it produced, finally introduced.
+   *
+   * Until this, a card read from a photo left two rows that never referred
+   * to one another: an `hrc_scorecards` row stuck at "parsed" holding the
+   * picture, and a played fixture with ten rubbers and no evidence behind
+   * it. Marking the row applied is what makes the picture answer the
+   * question it was kept for — "the card says 9-11, where did 11-9 come
+   * from?" — months later, when nobody remembers the match.
+   *
+   * A failure here must not lose the result. The rubbers are written and
+   * the fixture is played; the stamp is bookkeeping on top of that, and a
+   * Directus hiccup on this line is not a reason to tell a captain their
+   * card did not save.
+   */
+  if (input.scorecardId) {
+    try {
+      await client.request(
+        updateItem("hrc_scorecards", input.scorecardId, {
+          status: "applied",
+          applied_at: new Date().toISOString(),
+          ...(input.savedBy ? { applied_by: input.savedBy } : {}),
+        }),
+      );
+    } catch (error) {
+      console.error("Could not mark the scorecard applied", error);
+    }
+  }
+
   return { homeScore: score.home, awayScore: score.away, rubbers: rows.length };
 }
 
@@ -1822,6 +1926,7 @@ export async function recordScorecardUpload(input: {
   model?: string | null;
   inputTokens?: number | null;
   outputTokens?: number | null;
+  uploadedBy?: string | null;
 }): Promise<{ id: string }> {
   const client = await directus();
   const created = (await client.request(
@@ -1836,6 +1941,9 @@ export async function recordScorecardUpload(input: {
       input_tokens: input.inputTokens ?? null,
       output_tokens: input.outputTokens ?? null,
       parsed_at: new Date().toISOString(),
+      // Who sent it, on the attempt as well as on the save — a card that
+      // failed to read is exactly the one somebody may need to ask about.
+      applied_by: input.uploadedBy ?? null,
     }),
   )) as Row;
   return { id: created?.id ?? "" };
