@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { NAV, findGroup, findSection } from "@/lib/nav";
 import { useSettings } from "@/lib/queries";
-import { useRouteTransition } from "@/lib/scroll";
+import { lockPageScroll, useRouteTransition } from "@/lib/scroll";
 import { cn } from "@/lib/utils";
 import { Prose } from "@/components/ui";
 
@@ -197,6 +197,18 @@ function MobileNav({ pathname }: { pathname: string }) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
+  /*
+   * The page stays put while the menu is over it. The panel hangs off the
+   * header, and the header scrolls: without this, one flick sends the open
+   * menu off the top of the screen and leaves the reader looking at the
+   * middle of the page they were trying to leave, with the button still
+   * reporting the menu as open.
+   */
+  useEffect(() => {
+    if (!open) return;
+    return lockPageScroll();
+  }, [open]);
+
   return (
     <div className="lg:hidden">
       <button
@@ -215,48 +227,71 @@ function MobileNav({ pathname }: { pathname: string }) {
       </button>
 
       {open ? (
-        <div
-          id="mobile-menu"
-          className="absolute inset-x-0 z-40 mt-3 animate-fade-in-up border-y border-line bg-surface shadow-lifted"
-        >
-          <div className="max-h-[70vh] overflow-y-auto px-4 py-2">
-            {NAV.map((group) => (
-              <section key={group.label} className="border-b border-line py-3 last:border-b-0">
-                <h2 className="px-2 py-1 font-semibold uppercase tracking-wide text-ink-muted">
-                  {group.label}
-                </h2>
-                <ul>
-                  {group.links.map((link) => (
-                    <li key={link.href}>
-                      <Link
-                        href={link.href}
-                        aria-current={link.href === pathname ? "page" : undefined}
-                        className={cn(
-                          "flex min-h-touch items-center justify-between gap-3 rounded-card px-2 py-2.5 no-underline transition-colors hover:bg-brand-soft",
-                          link.href === pathname && "bg-brand-soft",
-                        )}
-                      >
-                        <span>
-                          <span className="block text-lg font-semibold text-brand">{link.title}</span>
-                          <span className="block text-ink-muted">{link.subtitle}</span>
-                        </span>
-                        <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-ink-muted" />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
+        <>
+          {/*
+            Tapping the page closes the menu. With the page held still
+            underneath, a reader who opened this by accident and did not
+            spot the X would otherwise be looking at a site that had
+            stopped responding to the only gesture they were using.
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface-sunken px-4 py-3">
-            <span className="font-semibold text-ink">Display</span>
-            <div className="flex items-center gap-2">
-              <TextSizeControl />
-              <ThemeToggle />
+            `top-full` measures itself against the header, so the dimmed
+            area begins exactly where the header ends and the masthead
+            stays legible behind the panel.
+          */}
+          <div
+            aria-hidden="true"
+            onClick={() => setOpen(false)}
+            className="absolute inset-x-0 top-full z-30 h-screen bg-black/40"
+          />
+          <div
+            id="mobile-menu"
+            className="absolute inset-x-0 z-40 mt-3 animate-fade-in-up border-y border-line bg-surface shadow-lifted"
+          >
+            {/*
+              `overscroll-contain`: reaching the end of this list must not
+              hand the flick on to the page behind it.
+            */}
+            <div className="max-h-[70vh] overflow-y-auto overscroll-contain px-4 py-2">
+              {NAV.map((group) => (
+                <section key={group.label} className="border-b border-line py-3 last:border-b-0">
+                  <h2 className="px-2 py-1 font-semibold uppercase tracking-wide text-ink-muted">
+                    {group.label}
+                  </h2>
+                  <ul>
+                    {group.links.map((link) => (
+                      <li key={link.href}>
+                        <Link
+                          href={link.href}
+                          aria-current={link.href === pathname ? "page" : undefined}
+                          className={cn(
+                            "flex min-h-touch items-center justify-between gap-3 rounded-card px-2 py-2.5 no-underline transition-colors hover:bg-brand-soft",
+                            link.href === pathname && "bg-brand-soft",
+                          )}
+                        >
+                          <span>
+                            <span className="block text-lg font-semibold text-brand">
+                              {link.title}
+                            </span>
+                            <span className="block text-ink-muted">{link.subtitle}</span>
+                          </span>
+                          <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-ink-muted" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface-sunken px-4 py-3">
+              <span className="font-semibold text-ink">Display</span>
+              <div className="flex items-center gap-2">
+                <TextSizeControl />
+                <ThemeToggle />
+              </div>
             </div>
           </div>
-        </div>
+        </>
       ) : null}
     </div>
   );
@@ -270,7 +305,7 @@ function Header({ pathname }: { pathname: string }) {
   const { data: settings } = useSettings();
 
   return (
-    <header className="relative z-40 border-b border-line bg-surface no-print">
+    <header id="top" className="relative z-40 border-b border-line bg-surface no-print">
       <div className="mx-auto max-w-page px-4">
         <div className="flex items-center justify-between gap-4 py-4">
           <Link href="/" className="group flex min-w-0 items-center gap-3 no-underline">
@@ -680,9 +715,19 @@ function PageFooterNav({ pathname }: { pathname: string }) {
           </Link>
         </li>
         <li className="ml-auto">
-          {/* Long pages are the reason this block exists; on those, getting
-              back to the menu is its own small journey. */}
-          <a href="#main" className="link font-semibold">
+          {/*
+            `#top`, not `#main`. Long pages are the reason this block
+            exists, and what a reader wants at the end of one is the menu —
+            but `<main>` starts *below* the header, so this link used to
+            stop at the breadcrumb with the masthead, the Menu button and
+            the whole navigation still off the top of the screen. It read
+            as a "back to top" that would not go to the top.
+
+            The header carries the matching id, so this also parks the
+            browser's sequential-focus point there: the next Tab goes into
+            the navigation rather than back into the page just left.
+          */}
+          <a href="#top" className="link font-semibold">
             Back to top
           </a>
         </li>
