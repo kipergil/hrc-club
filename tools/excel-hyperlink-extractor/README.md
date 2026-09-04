@@ -4,7 +4,8 @@ Reads an Excel workbook and prints, as plain text, the hyperlinks hiding inside 
 the cell's visible text next to the URL it actually points at, keyed by an id column you
 choose.
 
-Two front ends over the same rules, producing byte-identical reports:
+Two front ends over the same rules, producing byte-identical reports (with one
+documented exception — see [Links built by a formula](#links-built-by-a-formula)):
 
 - **`xlhyperlinks`** — the C# console app in this folder. Interactive, or scriptable.
 - **[`web/index.html`](web/index.html)** — the same thing as a page. Open the file in a
@@ -48,7 +49,7 @@ File   : /home/me/parts.xlsx
 Sheet  : Parts
 Id     : A (Item ID)
 Links  : C (Datasheet), D (Drawing)
-Rows   : 3 listed of 4 with data
+Rows   : 4 — every row of rows 2–5
 
 [row 2] P-1001
   C (Datasheet)
@@ -57,6 +58,9 @@ Rows   : 3 listed of 4 with data
   D (Drawing)
     text: DWG-1001
     link: https://example.com/dwg/1001.dwg  [HYPERLINK formula]
+
+[row 3] P-1002
+  ...
 ```
 
 Want a file to try it on first?
@@ -102,12 +106,43 @@ used when it isn't the obvious case:
 
 1. **An embedded hyperlink** — what Ctrl+K creates, including one applied to a
    merged cell (stored against the merge's top-left cell).
-2. **A `=HYPERLINK("target", "text")` formula** — the literal target is read
-   straight out of the formula. A computed target (a cell reference, a
-   concatenation) would need the workbook recalculated, so it is reported as no
-   link rather than guessed at.
+2. **A `=HYPERLINK(target, label)` formula** — the cells Excel gives an *Open
+   Hyperlink* but no *Edit Hyperlink* on, because the link is computed rather than
+   stored. The target argument is evaluated, so a reference, a concatenation or a
+   filled-down formula all resolve — see below.
 3. **A URL sitting in the cell as plain text** — `https://`, `ftp://`, `mailto:`,
    `file://`, `www.` or a UNC path.
+
+## Links built by a formula
+
+A cell whose right-click menu offers *Open Hyperlink* but not *Edit Hyperlink* has no
+link stored on it at all — a `=HYPERLINK()` formula computes one. The target is rarely a
+plain string, so it is evaluated rather than just read:
+
+| Formula | Target |
+| --- | --- |
+| `=HYPERLINK("https://x/1002.pdf","Doc")` | read straight out |
+| `=HYPERLINK(B2,"Doc")` | the text of `B2` |
+| `=HYPERLINK("https://x/"&B2&".pdf","Doc")` | concatenation, `&` |
+| `=HYPERLINK(CONCATENATE("https://x/",A2),"Doc")` | `CONCATENATE()` and `CONCAT()` |
+| `=HYPERLINK('Other sheet'!C7,"Doc")` | a reference to any sheet in the workbook |
+
+A formula filled down a column is stored once and shared by the rest; both readers expand
+that, so every row resolves to its own target.
+
+**Where the two differ.** A target that needs the rest of the formula language —
+`=HYPERLINK(VLOOKUP(A2,…),"Doc")`, an `IF`, an `INDEX/MATCH` — needs a formula engine.
+The console app has one (ClosedXML's) and computes those; the browser has none and says
+so rather than reporting no link:
+
+```
+  G (Lookup)
+    text: Lookup 1002
+    link: (not computed) =HYPERLINK(VLOOKUP(A2,$A$2:$B$5,2,FALSE), …)
+```
+
+The page also counts them above the report. This is the one case where the two front ends
+give different answers — if a sheet leans on lookups for its links, use the console app.
 
 ## One record in, one record out
 
@@ -195,6 +230,8 @@ Two, both forced by the browser:
 - SheetJS reads the workbook as saved, so a `=HYPERLINK()` cell that was never
   recalculated has no cached text. The label argument of the formula is used instead,
   which is what Excel would be showing.
+- A link target that needs a formula engine — a lookup, a condition — is reported as not
+  computed rather than resolved. The console app resolves those.
 - **Download** saves the report when the page can reach a save surface — served on its
   own, that is the browser; embedded in a viewer, the host handles it. **Copy** always
   works.

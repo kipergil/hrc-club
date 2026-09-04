@@ -19,7 +19,7 @@ internal enum LinkSource
     PlainText,
 }
 
-internal sealed record CellLink(string Text, string? Address, LinkSource Source)
+internal sealed record CellLink(string Text, string? Address, LinkSource Source, string? UnresolvedTarget = null)
 {
     public static readonly CellLink Empty = new(string.Empty, null, LinkSource.None);
 
@@ -90,6 +90,14 @@ internal static class HyperlinkExtractor
     public static CellLink ReadLink(IXLCell cell)
     {
         var text = GetDisplayText(cell);
+        var call = cell.HasFormula ? FormulaLinks.FindCall(cell.FormulaA1) : null;
+
+        // A formula cell saved without a cached result has no text of its own; Excel would be
+        // showing the label argument, so use that.
+        if (text.Length == 0 && call?.Label is { } label)
+        {
+            text = FormulaLinks.Evaluate(cell.Worksheet, label) ?? string.Empty;
+        }
 
         var hyperlink = GetEmbeddedHyperlink(cell);
         if (hyperlink is not null)
@@ -104,9 +112,15 @@ internal static class HyperlinkExtractor
             }
         }
 
-        if (cell.HasFormula && TryReadHyperlinkFormula(cell.FormulaA1, out var formulaAddress))
+        if (call is not null)
         {
-            return new CellLink(text, formulaAddress, LinkSource.Formula);
+            var target = FormulaLinks.Evaluate(cell.Worksheet, call.Target)
+                         ?? FormulaLinks.EvaluateWithEngine(cell.Worksheet, call.Target, cell.Address.ToStringRelative());
+
+            if (!string.IsNullOrWhiteSpace(target))
+            {
+                return new CellLink(text, target, LinkSource.Formula);
+            }
         }
 
         if (UrlLike.IsMatch(text))
@@ -114,7 +128,11 @@ internal static class HyperlinkExtractor
             return new CellLink(text, text.Trim(), LinkSource.PlainText);
         }
 
-        return CellLink.Empty with { Text = text };
+        // A HYPERLINK call whose target could not be worked out. Said plainly, so it is not
+        // mistaken for a cell that has no link at all.
+        return call is not null
+            ? new CellLink(text, null, LinkSource.None, call.Target)
+            : CellLink.Empty with { Text = text };
     }
 
     private static XLHyperlink? GetEmbeddedHyperlink(IXLCell cell)
@@ -135,61 +153,6 @@ internal static class HyperlinkExtractor
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Reads the target out of =HYPERLINK("target", "text"). Only literal targets can be
-    /// recovered; a computed one (a cell reference, a concatenation) needs the workbook
-    /// recalculated, so it is reported as "no link" rather than guessed at.
-    /// </summary>
-    internal static bool TryReadHyperlinkFormula(string? formula, out string? address)
-    {
-        address = null;
-        if (string.IsNullOrWhiteSpace(formula))
-        {
-            return false;
-        }
-
-        var open = formula.IndexOf("HYPERLINK(", StringComparison.OrdinalIgnoreCase);
-        if (open < 0)
-        {
-            return false;
-        }
-
-        var i = open + "HYPERLINK(".Length;
-        while (i < formula.Length && char.IsWhiteSpace(formula[i]))
-        {
-            i++;
-        }
-
-        if (i >= formula.Length || formula[i] != '"')
-        {
-            return false;
-        }
-
-        i++;
-        var value = new System.Text.StringBuilder();
-        while (i < formula.Length)
-        {
-            if (formula[i] == '"')
-            {
-                // "" is an escaped quote inside the literal; a lone quote ends it.
-                if (i + 1 < formula.Length && formula[i + 1] == '"')
-                {
-                    value.Append('"');
-                    i += 2;
-                    continue;
-                }
-
-                address = value.ToString();
-                return address.Length > 0;
-            }
-
-            value.Append(formula[i]);
-            i++;
-        }
-
-        return false;
     }
 
     /// <summary>The text as Excel shows it, so dates and numbers do not come out as serials.</summary>

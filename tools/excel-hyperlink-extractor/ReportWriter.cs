@@ -56,9 +56,11 @@ internal static class ReportWriter
                 }
 
                 report.AppendLine($"{indent}text: {Show(entry.Link.Text)}");
-                report.AppendLine(entry.Link.Source == LinkSource.None
-                    ? $"{indent}link: (none)"
-                    : $"{indent}link: {entry.Link.Address}{Note(entry.Link)}");
+                report.AppendLine(entry.Link.Source != LinkSource.None
+                    ? $"{indent}link: {entry.Link.Address}{Note(entry.Link)}"
+                    : entry.Link.UnresolvedTarget is { } expression
+                        ? $"{indent}link: (not computed) =HYPERLINK({Shorten(expression)}, …)"
+                        : $"{indent}link: (none)");
             }
 
             report.AppendLine();
@@ -123,6 +125,8 @@ internal static class ReportWriter
     }
 
     private static string Show(string text) => string.IsNullOrWhiteSpace(text) ? "(empty)" : text;
+
+    private static string Shorten(string text) => text.Length > 60 ? text[..57] + "…" : text;
 
     private static string Note(CellLink link) =>
         link.Source == LinkSource.Embedded ? string.Empty : $"  [{link.SourceLabel}]";

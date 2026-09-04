@@ -571,7 +571,8 @@
 
   <ul class="legend">
     <li><b>Embedded link</b> &mdash; what Ctrl+K puts in a cell, merged cells included</li>
-    <li><b>HYPERLINK formula</b> &mdash; the literal target inside <code>=HYPERLINK("&hellip;")</code></li>
+    <li><b>HYPERLINK formula</b> &mdash; the target inside <code>=HYPERLINK(&hellip;)</code>, worked out from
+      text, cell references, <code>&amp;</code> and <code>CONCATENATE</code></li>
     <li><b>Url in cell text</b> &mdash; no link, but the text is one</li>
   </ul>
 
@@ -664,40 +665,166 @@
     return rawText(cell).trim();
   }
 
-  // The literal arguments of =HYPERLINK("target", "label"). A computed target would need the
-  // workbook recalculated, so it is reported as no link rather than guessed at.
-  function hyperlinkFormula(formula) {
-    if (!formula) return null;
-    var open = formula.toUpperCase().indexOf("HYPERLINK(");
-    if (open < 0) return null;
+  // ---------- =HYPERLINK() ----------
+  //
+  // Excel offers "Open Hyperlink" but no "Edit Hyperlink" on these cells: the link is
+  // computed by the formula, not stored on the cell. The target is often not a literal but
+  // a reference or a concatenation, so the argument is evaluated rather than just read.
 
-    var at = open + "HYPERLINK(".length;
+  var CELL_REF = /^\$?[A-Za-z]{1,3}\$?[0-9]{1,7}$/;
+  var NUMBER = /^-?[0-9]+(\.[0-9]+)?$/;
+  var FUNCTION_CALL = /^([A-Za-z_][A-Za-z0-9_.]*)\s*\(([\s\S]*)\)$/;
 
-    function literal() {
-      while (at < formula.length && /\s/.test(formula[at])) at++;
-      if (formula[at] !== '"') return null;
+  // Splits on a separator that sits outside quotes and brackets.
+  function splitTop(text, separator) {
+    var parts = [];
+    var depth = 0;
+    var quoted = false;
+    var start = 0;
 
-      at++;
-      var value = "";
-      while (at < formula.length) {
-        if (formula[at] === '"') {
-          if (formula[at + 1] === '"') { value += '"'; at += 2; continue; }
-          at++;
-          return value;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text.charAt(i);
+
+      if (quoted) {
+        if (ch === '"') {
+          if (text.charAt(i + 1) === '"') i++;
+          else quoted = false;
         }
-        value += formula[at];
-        at++;
+        continue;
       }
-      return null;
+
+      if (ch === '"') quoted = true;
+      else if (ch === "(" || ch === "[") depth++;
+      else if (ch === ")" || ch === "]") depth--;
+      else if (ch === separator && depth === 0) {
+        parts.push(text.slice(start, i));
+        start = i + 1;
+      }
     }
 
-    var target = literal();
+    parts.push(text.slice(start));
+    return parts;
+  }
+
+  // The whole term must be one quoted string, or this is not a literal.
+  function stringLiteral(term) {
+    if (term.charAt(0) !== '"') return null;
+
+    var value = "";
+    for (var i = 1; i < term.length; i++) {
+      if (term.charAt(i) === '"') {
+        if (term.charAt(i + 1) === '"') { value += '"'; i++; continue; }
+        return i === term.length - 1 ? value : null;
+      }
+      value += term.charAt(i);
+    }
+    return null;
+  }
+
+  // A1, $A$1, Sheet2!A1, 'Another sheet'!A1 — one cell, on any sheet of this workbook.
+  function referenceText(term) {
+    var sheet = sheetCtx.sheet;
+    var ref = term;
+    var bang = term.lastIndexOf("!");
+
+    if (bang >= 0) {
+      var name = term.slice(0, bang);
+      ref = term.slice(bang + 1);
+      if (name.charAt(0) === "'" && name.charAt(name.length - 1) === "'") {
+        name = name.slice(1, -1).replace(/''/g, "'");
+      }
+      sheet = state.workbook && state.workbook.Sheets[name];
+      if (!sheet) return null;
+    }
+
+    if (!CELL_REF.test(ref)) return null;
+    return cellText(sheet[ref.replace(/\$/g, "").toUpperCase()]);
+  }
+
+  // Evaluates the small slice of the formula language that link targets are built from:
+  // text, numbers, cell references, & and CONCAT/CONCATENATE. Anything else — a lookup, a
+  // condition — needs a real formula engine, and returns null rather than a guess.
+  function evaluateExpression(expression) {
+    var parts = splitTop(expression, "&");
+    var out = "";
+
+    for (var i = 0; i < parts.length; i++) {
+      var value = evaluateTerm(parts[i].trim());
+      if (value === null) return null;
+      out += value;
+    }
+
+    return out;
+  }
+
+  function evaluateTerm(term) {
+    if (!term) return null;
+
+    if (term.charAt(0) === '"') return stringLiteral(term);
+    if (NUMBER.test(term)) return term;
+
+    var call = term.match(FUNCTION_CALL);
+    if (call) {
+      var name = call[1].toUpperCase().replace(/^_XLFN\./, "");
+      if (name !== "CONCATENATE" && name !== "CONCAT") return null;
+
+      var args = splitTop(call[2], ",");
+      var joined = "";
+      for (var i = 0; i < args.length; i++) {
+        var value = evaluateExpression(args[i].trim());
+        if (value === null) return null;
+        joined += value;
+      }
+      return joined;
+    }
+
+    if (term.charAt(0) === "(" && term.charAt(term.length - 1) === ")") {
+      return evaluateExpression(term.slice(1, -1));
+    }
+
+    return referenceText(term);
+  }
+
+  // The unevaluated arguments of a =HYPERLINK(...) call, wherever it sits in the formula.
+  function hyperlinkCall(formula) {
+    if (!formula) return null;
+
+    var upper = formula.toUpperCase();
+    var open = -1;
+
+    for (var at = upper.indexOf("HYPERLINK("); at >= 0; at = upper.indexOf("HYPERLINK(", at + 1)) {
+      var before = at > 0 ? upper.charAt(at - 1) : "";
+      if (!/[A-Z0-9_]/.test(before)) { open = at; break; }   // "." allows _xlfn.HYPERLINK
+    }
+
+    if (open < 0) return null;
+
+    var start = open + "HYPERLINK(".length;
+    var depth = 1;
+    var quoted = false;
+    var end = -1;
+
+    for (var i = start; i < formula.length; i++) {
+      var ch = formula.charAt(i);
+      if (quoted) {
+        if (ch === '"') {
+          if (formula.charAt(i + 1) === '"') i++;
+          else quoted = false;
+        }
+        continue;
+      }
+      if (ch === '"') quoted = true;
+      else if (ch === "(") depth++;
+      else if (ch === ")" && --depth === 0) { end = i; break; }
+    }
+
+    if (end < 0) return null;
+
+    var args = splitTop(formula.slice(start, end), ",");
+    var target = args[0] ? args[0].trim() : "";
     if (!target) return null;
 
-    while (at < formula.length && /\s/.test(formula[at])) at++;
-    var label = formula[at] === "," ? (at++, literal()) : null;
-
-    return { target: target, label: label };
+    return { target: target, label: args.length > 1 ? args[1].trim() : null };
   }
 
   // Merges are indexed by row once per sheet: scanning the whole list per cell turns a
@@ -752,11 +879,11 @@
     var sheet = sheetCtx.sheet;
     var cell = sheet[address(row, col)];
     var text = cellText(cell);
-    var formula = cell && cell.f ? hyperlinkFormula(cell.f) : null;
+    var call = cell && cell.f ? hyperlinkCall(cell.f) : null;
 
     // A formula cell saved without a cached result has no text of its own; Excel would
     // be showing the label argument, so use that.
-    if (!text && formula && formula.label) text = formula.label;
+    if (!text && call && call.label) text = evaluateExpression(call.label) || "";
 
     if (cell && cell.l && cell.l.Target) {
       return { text: text, target: cell.l.Target, source: "embedded hyperlink" };
@@ -767,12 +894,19 @@
       return { text: text, target: anchor.l.Target, source: "embedded hyperlink" };
     }
 
-    if (formula) {
-      return { text: text, target: formula.target, source: "HYPERLINK formula" };
+    if (call) {
+      var target = evaluateExpression(call.target);
+      if (target) return { text: text, target: target, source: "HYPERLINK formula" };
     }
 
     if (URL_LIKE.test(text)) {
       return { text: text, target: text, source: "url in cell text" };
+    }
+
+    // A HYPERLINK call whose target needs more of the formula language than this can
+    // evaluate. Said plainly, so it is not mistaken for a cell that has no link.
+    if (call) {
+      return { text: text, target: null, source: null, unresolved: call.target };
     }
 
     return { text: text, target: null, source: null };
@@ -785,7 +919,12 @@
   function cellHasLink(cell) {
     if (!cell) return false;
     if (cell.l && cell.l.Target) return true;
-    if (cell.f && hyperlinkFormula(cell.f)) return true;
+
+    if (cell.f) {
+      var call = hyperlinkCall(cell.f);
+      if (call && evaluateExpression(call.target)) return true;
+    }
+
     if (cell.t === "n" || cell.t === "b" || cell.t === "z") return false;   // never a URL
     return URL_LIKE.test(rawText(cell));
   }
@@ -864,6 +1003,7 @@
     var idColumn = state.idColumn === null ? null : findColumn(state.idColumn);
     var rows = [];
     var links = 0;
+    var unresolved = 0;
 
     for (var r = layout.firstDataRow; r <= layout.lastRow; r++) {
       var id = idColumn ? cellText(layout.sheet[address(r, idColumn.index)]) : String(r + 1);
@@ -874,6 +1014,7 @@
         var column = picked[i];
         var link = readLink(r, column.index);
         if (link.target) { hasLink = true; links++; }
+        if (link.unresolved) unresolved++;
         entries.push({ column: column, address: address(r, column.index), link: link });
       }
 
@@ -882,7 +1023,7 @@
       rows.push({ number: r + 1, id: id, entries: entries, hasLink: hasLink });
     }
 
-    return { rows: rows, idColumn: idColumn, columns: picked, links: links };
+    return { rows: rows, idColumn: idColumn, columns: picked, links: links, unresolved: unresolved };
   }
 
   // The extraction is the expensive half, and nothing about the output format changes it —
@@ -910,6 +1051,10 @@
       ? listed.length.toLocaleString() + " — every row of " + span
       : listed.length.toLocaleString() + " of " + result.rows.length.toLocaleString() +
         " (" + span + "), the rows that have a link";
+  }
+
+  function shorten(text) {
+    return text.length > 60 ? text.slice(0, 57) + "…" : text;
   }
 
   function truncationNote(listed, limit) {
@@ -952,7 +1097,9 @@
         lines.push(indent + "text: " + (entry.link.text || "(empty)"));
         lines.push(indent + "link: " + (entry.link.target
           ? entry.link.target + (entry.link.source === "embedded hyperlink" ? "" : "  [" + entry.link.source + "]")
-          : "(none)"));
+          : entry.link.unresolved
+            ? "(not computed) =HYPERLINK(" + shorten(entry.link.unresolved) + ", …)"
+            : "(none)"));
       }
       lines.push("");
     }
@@ -1010,7 +1157,7 @@
       : textReport(result, listed, limit);
 
     // Every link sits in a listed row, so the extraction's own count covers both filters.
-    return { text: text, links: result.links, rows: listed.length };
+    return { text: text, links: result.links, rows: listed.length, unresolved: result.unresolved };
   }
 
   // ---------- painting the controls ----------
@@ -1086,6 +1233,12 @@
     el.tally.textContent = report.rows
       ? count(report.rows, "row") + " · " + count(report.links, "link")
       : "";
+
+    // A HYPERLINK formula whose target this cannot compute is worth saying out loud;
+    // silently reporting no link would be wrong.
+    showNotice(report.unresolved
+      ? count(report.unresolved, "cell") + " build the link with a formula this cannot evaluate — a lookup or a condition. The console app can compute those."
+      : null);
   }
 
   // Renders everything: the picked columns changed, or the sheet did.

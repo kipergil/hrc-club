@@ -145,7 +145,9 @@ internal sealed class Options
 
         Columns are matched against the header text first (case-insensitive), then
         as a column letter. Hyperlinks are read from real embedded links first,
-        then HYPERLINK() formulas, then cells whose text is itself a URL.
+        then HYPERLINK() formulas, then cells whose text is itself a URL. A
+        formula target is evaluated, so references, concatenations and lookups
+        all resolve to the link they build.
 
         Every row of the sheet's data range is reported, with empty values where a
         row has no link, so the output stays row-for-row with the sheet. TSV and CSV
