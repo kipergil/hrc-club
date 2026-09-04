@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { DIVISION } from "@shared/enums.js";
 import type { Division } from "@shared/enums.js";
 import { PageHeader, PrintButton } from "@/components/layout";
-import { TeamFixtureList } from "@/components/data";
+import { TeamFixtureList, VisitorNote } from "@/components/data";
 import {
   Badge,
   Card,
@@ -220,6 +220,14 @@ export function TeamPage({ slug }: { slug: string }) {
           </Card>
         ) : null}
       </div>
+
+      {/*
+        Straight after the match-night card, because it qualifies it. A
+        visiting captain reads "at home on Wednesdays, from 7:30" and then
+        the club's own "we have the hall from 7pm til 10pm" — which is the
+        order those two have to be in for the second to land.
+      */}
+      <VisitorNote note={team.clubVisitorNote} clubName={team.clubName} />
 
       <section aria-labelledby="squad-heading">
         <h2 id="squad-heading" className="mb-3 text-2xl">

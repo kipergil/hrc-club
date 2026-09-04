@@ -42,6 +42,7 @@ export const KNOWN_ROUTE_SEGMENTS: readonly string[] = [
   "tables",
   "teams",
   "venues",
+  "whats-new",
 ];
 
 /** Is this path one the app has a route for? */

@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { discoverClubRefs, parseClubPage, parseVenue } from "./parse-club-page.js";
+import {
+  discoverClubRefs,
+  extractVisitorNote,
+  parseClubPage,
+  parseVenue,
+} from "./parse-club-page.js";
 
 /**
  * The fixture is a real capture of `Clubz.asp?Club=HRC` — Microsoft
@@ -150,5 +155,52 @@ describe("discoverClubRefs", () => {
 
   it("returns nothing for a page with no club links", () => {
     expect(discoverClubRefs("<html><body>nothing here</body></html>")).toEqual([]);
+  });
+});
+
+describe("the club's note to visiting teams", () => {
+  /**
+   * Two of the ten clubs run one, and both are about the hall's hours —
+   * the single most practical thing on either page and the easiest to
+   * lose, because on the league's site it is not a field but a cell the
+   * webmaster typed into.
+   */
+  it("reads Water Lane's, keeping the emphasis on the closing time", () => {
+    const note = extractVisitorNote(load("clubz-water-lane.html"));
+
+    expect(note).toContain("We have the hall from 7pm til 10pm on Wednesdays");
+    expect(note).toContain("Friday nights");
+    // Bold survives as markdown. Where the league used it, it is on the
+    // hour the hall shuts — the one fact in the sentence to act on.
+    expect(note).toContain("**9 pm**");
+  });
+
+  it("reads Furneux Pelham's", () => {
+    expect(extractVisitorNote(load("clubz-furneux-pelham.html"))).toBe(
+      "Please can all our home matches start at 7pm. Thank you!",
+    );
+  });
+
+  it("drops the cell's own 'Please Note!' heading", () => {
+    // The site puts its own heading on this; kept, it would be a heading
+    // inside a heading.
+    for (const file of ["clubz-water-lane.html", "clubz-furneux-pelham.html"]) {
+      expect(extractVisitorNote(load(file))!.toLowerCase()).not.toContain("please note!");
+    }
+  });
+
+  it("returns nothing for the eight clubs without one", () => {
+    // Every page carries `CFMessage` once, in a stylesheet rule. Matching
+    // the word rather than the cell would give all ten clubs a note made
+    // of CSS.
+    for (const file of ["clubz-hrc.html", "clubz-kidston.html"]) {
+      expect(load(file)).toContain("CFMessage");
+      expect(extractVisitorNote(load(file))).toBeNull();
+    }
+  });
+
+  it("is carried on the parsed club", () => {
+    expect(parseClubPage(load("clubz-water-lane.html")).visitorNote).toContain("7pm til 10pm");
+    expect(parseClubPage(load("clubz-hrc.html")).visitorNote).toBeNull();
   });
 });

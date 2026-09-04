@@ -9,7 +9,24 @@ const CATEGORY_LABEL: Record<string, string> = {
   match_report: "Match report",
   notice: "Notice",
   newsletter: "Newsletter",
+  feature: "Feature",
 };
+
+/**
+ * Two lists, two addresses, one collection.
+ *
+ * Newsletters and feature posts each have their own page, so the news list
+ * is what is left: the committee's own announcements, match reports and
+ * notices. Anything with a home of its own is filtered out here rather
+ * than appearing in both places, so every item has exactly one address to
+ * send someone to.
+ */
+const HOUSED_ELSEWHERE = new Set(["newsletter", "feature"]);
+
+/** Feature posts read at `/whats-new/…`; everything else at `/news/…`. */
+export function newsItemHref(category: string, slug: string): string {
+  return category === "feature" ? `/whats-new/${slug}` : `/news/${slug}`;
+}
 
 function NewsCard({
   item,
@@ -43,7 +60,7 @@ function NewsCard({
         {item.isPinned ? <Badge tone="accent">Pinned</Badge> : null}
       </p>
       <h2 className="mt-1.5 text-xl">
-        <Link href={`/news/${item.slug}`} className="link">
+        <Link href={newsItemHref(item.category, item.slug)} className="link">
           {item.title}
         </Link>
       </h2>
@@ -58,9 +75,7 @@ export function NewsPage() {
   if (isLoading) return <Loading what="the news" />;
   if (isError) return <ErrorNote what="news" />;
 
-  // Newsletters have their own page, so they are kept out of the news list
-  // rather than burying two lines of news under a run of PDFs.
-  const posts = (items ?? []).filter((item) => item.category !== "newsletter");
+  const posts = (items ?? []).filter((item) => !HOUSED_ELSEWHERE.has(item.category));
 
   return (
     <div>
@@ -68,6 +83,62 @@ export function NewsPage() {
 
       {posts.length === 0 ? (
         <Empty>Nothing has been posted yet. League notices will appear here.</Empty>
+      ) : (
+        <ul className="grid gap-4 sm:grid-cols-2">
+          {posts.map((item) => (
+            <li key={item.id}>
+              <NewsCard item={item} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The site explaining itself.
+ *
+ * Most of what was built this year is invisible until someone happens to
+ * press the right thing: that the year filter puts the season in the
+ * address, that a player's page lists every game they played, that the
+ * whole scorecard is on the match page. A league site cannot rely on
+ * being explored, so each of those gets a short post saying what it does
+ * and where to find it.
+ *
+ * Filed away from the committee's notices on purpose. These are the site's
+ * own words about itself, and a run of them alongside a postponement
+ * would make the postponement harder to find.
+ */
+export function WhatsNewPage() {
+  const { data: items, isLoading, isError } = useNews("feature");
+
+  if (isLoading) return <Loading what="these posts" />;
+  if (isError) return <ErrorNote what="posts" />;
+
+  const posts = items ?? [];
+
+  return (
+    <div>
+      <PageHeader
+        title="What's new"
+        subtitle="Short guides to what this site can do, and where to find it"
+      >
+        <p className="max-w-readable text-ink-muted">
+          Looking for the committee's announcements instead? They are on{" "}
+          <Link href="/news" className="link">
+            News and notices
+          </Link>
+          . If you have a question this does not answer,{" "}
+          <Link href="/help" className="link">
+            How do I…?
+          </Link>{" "}
+          is the place to start.
+        </p>
+      </PageHeader>
+
+      {posts.length === 0 ? (
+        <Empty>Nothing here yet. Notes about new features will appear here.</Empty>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2">
           {posts.map((item) => (

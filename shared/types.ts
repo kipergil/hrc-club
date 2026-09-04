@@ -156,6 +156,11 @@ export interface Club {
   shortName: string | null;
   isHomeClub: boolean;
   description: string | null;
+  /**
+   * The club's standing message to visiting teams — usually the hall's
+   * hours or an earlier start. Null for the eight clubs that have none.
+   */
+  visitorNote: string | null;
   website: string | null;
   logoId: string | null;
   venue: Venue | null;
@@ -183,6 +188,12 @@ export interface Team {
   seasonLabel: string;
   clubName: string | null;
   clubSlug: string | null;
+  /**
+   * The club's note, carried on the team so an away captain reading a team
+   * page does not have to go and find the club to learn the hall shuts at
+   * ten. Attributed to `clubName` where it is shown.
+   */
+  clubVisitorNote: string | null;
 }
 
 export interface SquadPlace {

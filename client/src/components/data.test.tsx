@@ -2,7 +2,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { Fixture, Standing, TeamFixture } from "@shared/types.js";
-import { FixtureList, StandingsTable, TeamFixtureList } from "./data";
+import { FixtureList, StandingsTable, TeamFixtureList, VisitorNote } from "./data";
 
 function fixture(overrides: Partial<Fixture> = {}): Fixture {
   return {
@@ -293,5 +293,43 @@ describe("where a team name in a match list leads", () => {
     render(<StandingsTable standings={[standing()]} season="2024-25" />);
 
     expect(screen.getAllByRole("link", { name: "HRC A" })[0]?.getAttribute("href")).toBe("/teams/hrc-a?season=2024-25");
+  });
+});
+
+describe("a club's note to visiting teams", () => {
+  const waterLane =
+    "We have the hall from 7pm til 10pm on Wednesdays so, please, all Water Lane home matches to start as close to 7pm as possible. Also note that on Friday nights we only have the hall till **9 pm**!";
+
+  it("renders nothing at all when a club has no note", () => {
+    // Eight of the ten clubs have none, and an empty bordered box on each
+    // of their pages would be worse than the feature is good.
+    const { container } = render(<VisitorNote note={null} />);
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("says whose note it is when it is shown away from the club's own page", () => {
+    // On a team page an unattributed notice reads as the league telling
+    // you to turn up at seven, rather than the host club asking.
+    render(<VisitorNote note={waterLane} clubName="Water Lane" />);
+    expect(screen.getByText("A note from Water Lane")).toBeTruthy();
+  });
+
+  it("drops the attribution on the club's own page, where it is obvious", () => {
+    render(<VisitorNote note={waterLane} />);
+    expect(screen.getByText("Please note")).toBeTruthy();
+  });
+
+  it("keeps the emphasis the league put on the closing time", () => {
+    // The league bolds the hour the hall shuts. Rendering the note as
+    // plain text would print a literal "**9 pm**" on the page.
+    const { container } = render(<VisitorNote note={waterLane} clubName="Water Lane" />);
+    const strong = container.querySelector("strong");
+    expect(strong?.textContent).toBe("9 pm");
+    expect(container.textContent).not.toContain("**");
+  });
+
+  it("is announced rather than left as decoration", () => {
+    const { container } = render(<VisitorNote note={waterLane} clubName="Water Lane" />);
+    expect(container.querySelector('[role="status"]')).toBeTruthy();
   });
 });

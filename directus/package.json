@@ -14,7 +14,9 @@
     "import:fixtures": "tsx src/content/import-fixtures.ts",
     "import:archive": "tsx src/content/import-archive.ts",
     "geocode:venues": "tsx src/content/geocode-venues.ts",
-    "sample:results": "tsx src/content/sample-results.ts"
+    "sample:results": "tsx src/content/sample-results.ts",
+    "write:features": "tsx src/content/write-feature-posts.ts",
+    "import:club-notes": "tsx src/content/import-club-notes.ts"
   },
   "dependencies": {
     "@directus/sdk": "^18.0.3",

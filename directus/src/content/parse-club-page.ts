@@ -33,6 +33,8 @@ export interface TeamInfo {
 export interface ClubInfo {
   clubName: string | null;
   venue: string | null;
+  /** The club's message to visiting teams; null for the eight without one. */
+  visitorNote: string | null;
   teams: TeamInfo[];
   updatedAt: string | null;
 }
@@ -72,6 +74,48 @@ export function toSlug(value: string): string {
 
 function cellsOf(row: string): string[] {
   return [...row.matchAll(/<t[dh][^>]*>(.*?)<\/t[dh]>/gis)].map((m) => m[1]!);
+}
+
+/**
+ * The club's standing message to visiting teams, where it has one.
+ *
+ * Two of the ten clubs run one, both about the hall's hours — Furneux
+ * Pelham asking for a 7pm start, Water Lane explaining that the hall goes
+ * at ten on a Wednesday and nine on a Friday. It is the most practical
+ * thing on either page and the easiest to lose in a rebuild, because it
+ * is not a field: it is a cell the webmaster typed into.
+ *
+ * Matched on `class=CFMessage` rather than on the crimson it is rendered
+ * in. Both identify it today, but one of them names the thing and the
+ * other describes how it looks — and the colour is the half that changes
+ * when somebody restyles the site. Every page carries the string once in
+ * a stylesheet rule, so it is the `<td>` that has to match, not the word.
+ *
+ * `<b>` is kept, as markdown, because where it is used it is on the
+ * closing time — the one fact in the sentence a captain has to act on.
+ */
+export function extractVisitorNote(source: string): string | null {
+  const cell = source.match(/<td[^>]*\bclass\s*=\s*["']?CFMessage["']?[^>]*>(.*?)<\/td>/is);
+  if (!cell) return null;
+
+  const text = decodeEntities(
+    cell[1]!
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/?(b|strong)>/gi, "**")
+      .replace(/<[^>]+>/g, ""),
+  )
+    // Collapse runs of spaces without eating the line breaks above.
+    .replace(/[^\S\n]+/g, " ")
+    .split("\n")
+    .map((line) => line.trim())
+    // "Please Note!" is the cell's own heading, and the site puts its own
+    // heading on this. Kept in the text it would be a heading inside a
+    // heading.
+    .filter((line) => line.length > 0 && !/^please\s+note[!:.]*$/i.test(line))
+    .join("\n")
+    .trim();
+
+  return text || null;
 }
 
 export function parseClubPage(source: string): ClubInfo {
@@ -166,6 +210,7 @@ export function parseClubPage(source: string): ClubInfo {
   return {
     clubName,
     venue,
+    visitorNote: extractVisitorNote(source),
     teams,
     // The league stamps a placeholder date on a club it holds no data for.
     updatedAt: updatedAt && !updatedAt.startsWith("30 Dec 1899") ? updatedAt : null,

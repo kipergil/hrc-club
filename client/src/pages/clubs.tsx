@@ -4,6 +4,7 @@ import type { Club } from "@shared/types.js";
 import { DIVISION, DIVISION_SHORT_LABELS } from "@shared/enums.js";
 import { PageHeader, PrintButton } from "@/components/layout";
 import { Badge, Card, Empty, ErrorNote, Loading, Prose, Stat, TableNote } from "@/components/ui";
+import { VisitorNote } from "@/components/data";
 import { GoogleMapsLink, VenueMap } from "@/components/map";
 import { isGoogleMapsUrl } from "@/lib/maps";
 import { useClub, useClubs } from "@/lib/queries";
@@ -130,6 +131,13 @@ export function ClubPage({ slug }: { slug: string }) {
       />
 
       {club.description ? <Prose markdown={club.description} /> : null}
+
+      {/*
+        Above the hall, because it is usually about the hall: what time it
+        opens, what time it goes. Reading the address first and the "be
+        out by ten" after it is the wrong way round.
+      */}
+      <VisitorNote note={club.visitorNote} />
 
       {venue ? (
         <section aria-labelledby="where-heading">
