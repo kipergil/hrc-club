@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { MapPin as MapPinIcon } from "lucide-react";
 import type { Club } from "@shared/types.js";
-import { PageHeader, PrintButton } from "@/components/layout";
+import { PageHeader } from "@/components/layout";
 import { Card, Empty, ErrorNote, Loading, TableNote } from "@/components/ui";
 import { GoogleMapsLink, VenueMap, type MapPin } from "@/components/map";
 import { useClubs } from "@/lib/queries";
@@ -62,7 +62,6 @@ export function VenuesPage() {
       <PageHeader
         title="Venues"
         subtitle={`All ${venues.length} halls in the league, from Bishop's Stortford to Enfield`}
-        actions={<PrintButton label="Print the venue list" />}
       />
 
       <VenueMap pins={pins} className="h-[26rem]" label="Map of every venue in the league" />

@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { DIVISION } from "@shared/enums.js";
 import type { Division } from "@shared/enums.js";
-import { PageHeader, PrintButton } from "@/components/layout";
+import { PageHeader } from "@/components/layout";
 import { TeamFixtureList, VisitorNote } from "@/components/data";
 import {
   Badge,
@@ -159,7 +159,6 @@ export function TeamPage({ slug }: { slug: string }) {
       <PageHeader
         title={team.name}
         subtitle={`${divisionLabel(team.division)} · ${team.seasonLabel || "current season"}`}
-        actions={<PrintButton label="Print this team's fixtures" />}
       >
         {/*
           A team's row exists once per season, so switching year here is

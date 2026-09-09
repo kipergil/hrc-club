@@ -2,7 +2,7 @@ import { ExternalLink, MapPin, Users } from "lucide-react";
 import { Link } from "wouter";
 import type { Club } from "@shared/types.js";
 import { DIVISION, DIVISION_SHORT_LABELS } from "@shared/enums.js";
-import { PageHeader, PrintButton } from "@/components/layout";
+import { PageHeader } from "@/components/layout";
 import { Badge, Card, Empty, ErrorNote, Loading, Prose, Stat, TableNote } from "@/components/ui";
 import { VisitorNote } from "@/components/data";
 import { GoogleMapsLink, VenueMap } from "@/components/map";
@@ -39,7 +39,6 @@ export function ClubsPage() {
       <PageHeader
         title="Clubs"
         subtitle="Every club in the league — where they play, which divisions their teams are in, and who turns out for them."
-        actions={<PrintButton label="Print the club list" />}
       >
         <dl className="grid grid-cols-3 gap-3 sm:max-w-lg">
           <Stat value={clubs.length} label="clubs" />
@@ -127,7 +126,6 @@ export function ClubPage({ slug }: { slug: string }) {
             ? `Plays at ${venue.name}${venue.town ? `, ${venue.town}` : ""}`
             : "A club in the Hertford & District League"
         }
-        actions={<PrintButton label="Print this club's details" />}
       />
 
       {club.description ? <Prose markdown={club.description} /> : null}

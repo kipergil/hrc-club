@@ -30,10 +30,10 @@ beforeAll(() => {
  * why the checks below are about scroll rather than about markup.
  */
 
-function renderSite() {
+function renderSite(pathname = "/results") {
   // Any page but the home page: the footer's navigation, "Back to top"
   // included, is furniture on the one page it would point at itself.
-  window.history.pushState({}, "", "/results");
+  window.history.pushState({}, "", pathname);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
@@ -128,5 +128,49 @@ describe("the phone menu", () => {
 
     const list = document.querySelector("#mobile-menu > div")!;
     expect(list.className).toContain("overscroll-contain");
+  });
+});
+
+describe("printing", () => {
+  /**
+   * The button used to sit beside each page's title — the wrong end of a
+   * page somebody prints *after* reading it. It is now in the footer
+   * navigation beside Back and Home, which means `Layout` decides whether
+   * to show it rather than the page passing it down.
+   */
+  it("offers Print at the foot of a page worth printing", () => {
+    renderSite("/tables");
+
+    const print = screen.getByRole("button", { name: /Print/ });
+    expect(print.textContent).toContain("Print");
+    // The accessible name has to contain the visible one, or a voice
+    // control user saying "Print" hits nothing.
+    expect(print.getAttribute("aria-label")).toContain("Print");
+
+    // In the page-navigation row, not floating somewhere else.
+    expect(print.closest("nav")?.getAttribute("aria-label")).toBe("Page navigation");
+  });
+
+  it("leaves it off a page nobody would print", () => {
+    renderSite("/contact");
+    expect(screen.queryByRole("button", { name: /Print/ })).toBeNull();
+  });
+
+  it("keeps every button in the row a full touch target", () => {
+    // The row was narrowed to fit on one line. `min-h-touch` is the 48px
+    // this site is built to and is not what gives — most of its readers
+    // are the wrong side of sixty.
+    renderSite("/tables");
+
+    const row = screen.getByRole("navigation", { name: "Page navigation" });
+    const controls = [...row.querySelectorAll("a, button")];
+    expect(controls.length).toBeGreaterThanOrEqual(4);
+    for (const control of controls) {
+      // "Back to top" is a plain text link, not one of the buttons.
+      if (control.textContent?.trim() === "Back to top") continue;
+      expect(control.className, `${control.textContent?.trim()} lost its touch target`).toContain(
+        "min-h-touch",
+      );
+    }
   });
 });
