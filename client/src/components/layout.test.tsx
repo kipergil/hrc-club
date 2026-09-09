@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Layout } from "./layout";
 
@@ -172,5 +172,99 @@ describe("printing", () => {
         "min-h-touch",
       );
     }
+  });
+});
+
+describe("the phone menu's display controls", () => {
+  /**
+   * These went missing in Chrome on a phone. The panel was `70vh` of list
+   * plus a row of controls beneath it, and Chrome reports `100vh` as the
+   * large viewport — the height with the URL bar retracted — while the
+   * visible area is about 110px shorter whenever that bar shows. The
+   * controls sat below the fold, and with the page behind deliberately
+   * locked nothing could scroll to reach them.
+   *
+   * jsdom lays nothing out, so the geometry was measured in a browser at
+   * four phone sizes with the visible area shortened. What is worth
+   * pinning here is the mechanism, because it is the part that would be
+   * quietly undone by someone "simplifying" it back to a CSS height.
+   */
+  const withVisualViewport = (height: number) => {
+    const listeners = { addEventListener() {}, removeEventListener() {} };
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: { height, ...listeners },
+    });
+  };
+
+  afterEach(() => {
+    Object.defineProperty(window, "visualViewport", { configurable: true, value: undefined });
+  });
+
+  it("sizes the panel from the visible viewport, not the window", () => {
+    // 500 visible inside an 800 window is exactly the case a URL bar
+    // creates, and the difference between the two is the whole bug.
+    window.innerHeight = 800;
+    withVisualViewport(500);
+
+    renderSite();
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+
+    const panel = document.getElementById("mobile-menu")!;
+    // jsdom reports every box at the origin, so the panel starts at 0 and
+    // the height is the visible area less the breathing room.
+    expect(panel.style.maxHeight).toBe("488px");
+  });
+
+  it("never collapses the panel to nothing on a freak measurement", () => {
+    withVisualViewport(20);
+
+    renderSite();
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+
+    // A short scrollable panel beats an invisible one.
+    expect(document.getElementById("mobile-menu")!.style.maxHeight).toBe("220px");
+  });
+
+  it("keeps the controls out of the scrolling list", () => {
+    renderSite();
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+
+    const panel = document.getElementById("mobile-menu")!;
+    const scroller = panel.querySelector("[class*='overflow-y-auto']")!;
+    // Scoped to the panel: the desktop header carries its own copy of both
+    // controls, hidden by CSS but present in the DOM all the same.
+    const textSize = within(panel).getByRole("group", { name: "Text size" });
+
+    // Inside the scroller they scroll away with the list; outside it, in a
+    // `shrink-0` row, they are the one part that always keeps its room.
+    expect(scroller.contains(textSize)).toBe(false);
+    expect(panel.contains(textSize)).toBe(true);
+    expect(textSize.parentElement!.className).toContain("shrink-0");
+  });
+
+  it("gives the list the room that is left rather than its full height", () => {
+    renderSite();
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+
+    const scroller = document.getElementById("mobile-menu")!.querySelector(
+      "[class*='overflow-y-auto']",
+    )!;
+    // `min-h-0` is load-bearing: without it a flex child refuses to shrink
+    // below its content and pushes the controls off the bottom again.
+    expect(scroller.className).toContain("min-h-0");
+    expect(scroller.className).toContain("flex-1");
+  });
+
+  it("lists the pages by name, without the explanation under each one", () => {
+    renderSite();
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+
+    const panel = document.getElementById("mobile-menu")!;
+    // Scoped for the same reason: the footer sitemap lists it too.
+    expect(within(panel).getByRole("link", { name: "League tables" })).toBeTruthy();
+    // Two lines a link, twenty-two links: it doubled the height of the one
+    // thing between a reader and the fixture they came for.
+    expect(panel.textContent).not.toContain("Who is top of each division");
   });
 });

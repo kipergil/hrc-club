@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowUp, ChevronRight, Home, Megaphone, Menu, Moon, Printer, Sun, X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { NAV, findGroup, findSection } from "@/lib/nav";
 import { useSettings } from "@/lib/queries";
@@ -182,6 +182,7 @@ function DesktopNav({ pathname }: { pathname: string }) {
  */
 function MobileNav({ pathname }: { pathname: string }) {
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setOpen(false);
@@ -208,6 +209,47 @@ function MobileNav({ pathname }: { pathname: string }) {
   useEffect(() => {
     if (!open) return;
     return lockPageScroll();
+  }, [open]);
+
+  /*
+   * Fit the panel to what the reader can actually see.
+   *
+   * This is the bug that hid the text-size and dark-mode controls on a
+   * phone. The panel was `70vh` of list plus a row of controls beneath it,
+   * and Chrome reports `100vh` as the *large* viewport — the height with
+   * the URL bar retracted — while the visible area is around 110px
+   * shorter whenever that bar is showing. So the controls sat below the
+   * fold on every phone size, and because the page behind is deliberately
+   * locked, nothing could scroll to reach them.
+   *
+   * `visualViewport.height` is the number that actually changes as the URL
+   * bar comes and goes, which is why it is measured rather than assumed.
+   * `dvh` would do most of this job in CSS, but not the part that matters:
+   * the panel starts an unknown distance down the page, under a masthead
+   * whose height depends on the reader's chosen text size.
+   */
+  useEffect(() => {
+    if (!open) return;
+
+    function fit() {
+      const panel = panelRef.current;
+      if (!panel) return;
+      const visible = window.visualViewport?.height ?? window.innerHeight;
+      const top = panel.getBoundingClientRect().top;
+      // A floor, so a freak measurement cannot collapse the menu to
+      // nothing — a short scrollable panel beats an invisible one.
+      panel.style.maxHeight = `${Math.max(220, visible - top - 12)}px`;
+    }
+
+    fit();
+    window.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("scroll", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("scroll", fit);
+    };
   }, [open]);
 
   return (
@@ -242,39 +284,55 @@ function MobileNav({ pathname }: { pathname: string }) {
           <div
             aria-hidden="true"
             onClick={() => setOpen(false)}
-            className="absolute inset-x-0 top-full z-30 h-screen bg-black/40"
+            /* `dvh`, not `vh`: the same URL-bar difference that used to
+               push the controls below the fold left a strip of undimmed
+               page under the backdrop. */
+            className="absolute inset-x-0 top-full z-30 h-[100dvh] bg-black/40"
           />
           <div
+            ref={panelRef}
             id="mobile-menu"
-            className="absolute inset-x-0 z-40 mt-3 animate-fade-in-up border-y border-line bg-surface shadow-lifted"
+            /*
+              A column, so the list takes the room that is left and the
+              controls keep theirs. The height comes from the effect above.
+            */
+            className="absolute inset-x-0 z-40 mt-3 flex flex-col animate-fade-in-up border-y border-line bg-surface shadow-lifted"
           >
             {/*
+              `min-h-0` is load-bearing: a flex child will not shrink below
+              its content without it, so the list would push the controls
+              off the bottom again and scroll nothing.
+
               `overscroll-contain`: reaching the end of this list must not
               hand the flick on to the page behind it.
             */}
-            <div className="max-h-[70vh] overflow-y-auto overscroll-contain px-4 py-2">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-1">
               {NAV.map((group) => (
-                <section key={group.label} className="border-b border-line py-3 last:border-b-0">
+                <section key={group.label} className="border-b border-line py-2 last:border-b-0">
                   <h2 className="px-2 py-1 font-semibold uppercase tracking-wide text-ink-muted">
                     {group.label}
                   </h2>
                   <ul>
                     {group.links.map((link) => (
                       <li key={link.href}>
+                        {/*
+                          The name only. Each entry used to carry its
+                          plain-English subtitle, which is worth having on
+                          a page and is two lines a link in a list of
+                          twenty-two — it doubled the height of the one
+                          thing standing between a reader and the fixture
+                          they came for. `nav.ts` still holds the
+                          subtitles; nothing renders them here.
+                        */}
                         <Link
                           href={link.href}
                           aria-current={link.href === pathname ? "page" : undefined}
                           className={cn(
-                            "flex min-h-touch items-center justify-between gap-3 rounded-card px-2 py-2.5 no-underline transition-colors hover:bg-brand-soft",
+                            "flex min-h-touch items-center justify-between gap-3 rounded-card px-2 text-lg font-semibold text-brand no-underline transition-colors hover:bg-brand-soft",
                             link.href === pathname && "bg-brand-soft",
                           )}
                         >
-                          <span>
-                            <span className="block text-lg font-semibold text-brand">
-                              {link.title}
-                            </span>
-                            <span className="block text-ink-muted">{link.subtitle}</span>
-                          </span>
+                          {link.title}
                           <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-ink-muted" />
                         </Link>
                       </li>
@@ -284,12 +342,16 @@ function MobileNav({ pathname }: { pathname: string }) {
               ))}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface-sunken px-4 py-3">
-              <span className="font-semibold text-ink">Display</span>
-              <div className="flex items-center gap-2">
-                <TextSizeControl />
-                <ThemeToggle />
-              </div>
+            {/*
+              `shrink-0`, so this is the one part of the panel that never
+              gives up its room. It is the reason the panel is a column at
+              all: these controls are how a reader who cannot read the site
+              makes it readable, and they were the first thing to fall off
+              the bottom.
+            */}
+            <div className="flex shrink-0 items-center justify-between gap-2 border-t border-line bg-surface-sunken px-4 py-2">
+              <TextSizeControl />
+              <ThemeToggle />
             </div>
           </div>
         </>
