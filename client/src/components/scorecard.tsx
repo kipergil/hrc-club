@@ -209,7 +209,7 @@ export function Scorecard({ match }: { match: FixtureDetail }) {
       */}
       <p className="mt-4 flex flex-wrap items-center gap-3">
         <Badge tone="neutral">
-          {rubbers.length} of 10 rubbers · {home}–{away}
+          {rubbers.length} of 10 matches · {home}–{away}
         </Badge>
         {match.homeScore !== null &&
         match.awayScore !== null &&

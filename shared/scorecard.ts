@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sameName } from "./name-match.js";
 
 /**
  * The league's own scorecard, as a data structure.
@@ -351,7 +352,17 @@ export function checkPairings(card: ScorecardInput): {
       const existing = (map as Record<string, string | undefined>)[slot];
       if (existing === undefined) {
         (map as Record<string, string>)[slot] = name;
-      } else if (existing.toLowerCase() !== name.toLowerCase()) {
+      } else if (sameName(existing, name)) {
+        /*
+         * The same player, written more or less fully. Keep whichever
+         * writing says more: with no line-up box, the slot is whatever the
+         * first row happened to call them, and "Sandy" is worth replacing
+         * with "Sandy Nash" the moment a later row supplies it.
+         */
+        if (name.trim().split(/\s+/).length > existing.trim().split(/\s+/).length) {
+          (map as Record<string, string>)[slot] = name;
+        }
+      } else {
         warnings.push({
           severity: "warning",
           rubberNumber: rubber.rubberNumber,

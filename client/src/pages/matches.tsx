@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { PageHeader, PrintButton } from "@/components/layout";
+import { PageHeader } from "@/components/layout";
 import {
   AveragesByDivision,
   FixtureList,
@@ -115,7 +115,6 @@ export function CalendarPage() {
       <PageHeader
         title="Season calendar"
         subtitle="Every team's whole season, week by week"
-        actions={<PrintButton label="Print this calendar" />}
       >
         <div className="space-y-4">
           <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
@@ -240,7 +239,6 @@ export function FixturesPage() {
       <PageHeader
         title="Fixture calendar"
         subtitle="Every match still to play, week by week"
-        actions={<PrintButton label="Print the fixture list" />}
       >
         <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
       </PageHeader>
@@ -297,7 +295,6 @@ export function ResultsPage() {
       <PageHeader
         title="Match history"
         subtitle="Every match played in the league"
-        actions={<PrintButton label="Print these results" />}
       >
         <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
       </PageHeader>
@@ -491,7 +488,6 @@ export function TablesPage() {
       <PageHeader
         title="League tables"
         subtitle="Who is top of each division, and how the season is going"
-        actions={<PrintButton label="Print the tables" />}
       >
         <SeasonPicker seasons={seasons} value={chosen} onChange={setSeason} />
       </PageHeader>
@@ -534,7 +530,6 @@ export function AveragesPage() {
       <PageHeader
         title="Averages"
         subtitle="Who has won what, this season"
-        actions={<PrintButton label="Print the averages" />}
       />
 
       <AveragesByDivision stats={stats ?? []} />

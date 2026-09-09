@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { DOCUMENT_CATEGORY_LABELS } from "@shared/enums.js";
 import type { Honour } from "@shared/types.js";
-import { PageHeader, PrintButton } from "@/components/layout";
+import { PageHeader } from "@/components/layout";
 import {
   Badge,
   Card,
@@ -177,7 +177,6 @@ export function HonoursPage() {
       <PageHeader
         title="Roll of honour"
         subtitle={`Every champion and cup winner the league has a record of${earliest ? `, back to ${earliest}` : ""}.`}
-        actions={<PrintButton label="Print the roll of honour" />}
       >
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat value={all.length} label="results recorded" />

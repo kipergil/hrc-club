@@ -4,6 +4,7 @@ import { Link, useLocation } from "wouter";
 import { NAV, findGroup, findSection } from "@/lib/nav";
 import { useSettings } from "@/lib/queries";
 import { lockPageScroll, useRouteTransition } from "@/lib/scroll";
+import { isPrintable } from "@/lib/print";
 import { cn } from "@/lib/utils";
 import { Prose } from "@/components/ui";
 
@@ -643,23 +644,44 @@ export function PageHeader({
   );
 }
 
-/** Print is a real output: captains pin the fixture list to a noticeboard. */
-export function PrintButton({ label = "Print this page" }: { label?: string }) {
+/**
+ * The one button shape this row uses, four times.
+ *
+ * `min-h-touch` is not negotiable and does not shrink: 48px is the target
+ * size this site is built to, and most of its readers are the wrong side
+ * of sixty. What gives instead is the horizontal padding — the row got
+ * narrower so that Back, the section, Home and Print sit on one line
+ * where there is room, not shorter.
+ */
+const footerButton =
+  "inline-flex min-h-touch items-center gap-1.5 rounded-card border border-line-strong " +
+  "bg-surface px-3 font-semibold text-ink no-underline shadow-raised transition-colors " +
+  "hover:border-brand hover:bg-brand-soft hover:text-brand";
+
+/**
+ * Print is a real output: captains pin the fixture list to a noticeboard.
+ *
+ * It used to sit beside the page title, which is the wrong end of a page
+ * somebody prints *after* reading. Down here it is next to Back and Home,
+ * where a reader who has finished with the page already is.
+ *
+ * "Print" on the face and "Print this page" to a screen reader: the
+ * accessible name contains the visible one, which is what WCAG's
+ * label-in-name rule asks, and the fuller wording says what will happen
+ * to someone who cannot see the row it sits in.
+ */
+function PrintButton() {
   return (
-    <button
-      type="button"
-      onClick={() => window.print()}
-      className="inline-flex min-h-touch items-center gap-2 rounded-card border border-line-strong bg-surface px-4 font-semibold text-ink shadow-raised transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand no-print"
-    >
+    <button type="button" onClick={() => window.print()} aria-label="Print this page" className={footerButton}>
       <Printer aria-hidden="true" className="size-5" />
-      {label}
+      Print
     </button>
   );
 }
 
 /**
- * Back, up a level, and home — at the foot of the page, where someone who
- * has read to the end actually is.
+ * Back, up a level, home, and print — at the foot of the page, where
+ * someone who has read to the end actually is.
  *
  * The header is a scroll away by then, and on a phone it is behind a Menu
  * button and two screens of table. "Back" is the browser's own history
@@ -683,37 +705,33 @@ function PageFooterNav({ pathname }: { pathname: string }) {
 
   return (
     <nav aria-label="Page navigation" className="mt-14 border-t border-line pt-6 no-print">
-      <ul className="flex flex-wrap items-center gap-3">
+      <ul className="flex flex-wrap items-center gap-2">
         <li>
-          <button
-            type="button"
-            onClick={() => window.history.back()}
-            className="inline-flex min-h-touch items-center gap-2 rounded-card border border-line-strong bg-surface px-4 font-semibold text-ink shadow-raised transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
-          >
+          <button type="button" onClick={() => window.history.back()} className={footerButton}>
             <ArrowLeft aria-hidden="true" className="size-5" />
             Back
           </button>
         </li>
         {up ? (
           <li>
-            <Link
-              href={up.href}
-              className="inline-flex min-h-touch items-center gap-2 rounded-card border border-line-strong bg-surface px-4 font-semibold text-ink no-underline shadow-raised transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
-            >
+            <Link href={up.href} className={footerButton}>
               <ArrowUp aria-hidden="true" className="size-5" />
               {"title" in up ? up.title : up.label}
             </Link>
           </li>
         ) : null}
         <li>
-          <Link
-            href="/"
-            className="inline-flex min-h-touch items-center gap-2 rounded-card border border-line-strong bg-surface px-4 font-semibold text-ink no-underline shadow-raised transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
-          >
+          <Link href="/" className={footerButton}>
             <Home aria-hidden="true" className="size-5" />
             Home
           </Link>
         </li>
+        {/* Only where printing the page is a thing anybody would do. */}
+        {isPrintable(pathname) ? (
+          <li>
+            <PrintButton />
+          </li>
+        ) : null}
         <li className="ml-auto">
           {/*
             `#top`, not `#main`. Long pages are the reason this block
