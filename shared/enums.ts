@@ -192,6 +192,24 @@ export const FIXTURE_RESULT_LABELS: Record<FixtureResult, string> = {
 export const NEWS_CATEGORY = ["news", "match_report", "notice", "newsletter", "feature"] as const;
 export type NewsCategory = (typeof NEWS_CATEGORY)[number];
 
+/**
+ * What a week of the season is for.
+ *
+ * The league schedules a season as thirty-two weeks, and only about half
+ * of them are league matches. The rest are cup rounds and free weeks, and
+ * they are properties of the *week* rather than fixtures between two
+ * teams — which is why they need their own collection rather than a row
+ * in `hrc_fixtures` with nobody playing in it.
+ */
+export const CALENDAR_WEEK_KIND = ["matches", "cup", "free"] as const;
+export type CalendarWeekKind = (typeof CALENDAR_WEEK_KIND)[number];
+
+export const CALENDAR_WEEK_KIND_LABELS: Record<CalendarWeekKind, string> = {
+  matches: "League matches",
+  cup: "Cup week",
+  free: "Free week",
+};
+
 export const EVENT_STATUS = ["scheduled", "cancelled", "completed"] as const;
 export type EventStatus = (typeof EVENT_STATUS)[number];
 

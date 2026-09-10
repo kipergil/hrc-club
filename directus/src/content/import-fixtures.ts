@@ -1,5 +1,6 @@
 import { createItems, deleteItems, readItems } from "@directus/sdk";
 import { getSchemaClient } from "../lib/client.js";
+import { playedOnFrom } from "./calendar-source.js";
 import { parseMatchHistory, parseSeasonLabel, type MatchRow } from "./parse-match-history.js";
 
 /**
@@ -45,7 +46,7 @@ async function main(): Promise<void> {
 
   const teams = (await client.request(
     readItems("hrc_teams" as never, {
-      fields: ["id", "name", "slug", "division", { season: ["id", "label"] }],
+      fields: ["id", "name", "slug", "division", "home_night", { season: ["id", "label"] }],
       limit: -1,
     } as never),
   )) as Row[];
@@ -140,9 +141,13 @@ async function main(): Promise<void> {
       home_team: home.id,
       away_team: away.id,
       week_commencing: match.weekCommencing,
-      // The league schedules by week and does not publish the night until
-      // the captains agree it, so the week is all this can honestly say.
-      played_on: match.weekCommencing,
+      // The league schedules by week; the match falls on the *host's* own
+      // night within it, which is Monday for exactly one club in twenty-six.
+      // Writing the Monday into both fields — which this did until the
+      // calendar import went in — puts every fixture on the wrong evening.
+      // `import:calendar` then confirms these against the league's own
+      // published dates.
+      played_on: playedOnFrom(match.weekCommencing, home.home_night) ?? match.weekCommencing,
       status: played ? "played" : "scheduled",
       home_score: match.homeScore,
       away_score: match.awayScore,

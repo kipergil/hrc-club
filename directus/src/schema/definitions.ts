@@ -1,4 +1,6 @@
 import {
+  CALENDAR_WEEK_KIND,
+  CALENDAR_WEEK_KIND_LABELS,
   COMPETITION,
   COMPETITION_LABELS,
   DAY_OF_WEEK,
@@ -433,6 +435,65 @@ export const fixturesCollection: CollectionDefinition = {
     fileField("hrc_fixtures", "report_image"),
   ],
 
+};
+
+/**
+ * What each week of the season is for.
+ *
+ * The league schedules thirty-two weeks and plays league matches in about
+ * half of them. The rest are cup rounds — Divisional, Handicap, the Finals
+ * night — and free weeks kept back for rearranged matches. Its own
+ * calendar shows these as whole tinted columns, and they are the reason a
+ * team's row has gaps in it.
+ *
+ * They live here rather than in `hrc_fixtures` because they are properties
+ * of a *week*, not matches between two teams: a cup week has no home side,
+ * no away side and no score, and a row in the fixtures table with all
+ * three left null would be a fixture that every query has to remember to
+ * exclude.
+ *
+ * A season with no rows here still renders — the calendar simply shows the
+ * weeks its fixtures fall in, which is what it did before this existed.
+ */
+export const calendarWeeksCollection: CollectionDefinition = {
+  collection: "hrc_calendar_weeks",
+  icon: "date_range",
+  note:
+    "One week of a season: its number, its Monday, and what it is for — league matches, a cup round, or a free week. Drives the season calendar's columns.",
+  displayTemplate: "{{season.label}} week {{week_number}} — {{kind}}",
+  sortField: "week_number",
+  fields: [
+    idField(),
+    integerField("week_number", {
+      nullable: false,
+      note: "1 for the first week of the season. The league counts every week, not just the ones it plays in.",
+    }),
+    dateOnlyField("week_commencing", {
+      note: "The Monday. Matches are played on the host club's own night, which is this date plus that club's home night — so this is rarely the day anybody plays.",
+    }),
+    selectField("kind", CALENDAR_WEEK_KIND, {
+      labels: CALENDAR_WEEK_KIND_LABELS,
+      defaultValue: "matches",
+      nullable: false,
+    }),
+    textField("label", {
+      nullable: true,
+      note: 'What to call it on the calendar — "Divisional", "Handicap", "Finals". Left empty for an ordinary match week.',
+    }),
+    textField("note", {
+      nullable: true,
+      note: "One line shown with the week, e.g. why it is free.",
+    }),
+    dateCreatedField(),
+    dateUpdatedField(),
+  ],
+  relationFields: [
+    m2o("hrc_calendar_weeks", "season", "hrc_seasons", {
+      template: "{{label}}",
+      oneField: "calendar_weeks",
+      onDelete: "CASCADE",
+    }),
+  ],
 };
 
 export const rubbersCollection: CollectionDefinition = {
@@ -1154,6 +1215,7 @@ export const allCollections: CollectionDefinition[] = [
   teamsCollection,
   squadsCollection,
   fixturesCollection,
+  calendarWeeksCollection,
   rubbersCollection,
   scorecardsCollection,
   standingsCollection,
