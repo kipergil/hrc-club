@@ -495,16 +495,12 @@ function Footer() {
               </Link>
             </li>
             {/*
-              Where a captain goes to enter a result. In the footer rather
-              than the menu because it is for a handful of people, and the
-              league's own site puts its Admin link in much the same
-              place — findable if you know to look, out of the way if not.
+              "Enter a result" used to be here and only here — findable if
+              you knew to look, which is a poor place for the one thing
+              eighteen captains do every week of the season. It is in the
+              Fixtures menu now, and on every match page, so a second copy
+              down here would only be a third place to look.
             */}
-            <li>
-              <Link href="/admin/scorecards" className="link">
-                Enter a result
-              </Link>
-            </li>
             {settings?.contactEmail ? (
               <li>
                 <a href={`mailto:${settings.contactEmail}`} className="link">

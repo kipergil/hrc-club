@@ -44,3 +44,22 @@ export function teamFixturesHref(slug: string, season?: string): string {
 export function teamHref(slug: string, season?: string): string {
   return season ? `/teams/${slug}?season=${encodeURIComponent(season)}` : `/teams/${slug}`;
 }
+
+/**
+ * The card screen, opened on one particular match.
+ *
+ * The shortcut a match page offers its captain. Without the id the screen
+ * opens on a search box over two hundred fixtures — which is the right
+ * thing when somebody arrives from the menu, and a second asking of a
+ * question already answered when they arrive from the match itself.
+ *
+ * Here rather than inline in the page because it is a contract between two
+ * screens: `admin.tsx` reads this parameter back, and a rename on one side
+ * only is a link that silently lands on the picker.
+ */
+export const ENTER_RESULT_HREF = "/admin/scorecards";
+
+export function enterResultHref(fixtureId?: string): string {
+  if (!fixtureId) return ENTER_RESULT_HREF;
+  return `${ENTER_RESULT_HREF}?fixture=${encodeURIComponent(fixtureId)}`;
+}

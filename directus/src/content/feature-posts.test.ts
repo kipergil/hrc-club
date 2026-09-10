@@ -95,11 +95,72 @@ describe("the feature posts", () => {
   });
 
   it("stays short", () => {
-    // "Short and concise" is the brief. Four hundred words is a page a
-    // reader scrolls past; these are meant to be read standing up.
+    /*
+     * "Short and concise" is the brief, and four hundred words is a page a
+     * reader scrolls past — these are meant to be read standing up.
+     *
+     * A walkthrough is the one exception, and it identifies itself: a post
+     * that carries screenshots is taking somebody through a screen a step
+     * at a time, which is read at the screen with a card in hand rather
+     * than skimmed. It still gets a ceiling, because a guide nobody
+     * finishes has failed in its own way.
+     */
     for (const post of FEATURE_POSTS) {
       const words = post.body.trim().split(/\s+/).length;
-      expect(words, `${post.slug} is ${words} words`).toBeLessThan(400);
+      const walkthrough = Object.keys(post.images ?? {}).length > 0;
+      const limit = walkthrough ? 800 : 400;
+      expect(words, `${post.slug} is ${words} words`).toBeLessThan(limit);
+    }
+  });
+});
+
+describe("the screenshots a post carries", () => {
+  /**
+   * A post's images are uploaded by the writer and its `image:token`
+   * references swapped for real addresses on the way out. Two ways that
+   * goes wrong, and both publish something that renders as an empty box
+   * rather than as an error: a token nothing declares, and a declared file
+   * that is not in the repository.
+   */
+  const declared = (body: string) =>
+    [...new Set([...body.matchAll(/\]\(image:([a-z0-9_-]+)\)/gi)].map((m) => m[1]!))];
+
+  it("declares every image its body refers to", () => {
+    for (const post of FEATURE_POSTS) {
+      for (const token of declared(post.body)) {
+        expect(post.images?.[token], `${post.slug} refers to image:${token}`).toBeTruthy();
+      }
+    }
+  });
+
+  it("ships the file for every image it declares", () => {
+    for (const post of FEATURE_POSTS) {
+      for (const [token, filename] of Object.entries(post.images ?? {})) {
+        const file = path.join(here, "__images__", filename);
+        expect(readFileSync(file).length, `${post.slug}/${token} is empty`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("uses every image it declares", () => {
+    // An unused image is dead weight uploaded to Directus on every run.
+    for (const post of FEATURE_POSTS) {
+      const used = new Set(declared(post.body));
+      for (const token of Object.keys(post.images ?? {})) {
+        expect(used, `${post.slug} declares image:${token} and never shows it`).toContain(token);
+      }
+    }
+  });
+
+  it("gives every screenshot alt text that says what it shows", () => {
+    // A screenshot in a step-by-step guide is the step. "Screenshot" as
+    // alt text tells a screen reader nothing it did not already know.
+    for (const post of FEATURE_POSTS) {
+      for (const match of post.body.matchAll(/!\[([^\]]*)\]\(image:[a-z0-9_-]+\)/gi)) {
+        const alt = match[1]!.trim();
+        expect(alt.length, `${post.slug} has an image with no alt text`).toBeGreaterThan(10);
+        expect(alt.toLowerCase()).not.toBe("screenshot");
+      }
     }
   });
 });

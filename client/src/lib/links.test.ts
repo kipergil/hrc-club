@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { teamFixturesHref, teamHref, teamModuleHref } from "./links.js";
+import { enterResultHref, teamFixturesHref, teamHref, teamModuleHref } from "./links.js";
 
 describe("where a team name goes", () => {
   it("keeps a played match in the results module", () => {
@@ -47,5 +47,26 @@ describe("teamFixturesHref", () => {
     expect(teamFixturesHref("kidston-a", "2025-26")).toBe(
       "/fixtures?team=kidston-a&season=2025-26",
     );
+  });
+});
+
+describe("enterResultHref", () => {
+  /**
+   * The contract between a match page and the card screen. `admin.tsx`
+   * reads `fixture` back off the address; renaming it on one side only
+   * gives a link that lands on the picker and looks like it worked.
+   */
+  it("carries the match, so the card screen opens on it", () => {
+    expect(enterResultHref("abc-123")).toBe("/admin/scorecards?fixture=abc-123");
+  });
+
+  it("is the plain screen when nobody has said which match", () => {
+    // What the menu entry points at: the picker is the right first screen
+    // for someone who has not got a match on the page already.
+    expect(enterResultHref()).toBe("/admin/scorecards");
+  });
+
+  it("escapes an id rather than trusting it to be url-safe", () => {
+    expect(enterResultHref("a b&c")).toBe("/admin/scorecards?fixture=a%20b%26c");
   });
 });

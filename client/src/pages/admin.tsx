@@ -31,6 +31,7 @@ import {
   TableNote,
 } from "@/components/ui";
 import { useFixtures } from "@/lib/queries";
+import { useUrlParam } from "@/lib/params";
 import {
   PARSE_TIMEOUT_MS,
   adminFetch,
@@ -1044,6 +1045,19 @@ function CardUpload({
 export function AdminScorecardsPage() {
   const [session, setSession] = useAdminSession();
   const [fixture, setFixture] = useState<Fixture | null>(null);
+  /*
+   * `?fixture=…` on the address, put there by the "Enter this result"
+   * button on a match page.
+   *
+   * A captain who has just looked at Tuesday's match has already told the
+   * site which match they mean; making them find it again in a list of two
+   * hundred is asking the same question twice. The picker is still there
+   * for anyone arriving from the menu, and still there if the id turns out
+   * to be a match this season does not have.
+   */
+  const [wanted, setWanted] = useUrlParam("fixture");
+  // The same query the picker runs, so this costs no extra request.
+  const { data: allFixtures } = useFixtures("competition=league");
   const [draft, setDraft] = useState<ScorecardDraft | null>(null);
   const [saved, setSaved] = useState<{ homeScore: number; awayScore: number } | null>(null);
   const [capability, setCapability] = useState<{ ai: boolean; name: string | null; allowList: boolean }>(
@@ -1066,6 +1080,28 @@ export function AdminScorecardsPage() {
       return next;
     });
   }
+
+  /*
+   * Back to the picker, and out of the address too.
+   *
+   * Both halves matter. Clearing the state alone would leave `?fixture=`
+   * on the address for the effect below to read straight back, so "pick a
+   * different match" would land on the same match it just left.
+   */
+  function backToPicker() {
+    setFixture(null);
+    setDraft(null);
+    replacePhoto(null);
+    if (wanted) setWanted(undefined);
+  }
+
+  useEffect(() => {
+    if (!wanted || fixture) return;
+    const found = (allFixtures ?? []).find((row) => row.id === wanted);
+    // An id for a match this season does not hold is not an error worth a
+    // screen: the picker is already the right thing to show.
+    if (found) setFixture(found);
+  }, [wanted, fixture, allFixtures]);
 
   useEffect(() => {
     if (!session) return;
@@ -1095,9 +1131,7 @@ export function AdminScorecardsPage() {
             variant="secondary"
             onClick={() => {
               setSaved(null);
-              setDraft(null);
-              setFixture(null);
-              replacePhoto(null);
+              backToPicker();
             }}
           >
             Enter another card
@@ -1146,13 +1180,7 @@ export function AdminScorecardsPage() {
         />
       ) : !draft ? (
         <>
-          <Button
-            variant="quiet"
-            onClick={() => {
-              setFixture(null);
-              replacePhoto(null);
-            }}
-          >
+          <Button variant="quiet" onClick={backToPicker}>
             ← Pick a different match
           </Button>
           <CardUpload
@@ -1170,11 +1198,7 @@ export function AdminScorecardsPage() {
           session={session}
           photo={photo}
           onSaved={setSaved}
-          onBack={() => {
-            setDraft(null);
-            setFixture(null);
-            replacePhoto(null);
-          }}
+          onBack={backToPicker}
         />
       )}
     </div>
