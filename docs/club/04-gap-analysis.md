@@ -136,7 +136,10 @@ try again around Christmas".
 
 ## 5. Built but thinner than the original
 
-### 5.1 The fixture calendar is a list; the original is a grid
+### 5.1 The fixture calendar is a list; the original is a grid — **closed**
+
+> **Closed.** `/fixtures/calendar` carries the grid, and a second view beside it. See
+> "What was built" at the end of this section; the analysis below is left as written.
 
 **Original:** `Calendarz.asp?Div=0|1|2` → a per-division grid. Teams down the left, **16 week
 columns across**, one row per team, so a captain sees their team's entire half-season on one
@@ -156,6 +159,37 @@ same `useFixtures` data, with the week columns horizontally scrollable inside th
 container and a per-team row on narrow screens. Away/home as a visible marker, not italics alone
 (italics are colour-adjacent: they cannot be the only signal). Byes and cup weeks come from the
 fixture data we already hold, once cup fixtures are imported (§6.1).
+
+**What was built.** `/fixtures/calendar` with a season picker, a division filter and a **View**
+switch between two shapes of the same season:
+
+- **Whole season** — the original's grid. Teams down, weeks across, split by calendar year as
+  the league splits it, with a sticky team column. "v" and "at" in words, never italics alone.
+- **Week by week** — one block a week, matches gathered under the evening each is played on.
+  This is the view that survives a phone; the grid is thirty-two columns wide by nature.
+
+Two things had to be got right before either could be honest.
+
+**The dates were wrong, all 184 of them.** `MatchHistory.asp` lists a match against the Monday
+its week commences, so the first import wrote that Monday into `played_on` too. The real night
+is the week's Monday plus the *host club's* own night, and it is published only inside a
+tooltip on the calendar pages — Cheshunt Tuesdays, Ellenborough Fridays, one club in
+twenty-six on a Monday. `parse-calendar.ts` reads the grid and its `CalendarJ*.js` as text, and
+`npm run directus:import:calendar` corrects them. Both dates are now held: `week_commencing`
+and `played_on` were always separate columns and now differ.
+
+**Cup and free weeks are not fixtures.** Fourteen of the season's thirty-two weeks have no
+league match in them — nine cup rounds (Divisional, Handicap, Finals) and five free weeks kept
+for rearranged matches — and none can be recovered from the fixture list, because from the
+fixtures' side they are all identical: nothing happens. `hrc_calendar_weeks` holds them per
+season (one programme, all three divisions), served at `/api/calendar-weeks`. §6.1's "import
+the cup fixtures" is therefore answered differently from how it was framed: the cup *weeks* are
+modelled; the cup *ties* still are not.
+
+**One discrepancy the league has not resolved.** PramaStars A are blanked out of the Division 1
+grid — their slot reads `No Match` — but their sixteen fixtures are still in `MatchHistory.asp`
+and still in `hrc_fixtures`. The import dates them from the team's own `home_night` and reports
+them rather than dropping them. Worth asking the league which is right before the season starts.
 
 ### 5.2 Cup News is a fixture list; the original is a rulebook
 

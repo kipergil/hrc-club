@@ -176,6 +176,13 @@ export function registerRoutes(app: Express): void {
   );
 
   app.get(
+    "/api/calendar-weeks",
+    handler(async (req, res) => {
+      ok(res, await storage.getCalendarWeeks(param(req.query.season)), CACHE.slow);
+    }),
+  );
+
+  app.get(
     "/api/standings",
     handler(async (req, res) => {
       ok(res, await storage.getStandings(param(req.query.season), param(req.query.division)));

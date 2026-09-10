@@ -16,6 +16,7 @@ const READ_ONLY_COLLECTIONS = [
   "hrc_sessions",
   "hrc_venues",
   "hrc_seasons",
+  "hrc_calendar_weeks",
   "hrc_teams",
   "hrc_squads",
   "hrc_honours",

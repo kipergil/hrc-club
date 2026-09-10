@@ -21,6 +21,7 @@
     "directus:seed": "npm --prefix directus run seed",
     "directus:import:league": "npm --prefix directus run import:league",
     "directus:import:content": "npm --prefix directus run import:content",
+    "directus:import:calendar": "npm --prefix directus run import:calendar",
     "directus:import:archive": "npm --prefix directus run import:archive",
     "directus:geocode:venues": "npm --prefix directus run geocode:venues",
     "directus:sample:results": "npm --prefix directus run sample:results",

@@ -5,6 +5,7 @@ import {
   FixtureList,
   HandicapTable,
   SeasonGrid,
+  SeasonWeeks,
   StandingsByDivision,
 } from "@/components/data";
 import {
@@ -24,12 +25,19 @@ import {
   Tr,
   usePagination,
 } from "@/components/ui";
-import { useAverages, useFixture, useFixtures, useSeasons, useStandings } from "@/lib/queries";
+import {
+  useAverages,
+  useCalendarWeeks,
+  useFixture,
+  useFixtures,
+  useSeasons,
+  useStandings,
+} from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
 import { useUrlParam } from "@/lib/params";
 import { teamModuleHref } from "@/lib/links";
 import { cn, divisionLabel, formatDateLong, formatTime, resultLabel } from "@/lib/utils";
-import { buildCalendar } from "@/lib/calendar";
+import { buildCalendar, buildWeekBlocks } from "@/lib/calendar";
 import { Scorecard } from "@/components/scorecard";
 import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
 import type { Division } from "@shared/enums.js";
@@ -60,7 +68,7 @@ function SyncNote({ lastSyncedAt }: { lastSyncedAt: string | null | undefined })
 // ---------------------------------------------------------------------------
 
 /**
- * The season grid, division by division — the league's `Calendarz.asp`.
+ * The season calendar, division by division — the league's `Calendar0.htm`.
  *
  * A separate page rather than a toggle on `/fixtures` because it is a
  * thing people link to and print: "here is our season" is the message, and
@@ -69,7 +77,18 @@ function SyncNote({ lastSyncedAt }: { lastSyncedAt: string | null | undefined })
  * One division at a time, as the league does it. Three divisions of eight
  * or nine teams across thirty-two weeks in a single grid would be a table
  * nobody could read on any screen.
+ *
+ * Two views of the same season, because the two questions people bring
+ * here are different shapes. "When are we free, and when do we play them"
+ * is a row of a grid. "What is on, and which evening" is a diary. The grid
+ * is the league's own table and is thirty-two columns wide by nature; the
+ * week list is the same data turned ninety degrees and is the one that
+ * survives a phone. Neither is a subset of the other, so the page carries
+ * both and the switch is one tap.
  */
+const CALENDAR_VIEWS = ["grid", "weeks"] as const;
+type CalendarView = (typeof CALENDAR_VIEWS)[number];
+
 export function CalendarPage() {
   const [season, setSeason] = useSeasonParam();
   const { data: seasons } = useSeasons();
@@ -78,8 +97,19 @@ export function CalendarPage() {
     isLoading,
     isError,
   } = useFixtures(`competition=league${season ? `&season=${season}` : ""}`);
+  // The fourteen weeks of the season nobody plays a league match in. Not
+  // part of the fixture list, and not derivable from it: from the
+  // fixtures' point of view a cup week and a week the league forgot are
+  // the same thing, which is nothing.
+  const { data: weeks } = useCalendarWeeks(season);
 
   const [division, setDivision] = useState<Division>("premier");
+  // In the address, so a captain can send "the week view of Division 2"
+  // and have it open that way.
+  const [viewParam, setView] = useUrlParam("view");
+  const view: CalendarView = CALENDAR_VIEWS.includes(viewParam as CalendarView)
+    ? (viewParam as CalendarView)
+    : "grid";
 
   // Which divisions the season actually ran. The league fielded two from
   // 2016-17 to 2018-19, and a chip for an empty division is a dead end.
@@ -96,26 +126,27 @@ export function CalendarPage() {
 
   const shown = divisions.includes(division) ? division : divisions[0];
 
-  const segments = useMemo(
+  const inDivision = useMemo(
     () =>
-      buildCalendar(
-        (fixtures ?? []).filter(
-          (fixture) =>
-            fixture.homeTeam?.division === shown || fixture.awayTeam?.division === shown,
-        ),
+      (fixtures ?? []).filter(
+        (fixture) =>
+          fixture.homeTeam?.division === shown || fixture.awayTeam?.division === shown,
       ),
     [fixtures, shown],
   );
+
+  // Both are built either way. They are a few hundred rows of pure
+  // grouping, and building only the visible one would make the switch
+  // stutter for no gain a reader would ever notice.
+  const segments = useMemo(() => buildCalendar(inDivision, weeks ?? []), [inDivision, weeks]);
+  const blocks = useMemo(() => buildWeekBlocks(inDivision, weeks ?? []), [inDivision, weeks]);
 
   if (isLoading) return <Loading what="the fixture calendar" variant="table" />;
   if (isError) return <ErrorNote what="fixture calendar" />;
 
   return (
     <div>
-      <PageHeader
-        title="Season calendar"
-        subtitle="Every team's whole season, week by week"
-      >
+      <PageHeader title="Season calendar" subtitle="Every team's whole season, week by week">
         <div className="space-y-4">
           <SeasonPicker seasons={seasons} value={season} onChange={setSeason} />
           {divisions.length > 1 ? (
@@ -126,15 +157,35 @@ export function CalendarPage() {
               options={divisions.map((value) => ({ value, label: divisionLabel(value) }))}
             />
           ) : null}
+          <FilterChips
+            label="View"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "grid", label: "Whole season" },
+              { value: "weeks", label: "Week by week" },
+            ]}
+          />
         </div>
       </PageHeader>
 
       <p className="mb-6 max-w-readable text-ink-muted">
-        Each row is a team and each column a week. “v” is a home match and “at” is away; an empty
-        week is one with no match in it.
+        {view === "grid" ? (
+          <>
+            Each row is a team and each column a week. “v” is a home match and “at” is away, and
+            the date under it is the evening the match is played — the league schedules by week,
+            and each club plays on its own night.
+          </>
+        ) : (
+          <>
+            Every week of the season in turn, with each match under the evening it is played on.
+            The week is named for its Monday; the match is on the host club's own night, which is
+            rarely the same day.
+          </>
+        )}
       </p>
 
-      <SeasonGrid segments={segments} />
+      {view === "grid" ? <SeasonGrid segments={segments} /> : <SeasonWeeks blocks={blocks} />}
 
       <SyncNote lastSyncedAt={fixtures?.[0]?.lastSyncedAt} />
     </div>

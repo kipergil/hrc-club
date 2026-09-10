@@ -32,7 +32,7 @@ The field tables in §5 are generated from the live instance, so this document a
 | **The league** | `hrc_clubs` — every club in the league, HRC included |
 | **Reference** | `hrc_seasons`, `hrc_venues`, `hrc_members` |
 | **Teams** | `hrc_teams`, `hrc_squads` |
-| **Mirrored from the league** | `hrc_fixtures`, `hrc_rubbers`, `hrc_standings`, `hrc_player_stats` |
+| **Mirrored from the league** | `hrc_fixtures`, `hrc_calendar_weeks`, `hrc_rubbers`, `hrc_standings`, `hrc_player_stats` |
 | **The record** | `hrc_honours` |
 | **Editorial** | `hrc_pages`, `hrc_news`, `hrc_events`, `hrc_sessions` |
 | **Club business** | `hrc_membership_options`, `hrc_committee_roles`, `hrc_documents` |
@@ -48,6 +48,7 @@ hrc_seasons ─┬─< hrc_teams ─┬─< hrc_squads >── hrc_members
              │              ├─< hrc_fixtures ─< hrc_rubbers >── hrc_members
              │              └─< hrc_player_stats >── hrc_members
              ├─< hrc_standings
+             ├─< hrc_calendar_weeks
              └─< hrc_honours >── hrc_members / hrc_teams
 
 hrc_venues ──< hrc_sessions / hrc_events / hrc_fixtures / hrc_teams
@@ -75,7 +76,7 @@ One policy and role, `HRC Club Service`, defined in [`directus/src/permissions/d
 
 | Collections | Permissions | Why |
 |---|---|---|
-| 19 editorial and reference collections | `read` | Authored in the admin panel; the app never writes them |
+| 20 editorial and reference collections | `read` | Authored in the admin panel; the app never writes them. `hrc_calendar_weeks` is here rather than with the synced collections: the calendar import runs on the admin client, not on this token |
 | `hrc_fixtures`, `hrc_standings`, `hrc_player_stats` | `read`, `create`, `update` | Written by the league sync. Never `delete` — a fixture that vanishes upstream is marked `void`, so a link to it never 404s |
 | `hrc_members` | `read` (13 named fields), `update` (`clerk_user_id` only) | The projection excludes `email` and `phone`. The only writable column is the one the sign-in flow sets |
 | `hrc_enquiries` | `create` only | A visitor can submit and can never read one back, so the form cannot be turned into a way of reading other people's messages |

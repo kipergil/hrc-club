@@ -15,9 +15,22 @@ import {
   Tr,
   usePagination,
 } from "@/components/ui";
-import { cn, divisionLabel, formatDateShort, formatTime, resultLabel } from "@/lib/utils";
+import {
+  cn,
+  divisionLabel,
+  formatDateLong,
+  formatDateShort,
+  formatTime,
+  resultLabel,
+} from "@/lib/utils";
 import { teamFixturesHref, teamHref, teamModuleHref } from "@/lib/links";
-import type { CalendarCell, CalendarSegment } from "@/lib/calendar";
+import { nightOf } from "@/lib/calendar";
+import type {
+  CalendarCell,
+  CalendarColumn,
+  CalendarSegment,
+  CalendarWeekBlock,
+} from "@/lib/calendar";
 
 /**
  * Every wide table on this site ships twice: as a real `<table>` from 640px
@@ -768,8 +781,61 @@ export function HandicapTable({ stats }: { stats: PlayerStat[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// The season grid
+// The season calendar, in two views
 // ---------------------------------------------------------------------------
+
+/**
+ * How a week that is not a league match week is drawn.
+ *
+ * The league's own grid tints these columns — Thistle for a cup week,
+ * Gainsboro for a free one — and spells "DivCup" vertically down the rows a
+ * letter at a time. The tints are 1990s web-safe values and none of them
+ * clears the 7:1 bar this site holds itself to, so the site's own accent
+ * and sunken neutral stand in; the vertical lettering is not reproduced at
+ * all, because a word written downwards is unreadable to a screen reader
+ * and nearly so to everyone else. The label goes in the header once.
+ */
+const WEEK_TINT: Record<CalendarColumn["kind"], string> = {
+  matches: "",
+  // One tint for both, saying the one thing they have in common: no league
+  // match this week. Two tints were tried and were not worth having. The
+  // pair that reads as a pair — the accent and the neutral — differ by so
+  // little side by side that December's cup final and the two free weeks
+  // either side of it looked identical anyway; and pushing the accent far
+  // enough apart to be seen dropped the muted text on it to 6.4:1 in the
+  // dark theme, under this site's 7:1 floor. Which week it is, the header
+  // says in words.
+  cup: "bg-surface-sunken",
+  free: "bg-surface-sunken",
+};
+
+/**
+ * What to call a week in a heading.
+ *
+ * The league's labels are "Divisional", "Handicap" and "Finals", and only
+ * the first two take "cup" after them — the third is the cup finals, and
+ * "Finals cup" is not a thing anybody in the league says.
+ */
+function weekTitle(column: CalendarColumn): string {
+  if (column.kind === "free") return "Free week";
+  if (column.kind !== "cup") return "League matches";
+  if (!column.label) return "Cup week";
+  return /finals?/i.test(column.label) ? "Cup finals" : `${column.label} cup`;
+}
+
+/**
+ * The one line a reader needs about a week nobody plays a league match in.
+ *
+ * The league says this in a tooltip, which is to say it does not say it to
+ * anyone on a phone. A free week is not an empty week — it is the week your
+ * postponed match goes in — and that is worth a sentence.
+ */
+function weekBlurb(column: CalendarColumn): string | null {
+  if (column.note) return column.note;
+  if (column.kind === "free") return "No league matches. Outstanding matches can be played.";
+  if (column.kind === "cup") return "No league matches — cup night.";
+  return null;
+}
 
 /**
  * One team's week in the grid.
@@ -780,10 +846,24 @@ export function HandicapTable({ stats }: { stats: PlayerStat[] }) {
  * anyone who cannot see it and for anyone who did not read the line — so
  * here the words say it: "v Kidston" at home, "at Kidston" away. The tint
  * is a second cue, never the only one.
+ *
+ * The night is under the opponent, in every cell. On the league's site it
+ * is in the tooltip and nowhere else, and the column header shows the
+ * Monday — so a reader on Cheshunt's row and a reader on Ellenborough's
+ * read the same header and are three days apart.
  */
-function CalendarCellContent({ cell }: { cell: CalendarCell }) {
+function CalendarCellContent({ cell, column }: { cell: CalendarCell; column: CalendarColumn }) {
   if (cell.entries.length === 0) {
-    return <span className="text-ink-muted">No match</span>;
+    // In a cup or free column the header has already said why the cell is
+    // empty, so the dash is a placeholder rather than information: hidden
+    // from a screen reader, which would otherwise announce it seventy-two
+    // times a season, and at full ink because muted text on the tint does
+    // not clear this site's 7:1 bar in the dark theme.
+    return column.kind === "matches" ? (
+      <span className="text-ink-muted">No match</span>
+    ) : (
+      <span aria-hidden="true">—</span>
+    );
   }
 
   return (
@@ -794,6 +874,7 @@ function CalendarCellContent({ cell }: { cell: CalendarCell }) {
             <span className="text-ink-muted">{isHome ? "v" : "at"}</span> {opponent.name}
           </>
         );
+        const night = nightOf(fixture);
         return (
           <span key={fixture.id} className="block">
             {fixture.status === "played" ? (
@@ -803,6 +884,9 @@ function CalendarCellContent({ cell }: { cell: CalendarCell }) {
             ) : (
               label
             )}
+            {night && night !== column.weekCommencing ? (
+              <span className="block text-ink-muted">{formatDateShort(night)}</span>
+            ) : null}
           </span>
         );
       })}
@@ -813,17 +897,16 @@ function CalendarCellContent({ cell }: { cell: CalendarCell }) {
 /**
  * The season at a glance — teams down the side, weeks across the top.
  *
- * This is the league's `Calendarz.asp?Div=…`, which the chronological
- * fixture list does not replace. A list answers "what is on this week"; a
- * captain arranging a rearrangement is asking "when are we free, and when
- * do we play them", and reading that off a list means scanning sixteen
- * weeks for two mentions of one team.
+ * This is the league's own grid, which the chronological fixture list does
+ * not replace. A list answers "what is on this week"; a captain arranging a
+ * rearrangement is asking "when are we free, and when do we play them", and
+ * reading that off a list means scanning sixteen weeks for two mentions of
+ * one team.
  *
  * Wide by nature, so the table scrolls sideways inside its own container
  * and the team column is sticky: scroll to March and you can still see
- * whose row you are on. There is no card fallback for narrow screens —
- * unlike a league table, a grid *is* the information here, and a
- * per-team list of fixtures already exists on the team's own page.
+ * whose row you are on. Narrow screens get the week-by-week view instead,
+ * which is the other half of why both exist.
  */
 export function SeasonGrid({ segments }: { segments: CalendarSegment[] }) {
   if (segments.length === 0) {
@@ -850,13 +933,29 @@ export function SeasonGrid({ segments }: { segments: CalendarSegment[] }) {
                   >
                     Team
                   </th>
-                  {segment.weeks.map((week) => (
+                  {segment.columns.map((column) => (
                     <th
                       scope="col"
-                      key={week}
-                      className="whitespace-nowrap border-b border-line bg-surface-sunken px-4 py-3 font-semibold text-ink"
+                      key={column.weekCommencing}
+                      className={cn(
+                        "whitespace-nowrap border-b border-line px-4 py-3 text-left font-semibold text-ink",
+                        column.kind === "matches" ? "bg-surface-sunken" : WEEK_TINT[column.kind],
+                      )}
                     >
-                      {formatDateShort(week)}
+                      <span className="block">{formatDateShort(column.weekCommencing)}</span>
+                      {column.kind === "matches" ? (
+                        column.weekNumber ? (
+                          <span className="block font-normal text-ink-muted">
+                            Week {column.weekNumber}
+                          </span>
+                        ) : null
+                      ) : (
+                        // Named here once, rather than repeated down every
+                        // row of a column in which nothing happens.
+                        <span className="block font-normal text-ink-muted">
+                          {weekTitle(column)}
+                        </span>
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -875,14 +974,20 @@ export function SeasonGrid({ segments }: { segments: CalendarSegment[] }) {
                         {row.team.name}
                       </Link>
                     </th>
-                    {row.cells.map((cell, index) => (
-                      <td
-                        key={segment.weeks[index]}
-                        className="whitespace-nowrap border-b border-line px-4 py-3 align-top"
-                      >
-                        <CalendarCellContent cell={cell} />
-                      </td>
-                    ))}
+                    {row.cells.map((cell, index) => {
+                      const column = segment.columns[index]!;
+                      return (
+                        <td
+                          key={column.weekCommencing}
+                          className={cn(
+                            "whitespace-nowrap border-b border-line px-4 py-3 align-top",
+                            WEEK_TINT[column.kind],
+                          )}
+                        >
+                          <CalendarCellContent cell={cell} column={column} />
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -891,6 +996,94 @@ export function SeasonGrid({ segments }: { segments: CalendarSegment[] }) {
         </section>
       ))}
     </div>
+  );
+}
+
+/**
+ * The same season as a diary — one block a week, matches under the night
+ * they are played on.
+ *
+ * The grid is the season's shape; this is its sequence, and it is the view
+ * that makes the league's hidden distinction impossible to miss. The week
+ * is named for its Monday and the match is on the host club's own night,
+ * so here the night is the heading and the fixture sits under it: you
+ * cannot read one without reading the other.
+ *
+ * It is also the view that survives a phone. The grid is thirty-two columns
+ * wide by nature and always will be.
+ */
+export function SeasonWeeks({ blocks }: { blocks: CalendarWeekBlock[] }) {
+  if (blocks.length === 0) {
+    return (
+      <Empty>
+        There is no fixture programme for this division yet. It usually appears in August, before
+        the season starts.
+      </Empty>
+    );
+  }
+
+  return (
+    <ol className="space-y-4">
+      {blocks.map((block) => {
+        const { column } = block;
+        const blurb = weekBlurb(column);
+        return (
+          <li
+            key={column.weekCommencing}
+            className={cn(
+              "rounded-card border border-line px-5 py-4 shadow-card print-plain",
+              column.kind === "matches" ? "bg-surface" : WEEK_TINT[column.kind],
+            )}
+          >
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h3 className="text-lg">
+                {column.weekNumber ? `Week ${column.weekNumber}` : "Week"}
+                <span className="font-normal text-ink-muted">
+                  {" "}
+                  commencing {formatDateShort(column.weekCommencing)}
+                </span>
+              </h3>
+              {column.kind === "matches" ? null : <Badge tone="accent">{weekTitle(column)}</Badge>}
+            </div>
+
+            {blurb ? <p className="mt-1 text-ink-muted">{blurb}</p> : null}
+
+            {block.nights.length > 0 ? (
+              <div className="mt-3 space-y-3">
+                {block.nights.map((night) => (
+                  <div key={night.date}>
+                    {/* The night, spelled out. This is the whole point of
+                        the view: "Wednesday 23 September", not "w/c 21st". */}
+                    <h4 className="font-semibold">{formatDateLong(night.date)}</h4>
+                    <ul className="mt-1 space-y-1">
+                      {night.entries.map(({ fixture, home, away }) => (
+                        <li key={fixture.id} className="flex flex-wrap items-baseline gap-x-2">
+                          <span>
+                            {home.name} <span className="text-ink-muted">v</span> {away.name}
+                          </span>
+                          {fixture.status === "played" ? (
+                            <Link href={`/results/${fixture.id}`} className="link">
+                              {fixture.homeScore}–{fixture.awayScore}
+                            </Link>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {block.restingTeams.length > 0 ? (
+              <p className="mt-3 text-ink-muted">
+                No match this week:{" "}
+                {block.restingTeams.map((team) => team.name).join(", ")}
+              </p>
+            ) : null}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

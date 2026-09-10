@@ -9,6 +9,7 @@
  * than as an undefined somewhere in a component.
  */
 import type {
+  CalendarWeekKind,
   Competition,
   DayOfWeek,
   Division,
@@ -215,6 +216,27 @@ export interface TeamRef {
   slug: string;
   /** Null for an archived row naming a team the site no longer holds. */
   division: Division | null;
+}
+
+/**
+ * One week of the season, and what the league has it down for.
+ *
+ * A season is thirty-two weeks and only eighteen of them are league
+ * matches; the rest are cup rounds and free weeks kept back for rearranged
+ * matches. Without these a calendar built from fixtures alone shows a
+ * fortnight-long hole at Christmas with nothing to say about it, and a cup
+ * week looks exactly like a week the league forgot.
+ */
+export interface CalendarWeek {
+  /** 1 for the first week of the season. */
+  weekNumber: number;
+  /** The Monday, ISO. Matches fall on the host club's own night after it. */
+  weekCommencing: string;
+  kind: CalendarWeekKind;
+  /** "Divisional", "Handicap", "Finals", "Free" — the league's own word. */
+  label: string | null;
+  /** One line from the committee, e.g. why a week is free. */
+  note: string | null;
 }
 
 /**

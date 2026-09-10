@@ -134,6 +134,13 @@ async function collectRoutes(): Promise<RouteSpec[]> {
         queryKey: keys.fixtures("competition=league"),
         queryFn: () => storage.getFixtures({ competition: "league" }),
       });
+      // And the weeks nobody plays in. Fourteen of the thirty-two are cup
+      // rounds or free weeks; without them the calendar renders a hole at
+      // Christmas with nothing to say about it.
+      await client.prefetchQuery({
+        queryKey: keys.calendarWeeks(),
+        queryFn: () => storage.getCalendarWeeks(),
+      });
     }),
     route("/results", async (client) => {
       await client.prefetchQuery({

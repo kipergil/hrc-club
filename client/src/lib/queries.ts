@@ -1,6 +1,7 @@
 import { QueryClient, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { apiGet } from "@shared/api-client.js";
 import type {
+  CalendarWeek,
   Club,
   ClubDetail,
   ClubDocument,
@@ -68,6 +69,7 @@ export const keys = {
   team: (slug: string, season?: string) => ["team", slug, season ?? "current"] as const,
   fixtures: (query: string) => ["fixtures", query] as const,
   fixture: (id: string) => ["fixture", id] as const,
+  calendarWeeks: (season?: string) => ["calendar-weeks", season ?? "current"] as const,
   standings: (season?: string) => ["standings", season ?? "current"] as const,
   averages: (season?: string) => ["averages", season ?? "current"] as const,
   players: ["players"] as const,
@@ -100,6 +102,8 @@ export const fetchers = {
     apiGet<TeamDetail>(`/api/teams/${slug}${season ? `?season=${season}` : ""}`),
   fixtures: (query: string) => apiGet<Fixture[]>(`/api/fixtures${query ? `?${query}` : ""}`),
   fixture: (id: string) => apiGet<FixtureDetail>(`/api/fixtures/${id}`),
+  calendarWeeks: (season?: string) =>
+    apiGet<CalendarWeek[]>(`/api/calendar-weeks${season ? `?season=${season}` : ""}`),
   standings: (season?: string) => apiGet<Standing[]>(`/api/standings${season ? `?season=${season}` : ""}`),
   averages: (season?: string) => apiGet<PlayerStat[]>(`/api/averages${season ? `?season=${season}` : ""}`),
   players: () => apiGet<MemberSummary[]>("/api/players"),
@@ -145,6 +149,9 @@ export const useFixture = (id: string): UseQueryResult<FixtureDetail> =>
 /** Every season the site holds, newest first — what the year filters offer. */
 export const useSeasons = (): UseQueryResult<Season[]> =>
   useQuery({ queryKey: keys.seasons, queryFn: fetchers.seasons });
+/** The season's weeks: which are match weeks, which are cup, which are free. */
+export const useCalendarWeeks = (season?: string): UseQueryResult<CalendarWeek[]> =>
+  useQuery({ queryKey: keys.calendarWeeks(season), queryFn: () => fetchers.calendarWeeks(season) });
 export const useStandings = (season?: string): UseQueryResult<Standing[]> =>
   useQuery({ queryKey: keys.standings(season), queryFn: () => fetchers.standings(season) });
 export const useAverages = (season?: string): UseQueryResult<PlayerStat[]> =>
