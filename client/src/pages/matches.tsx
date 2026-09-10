@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { ClipboardPen } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import {
   AveragesByDivision,
@@ -35,7 +36,7 @@ import {
 } from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
 import { useUrlParam } from "@/lib/params";
-import { teamModuleHref } from "@/lib/links";
+import { enterResultHref, teamModuleHref } from "@/lib/links";
 import { cn, divisionLabel, formatDateLong, formatTime, resultLabel } from "@/lib/utils";
 import { buildCalendar, buildWeekBlocks } from "@/lib/calendar";
 import { Scorecard } from "@/components/scorecard";
@@ -498,6 +499,26 @@ export function MatchPage({ id }: { id: string }) {
             </a>
           </p>
         ) : null}
+
+        {/*
+          The shortcut into the card screen, carrying this match with it.
+          A captain reaches this page from their team's fixture list, which
+          means they have already said which match they mean; without this
+          they say it again by finding it in a list of two hundred.
+
+          Shown on a played match as well as an unplayed one — a card that
+          was entered wrong is corrected by entering it again, and that is
+          the moment somebody is looking at the wrong score.
+        */}
+        <p className="mt-5 flex flex-wrap justify-center gap-3 border-t border-line pt-4">
+          <Link
+            href={enterResultHref(match.id)}
+            className="inline-flex min-h-touch items-center gap-2 rounded-card border border-line-strong bg-surface px-4 font-semibold text-ink no-underline shadow-raised transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
+          >
+            <ClipboardPen aria-hidden="true" className="size-5" />
+            {played ? "Correct this result" : "Enter this result"}
+          </Link>
+        </p>
       </Card>
 
       <Scorecard match={match} />

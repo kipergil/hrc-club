@@ -24,6 +24,17 @@ export interface FeaturePost {
   title: string;
   summary: string;
   body: string;
+  /**
+   * Screenshots the post shows, as `token -> filename` under
+   * `__images__/`.
+   *
+   * The body refers to one as `![alt](image:token)`. The writer uploads
+   * the file to Directus and swaps the token for the real address before
+   * publishing, because a file id is not something that can sensibly be
+   * typed into a post here — and a post that hard-coded one would break
+   * the first time the images were re-uploaded.
+   */
+  images?: Record<string, string>;
 }
 
 /**
@@ -31,6 +42,81 @@ export interface FeaturePost {
  * array is the top of the page.
  */
 export const FEATURE_POSTS: FeaturePost[] = [
+  {
+    slug: "how-to-enter-a-result",
+    title: "How to enter a result, step by step",
+    summary:
+      "Six screens from the match page to a saved card. Photograph it or type it in — either way you check every line before anything reaches the table.",
+    images: {
+      match: "enter-result-match-page.png",
+      menu: "enter-result-menu.png",
+      choose: "scorecard-choose.png",
+      lineup: "scorecard-lineup.png",
+      games: "scorecard-games.png",
+      save: "scorecard-save.png",
+    },
+    body: `Captains enter their own results, as they always have. This is the whole of it, screen by screen. It takes about two minutes with the card in front of you.
+
+You need two things: the email address the league holds for you, and the result-entry password. Ask the match secretary if you have not got it.
+
+## 1. Start from the match
+
+Open the match on [Match history](/results) or from your team's fixture list, and use the button under the score.
+
+![The Enter this result button, under the score on a match page](image:match)
+
+That button carries the match with it, so the next screens already know which one you mean. On a match that already has a score it says **Correct this result** instead — entering a card again replaces the old one, which is how a mistake gets fixed.
+
+If you would rather start from the menu, [Enter a result](/admin/scorecards) is under Fixtures, and you pick the match from a list.
+
+![Enter a result in the Fixtures section of the menu](image:menu)
+
+## 2. Sign in
+
+Your email address and the shared password. The address goes on the card you save, so the committee can see who entered what.
+
+## 3. Photograph the card, or type it in
+
+![Choose a photograph, or type the card in instead](image:choose)
+
+**Photograph** is the quick way. Take a picture of the card on the table at the end of the night — a phone photo is fine, it does not need to be straight or in good light. It is read for you, which takes twenty or thirty seconds, and what it read lands in the form at step 4 for you to check.
+
+**Type the card in** goes to the same form with everything blank. Use it if you have not got the card to hand, or if a photograph came back wrong.
+
+Either way the photograph is kept. A disputed result is settled by looking at what the captain actually wrote.
+
+## 4. Say who played
+
+Three players a side, against the letters on the card — A, B and C at home, X, Y and Z away.
+
+![Choosing the three players on each side against their letters](image:lineup)
+
+Get these right and the nine singles below fill themselves in, because the order they are played in is fixed by the league. Change a player here and their three matches change with them.
+
+## 5. Check the games
+
+Ten rows in the order the card prints them: nine singles, then the doubles.
+
+![The ten matches, with the games typed in and the sets worked out](image:games)
+
+Type each game as it is written — \`11-7, 11-9, 9-11, 11-6\` — with your own team's score first. The **Sets** column on the right works itself out as you go. Anything that could not be read is flagged on the row it belongs to, in words, so you can see what to look at rather than hunting for it.
+
+Nothing here is locked. Every box can be changed, whether a photograph filled it in or you did.
+
+## 6. Save
+
+![The running score, and the Save this card button](image:save)
+
+The score at the bottom is worked out from the games above rather than typed, so the card and the result cannot disagree.
+
+Press **Save this card** and it is on the site: the match page shows the full card, the division table changes, and every player in it has the games added to their own record.
+
+## If something goes wrong
+
+- **The photograph could not be read.** Type the card in instead — same form, same buttons.
+- **You saved the wrong thing.** Open the match again and use *Correct this result*. The new card replaces the old one.
+- **It says you cannot enter results.** The committee marks who may. Ask the match secretary.`,
+  },
   {
     slug: "sixteen-seasons-one-address",
     title: "Sixteen seasons, one address",

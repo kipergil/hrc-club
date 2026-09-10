@@ -773,6 +773,11 @@ export function Prose({ markdown, className }: { markdown: string | null; classN
         "prose-p:text-ink prose-li:text-ink prose-strong:text-ink",
         "prose-a:text-brand prose-a:underline prose-a:underline-offset-4",
         "prose-blockquote:border-l-brand prose-blockquote:text-ink-muted",
+        // A screenshot of this site, on this site, needs an edge or it
+        // reads as part of the page it is sitting in — which in a
+        // step-by-step guide means a reader cannot tell the picture of the
+        // button from the button.
+        "prose-img:rounded-card prose-img:border prose-img:border-line",
         className,
       )}
     >

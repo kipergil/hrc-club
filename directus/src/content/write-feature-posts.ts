@@ -1,4 +1,7 @@
-import { createItems, readItems, updateItem } from "@directus/sdk";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createItems, readFiles, readItems, updateFile, updateItem, uploadFiles } from "@directus/sdk";
 import { getSchemaClient } from "../lib/client.js";
 import { FEATURE_POSTS } from "./feature-posts.js";
 
@@ -18,9 +21,77 @@ import { FEATURE_POSTS } from "./feature-posts.js";
  *
  * Nothing is pinned. Pinning puts an item on the home page, which is for
  * the committee's notices, not for the site talking about itself.
+ *
+ * Screenshots travel with the post. A post declares them by name, the file
+ * sits next to this script under `__images__/`, and `image:token` in the
+ * body is swapped for the real address on the way out — see `resolveImages`
+ * below for why they are uploaded rather than referenced from the repo.
  */
 
 type Row = { id: string | number; slug: string };
+type FileRow = { id: string; title?: string | null };
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Uploads a post's screenshots and returns its body with the tokens
+ * replaced.
+ *
+ * The images go into Directus rather than being served from the client
+ * bundle because that is where the rest of the site's images already live,
+ * and `/api/files/:id` is the one image address the content security
+ * policy admits — a post pointing anywhere else renders a broken image and
+ * no error.
+ *
+ * Matched on `title`, which is set to the filename, so a re-run replaces
+ * the picture instead of filling the library with copies of it. That
+ * matters: these are screenshots of a screen that will change.
+ */
+async function resolveImages(
+  client: Awaited<ReturnType<typeof getSchemaClient>>,
+  images: Record<string, string> | undefined,
+  body: string,
+): Promise<string> {
+  if (!images) return body;
+
+  let resolved = body;
+  for (const [token, filename] of Object.entries(images)) {
+    const bytes = readFileSync(path.join(here, "__images__", filename));
+
+    // `readFiles`, not `readItems` — the SDK refuses core collections
+    // through the generic item commands.
+    const existing = (await client.request(
+      readFiles({
+        fields: ["id", "title"],
+        filter: { title: { _eq: filename } },
+        limit: 1,
+      } as never),
+    )) as FileRow[];
+
+    const form = new FormData();
+    form.append("title", filename);
+    form.append("file", new Blob([bytes], { type: "image/png" }), filename);
+
+    // `updateFile` replaces the bytes behind an id; `uploadFiles`' second
+    // argument is a query, not a key, so passing the id there builds a
+    // nonsense request rather than replacing anything.
+    const id = existing[0]?.id;
+    const file = (await client.request(
+      id ? updateFile(id, form) : uploadFiles(form),
+    )) as FileRow;
+
+    console.log(`      ${id ? "=" : "+"} ${filename} → ${file.id}`);
+    resolved = resolved.split(`image:${token}`).join(`/api/files/${file.id}`);
+  }
+
+  // A token left behind is a broken image on a published page, and the
+  // markdown renders it as an empty box rather than as an error.
+  const orphan = resolved.match(/image:[a-z0-9_-]+/i);
+  if (orphan) {
+    throw new Error(`No image declared for "${orphan[0]}" — check the post's images map.`);
+  }
+  return resolved;
+}
 
 async function main(): Promise<void> {
   const client = await getSchemaClient();
@@ -43,7 +114,7 @@ async function main(): Promise<void> {
       title: post.title,
       slug: post.slug,
       summary: post.summary,
-      body: post.body,
+      body: await resolveImages(client, post.images, post.body),
       category: "feature",
       status: "published",
       is_pinned: false,

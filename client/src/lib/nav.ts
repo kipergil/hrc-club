@@ -42,6 +42,21 @@ export const NAV: readonly [NavGroup, NavGroup, NavGroup, NavGroup, NavGroup] = 
       },
       { href: "/results", title: "Match history", subtitle: "Every match played this season" },
       { href: "/cups", title: "Cup news", subtitle: "The four cups and how they stand" },
+      /*
+       * Under Fixtures because that is where a captain already is when the
+       * card is in their hand, and because it was previously only in the
+       * footer — findable if you knew to look, which is a poor place for
+       * the one thing eighteen captains do every week of the season.
+       *
+       * A match page carries the same link with `?fixture=` on it, which
+       * opens this screen on that match rather than on the picker. This
+       * entry is the way in for somebody who has not got a match on screen.
+       */
+      {
+        href: "/admin/scorecards",
+        title: "Enter a result",
+        subtitle: "Captains: photograph the card and save it",
+      },
     ],
   },
   {
