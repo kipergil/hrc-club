@@ -227,6 +227,107 @@
    * chosen nothing — which is most people in dark mode, and exactly the
    * case where the hart vanishes.
    */
+  /*
+   * The masthead: the badge, the league's name, and the strapline, sized
+   * to whatever room the row has left after the Menu button.
+   *
+   * The name has to sit on one line. "Hertford & District Table Tennis
+   * League" is thirty-nine characters and about 21 characters wide per em,
+   * so at 1.75rem it wants 670px of masthead — and set to appear from
+   * 640px it wrapped onto two lines across every tablet and small laptop
+   * there is. So it steps: the short name, then the short name larger,
+   * then the full name, then the full name at full size, each as soon as
+   * there is room for it.
+   *
+   * Container queries rather than media queries, and `em` rather than
+   * `px`, because there are two axes here and a media query only sees one.
+   * The reader's A / A+ / A++ control multiplies the root font size, which
+   * grows the name, the badge and the Menu button together — and inside a
+   * media query `rem` means the browser's *initial* size, not ours, so a
+   * `min-width` in px or rem is blind to it. At A++ that put the league's
+   * name off the end of its own masthead. Measured against this row's own
+   * width in this row's `em`, every threshold below holds at all three
+   * text sizes, because everything competing for the width is in `rem`
+   * too — and the swap points move with the reader, which is the point.
+   *
+   * Display and font-size are set here rather than with Tailwind's
+   * `hidden` / `block` / `text-xl`, because utilities live in a later
+   * layer and would win against these however the queries came out. A
+   * first pass at this kept them and got both names on screen at once.
+   *
+   * The numbers were measured, not derived: a browser sweep of 320-1600px
+   * at each of the three text sizes, checking every width for a second
+   * line, a clipped name, a collision with the controls, and a page that
+   * scrolls sideways. If these are ever touched, sweep them again.
+   */
+  .masthead-row {
+    container-type: inline-size;
+  }
+
+  /* The narrowest case needs no query at all, so a browser without
+     container queries still gets a masthead that reads. */
+  .masthead-badge,
+  .masthead-full {
+    display: none;
+  }
+
+  .masthead-short {
+    display: block;
+    font-size: 1.15rem;
+    line-height: 1.5;
+  }
+
+  .masthead-short,
+  .masthead-full {
+    white-space: nowrap;
+  }
+
+  /*
+   * One corner where one line is not possible: a 320px phone at the
+   * largest text size, where the name, a 3rem touch target and the word
+   * "Menu" cannot all have their width. The name wraps there rather than
+   * running off the page — two short lines is a worse masthead than one,
+   * and a sideways scrollbar on every page of the site is worse than
+   * both. Dropping the button's label instead was the other option, and
+   * an unlabelled hamburger is a thing this site's own audit called out.
+   */
+  @container (max-width: 14em) {
+    .masthead-short {
+      white-space: normal;
+    }
+  }
+
+  @container (min-width: 19em) {
+    .masthead-badge {
+      display: block;
+    }
+  }
+
+  @container (min-width: 33em) {
+    .masthead-short {
+      font-size: 1.4rem;
+      line-height: 1.35;
+    }
+  }
+
+  @container (min-width: 51em) {
+    .masthead-short {
+      display: none;
+    }
+    .masthead-full {
+      display: block;
+      font-size: 1.4rem;
+      line-height: 1.35;
+    }
+  }
+
+  @container (min-width: 58em) {
+    .masthead-full {
+      font-size: 1.75rem;
+      line-height: 1.25;
+    }
+  }
+
   .site-badge {
     border-radius: 0.375rem;
   }

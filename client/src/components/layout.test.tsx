@@ -268,3 +268,71 @@ describe("the phone menu's display controls", () => {
     expect(panel.textContent).not.toContain("Who is top of each division");
   });
 });
+
+describe("the masthead fitting on one line", () => {
+  /**
+   * "Hertford & District Table Tennis League" is thirty-nine characters,
+   * and at the size it was set in it wanted 670px of masthead while
+   * appearing from 640px. It wrapped onto two lines across every tablet
+   * and small laptop there is.
+   *
+   * The fix is a set of container queries in `index.css`, and it cannot be
+   * checked here: jsdom lays nothing out and implements no container
+   * queries. It was measured in a browser instead — every width from 320
+   * to 1600px at each of the three text sizes, checking for a second line,
+   * a clipped name, a collision with the controls, and a header that
+   * scrolls sideways.
+   *
+   * What these pin is the mechanism, because it is the part a later change
+   * would quietly undo. Twice while building it a Tailwind utility on the
+   * element beat the rule in the stylesheet — utilities are a later layer
+   * — and the visible result was both names on screen at once.
+   */
+  const mastheadClasses = () => {
+    renderSite();
+    const link = document.querySelector("header a[href='/']")!;
+    const spans = [...link.querySelectorAll("span > span")];
+    return {
+      row: document.querySelector(".masthead-row"),
+      short: spans.find((s) => s.className.includes("masthead-short"))!,
+      full: spans.find((s) => s.className.includes("masthead-full"))!,
+      badge: link.querySelector("img")!,
+    };
+  };
+
+  it("puts both names in the markup and lets the stylesheet choose", () => {
+    const { row, short, full, badge } = mastheadClasses();
+
+    expect(row).toBeTruthy();
+    expect(short.textContent).toBe("Herts TTL");
+    expect(full.textContent).toBe("Hertford & District Table Tennis League");
+    expect(badge.className).toContain("masthead-badge");
+  });
+
+  it("keeps display and size utilities off all three", () => {
+    // `hidden`, `block` and `text-xl` are utilities-layer rules and win
+    // against the container queries however those come out. This is the
+    // check that would have caught both names rendering at once.
+    const { short, full, badge } = mastheadClasses();
+
+    for (const [name, el] of [["short name", short], ["full name", full], ["badge", badge]] as const) {
+      for (const banned of [/\bhidden\b/, /\bblock\b/, /\btext-(base|lg|xl|2xl|3xl)\b/]) {
+        expect(el.className, `${name} carries a utility the stylesheet needs to own`).not.toMatch(
+          banned,
+        );
+      }
+    }
+  });
+
+  it("does not decide any of it in a media query", () => {
+    // The reader's A / A+ / A++ control multiplies the root font size, so
+    // it changes how much room the name needs — and inside a media query
+    // `rem` means the browser's initial size, not ours. A `sm:` or `lg:`
+    // here would be blind to it, which is how the name came to run off the
+    // end of its own masthead at A++.
+    const { short, full } = mastheadClasses();
+    for (const el of [short, full]) {
+      expect(el.className).not.toMatch(/\b(sm|md|lg|xl|2xl|min-\[)/);
+    }
+  });
+});

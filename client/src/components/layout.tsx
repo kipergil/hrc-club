@@ -259,7 +259,7 @@ function MobileNav({ pathname }: { pathname: string }) {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-controls="mobile-menu"
-        className="flex min-h-touch items-center gap-2 rounded-card border border-line-strong bg-surface px-4 text-lg font-semibold text-ink shadow-raised transition-colors hover:border-brand hover:text-brand"
+        className="flex min-h-touch items-center gap-1.5 rounded-card border border-line-strong bg-surface px-3 text-lg font-semibold text-ink shadow-raised transition-colors hover:border-brand hover:text-brand sm:gap-2 sm:px-4"
       >
         {open ? (
           <X aria-hidden="true" className="size-6" />
@@ -370,7 +370,7 @@ function Header({ pathname }: { pathname: string }) {
   return (
     <header id="top" className="relative z-40 border-b border-line bg-surface no-print">
       <div className="mx-auto max-w-page px-4">
-        <div className="flex items-center justify-between gap-4 py-4">
+        <div className="masthead-row flex items-center justify-between gap-4 py-4">
           <Link href="/" className="group flex min-w-0 items-center gap-3 no-underline">
             {/*
               The league's own badge, from the original site. Decorative
@@ -381,25 +381,45 @@ function Header({ pathname }: { pathname: string }) {
               Fixed height rather than width: it sits on the same optical
               line as the masthead at every size, and the intrinsic
               width/height keep the row from reflowing as it loads.
+
+              Gone when the row is very narrow — a 320px phone, or a wider
+              one at the largest text size. It is the one thing in this row
+              that is decorative, which `alt=""` already says, and when the
+              badge, the Menu button and the league's own name cannot all
+              have their width, the name wins.
             */}
             <img
               src="/httl-badge.png"
               alt=""
               width={196}
               height={153}
-              className="site-badge h-11 w-auto shrink-0 sm:h-14"
+              className="masthead-badge site-badge h-9 w-auto shrink-0 sm:h-11 lg:h-14"
             />
             <span className="min-w-0">
               {/*
-                The short name on a phone, the full name from 640px up.
-                Truncating the full one instead rendered the masthead as
-                "Hertford …" on a 390px screen — a site whose own name is
-                cut off before the first word of it that identifies anything.
+                A site's own name reads as one line or it reads as broken,
+                so neither of these wraps and the wording and the size step
+                to suit the room instead.
+
+                Which of the two shows, how big, and whether it may wrap
+                after all is decided in `index.css`, against the width of
+                this row — see the `.masthead-*` rules there for why it
+                cannot be decided here in Tailwind's `sm:` / `lg:`
+                variants. The short version: the reader's own text-size
+                control changes how much room the name needs, and a media
+                query cannot see that. Deliberately no `hidden` / `block` /
+                `text-xl` here either — utilities are a later layer and
+                would beat those rules whichever way they came out.
+
+                Truncating instead was tried and rejected long ago — it
+                rendered the masthead as "Hertford …", a site whose name is
+                cut off before the first word of it that identifies
+                anything.
               */}
-              <span className="block text-xl font-semibold tracking-tight text-ink transition-colors group-hover:text-brand sm:hidden">
+              <span className="masthead-short font-semibold tracking-tight text-ink transition-colors group-hover:text-brand">
                 {settings?.shortName ?? settings?.clubName ?? "Herts TTL"}
               </span>
-              <span className="hidden text-2xl font-semibold tracking-tight text-ink transition-colors group-hover:text-brand sm:block">
+              <span className="masthead-full font-semibold tracking-tight text-ink transition-colors group-hover:text-brand">
                 {settings?.clubName ?? "Hertford & District Table Tennis League"}
               </span>
               {settings?.strapline ? (
