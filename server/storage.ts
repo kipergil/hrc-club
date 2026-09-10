@@ -8,6 +8,7 @@ import {
   uploadFiles,
 } from "@directus/sdk";
 import type {
+  CalendarWeek,
   Club,
   ClubDetail,
   ClubDocument,
@@ -527,6 +528,37 @@ async function seasonIdFor(label?: string): Promise<string | null> {
     readItems("hrc_seasons", { fields: ["id"], filter: { slug: { _eq: label } }, limit: 1 }),
   )) as Row[];
   return rows[0]?.id ?? null;
+}
+
+/**
+ * The season's thirty-two weeks — which are match weeks, which are cup
+ * rounds, and which are free.
+ *
+ * All three divisions run one programme, so these belong to the season
+ * rather than to a division. Empty for the archived seasons, which were
+ * imported from the league's results tables long after their calendars
+ * came down; a calendar built from fixtures alone is what the site falls
+ * back to there.
+ */
+export async function getCalendarWeeks(seasonSlug?: string): Promise<CalendarWeek[]> {
+  const seasonId = await seasonIdFor(seasonSlug);
+  if (!seasonId) return [];
+  const client = await directus();
+  const rows = (await client.request(
+    readItems("hrc_calendar_weeks", {
+      fields: ["week_number", "week_commencing", "kind", "label", "note"],
+      filter: { season: { _eq: seasonId } },
+      sort: ["week_number"],
+      limit: -1,
+    }),
+  )) as Row[];
+  return rows.map((row) => ({
+    weekNumber: num(row.week_number) ?? 0,
+    weekCommencing: str(row.week_commencing) ?? "",
+    kind: (row.kind as CalendarWeek["kind"]) ?? "matches",
+    label: str(row.label),
+    note: str(row.note),
+  }));
 }
 
 let homeClubCache: { id: string; slug: string } | null = null;
