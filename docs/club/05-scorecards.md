@@ -224,7 +224,51 @@ played most for, and their whole record counts.
 Stored `hrc_player_stats` remains the source for archived seasons, whose rubbers this site will
 never hold — the same fallback shape the league tables use.
 
-## 7. What is not done
+## 7. Cards from the league's own site
+
+The league posts every card it receives at `ScoreCard.asp?LMID=…`, linked from the magnifying
+glass on a team's match history. `import-scorecards.ts` reads them, so a match played this season
+arrives with its players and games, not just its score.
+
+**The weekly refresh is one command:**
+
+```bash
+npm run directus:sync:results
+```
+
+which runs, in this order:
+
+1. `import:fixtures` — new results from each team's match history. **Updates in place**, keyed on
+   `league_fixture_ref`. It used to clear the season and recreate it, which deleted every card
+   with it (rubbers cascade), including cards captains typed in here, and gave every fixture a new
+   id. A fixture with a card keeps the card's score and date; if the league's summary disagrees,
+   it says so rather than overwriting. A fixture the league drops is removed if nothing is behind
+   it, and marked `void` if a card is.
+2. `import:calendar` — scheduled nights for unplayed fixtures. A played match's date is left
+   alone: the card records the night it was actually played, which for a rearranged match is not
+   the night the calendar scheduled.
+3. `import:scorecards` — the cards. `--dry-run` checks everything and writes nothing.
+4. `compare:results` — the league and this site, match by match.
+
+**A card is refused, with the reason, unless** the parser reconciled everything, it is for the
+fixture's teams, `reviewScorecard` (the check a captain's card gets) finds no blocking error, its
+games add up to the card's own printed final result and every match's Sets column, and that
+result equals the one the fixture holds. On the first run, five cards from five, all passing.
+
+**Names become members on an exact match only**, first in the team's squad and then anywhere in
+the club — a player playing up is in the lower team's squad. Anything else is kept as the name
+(`home_player_name`, and now `home_player_2_name` for a doubles partner, which previously had no
+fallback and vanished) and listed at the end of the run. On the first run three players did not
+match; all three had registered since the August squad import, and re-running
+`directus:import:league` brought them in. **Run the league import first when names are missing.**
+
+A card entered on this site is never overwritten by the league's copy. A card this script
+imported before is replaced, so a correction posted on the league's site comes through.
+
+Both the captain's save and the import build rows through `rubberRowsFor` in
+`shared/scorecard.ts`, so the two cannot disagree about how a card is stored.
+
+## 8. What is not done
 
 - **The parse has still not produced a card from a real photograph.** The first attempt against
   a real key was refused by the API before the model saw anything, because the key is

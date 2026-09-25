@@ -41,7 +41,7 @@ import type {
 } from "../shared/types.js";
 import type { EnquiryInput } from "../shared/schema.js";
 import { DIVISION, type Division } from "../shared/enums.js";
-import { matchScoreOf, outcomeOf } from "../shared/scorecard.js";
+import { matchScoreOf, rubberRowsFor } from "../shared/scorecard.js";
 import { buildAverages, type AverageSource } from "../shared/averages.js";
 import { directus } from "./lib/directus.js";
 
@@ -262,11 +262,11 @@ function toRubberPlayer(member: Row | null, fallback: unknown): { name: string; 
 function toRubber(row: Row): Rubber {
   const home = [
     toRubberPlayer(rel(row.home_player), row.home_player_name),
-    toRubberPlayer(rel(row.home_player_2), null),
+    toRubberPlayer(rel(row.home_player_2), row.home_player_2_name),
   ].filter((player): player is { name: string; slug: string | null } => player !== null);
   const away = [
     toRubberPlayer(rel(row.away_player), row.away_player_name),
-    toRubberPlayer(rel(row.away_player_2), null),
+    toRubberPlayer(rel(row.away_player_2), row.away_player_2_name),
   ].filter((player): player is { name: string; slug: string | null } => player !== null);
 
   return {
@@ -1865,6 +1865,8 @@ export async function saveScorecard(input: {
     awayPlayer2Id: string | null;
     homePlayerName: string | null;
     awayPlayerName: string | null;
+    homePlayer2Name?: string | null;
+    awayPlayer2Name?: string | null;
     games: Array<[number, number]>;
   }>;
 }): Promise<{ homeScore: number; awayScore: number; rubbers: number }> {
@@ -1881,25 +1883,14 @@ export async function saveScorecard(input: {
     await client.request(deleteItems("hrc_rubbers", existing.map((row) => row.id)));
   }
 
-  const rows = input.rubbers.map((rubber) => {
-    const { homeSets, awaySets } = outcomeOf(rubber.games);
-    return {
-      fixture: input.fixtureId,
-      rubber_number: rubber.rubberNumber,
-      kind: rubber.kind === "doubles" ? "doubles" : "singles",
-      home_player: rubber.homePlayerId,
-      home_player_2: rubber.homePlayer2Id,
-      away_player: rubber.awayPlayerId,
-      away_player_2: rubber.awayPlayer2Id,
-      // Only kept where no member matched; a name beside a relation is
-      // two sources for one fact.
-      home_player_name: rubber.homePlayerId ? null : rubber.homePlayerName,
-      away_player_name: rubber.awayPlayerId ? null : rubber.awayPlayerName,
-      home_sets: homeSets,
-      away_sets: awaySets,
-      games: rubber.games,
-    };
-  });
+  // The same row shape an imported card gets — see `rubberRowsFor`.
+  const rows = rubberRowsFor(
+    input.fixtureId,
+    input.rubbers.map((rubber) => ({
+      ...rubber,
+      kind: rubber.kind === "doubles" ? ("doubles" as const) : ("singles" as const),
+    })),
+  );
 
   if (rows.length > 0) {
     await client.request(createItems("hrc_rubbers", rows as never));

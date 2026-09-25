@@ -116,6 +116,7 @@ async function main(): Promise<void> {
         "id",
         "week_commencing",
         "played_on",
+        "status",
         { home_team: ["name", "home_night"] },
         { away_team: ["name"] },
       ],
@@ -137,10 +138,20 @@ async function main(): Promise<void> {
 
   let corrected = 0;
   let alreadyRight = 0;
+  let alreadyPlayed = 0;
   const undated: string[] = [];
   const notOnTheCalendar: string[] = [];
 
   for (const fixture of fixtures) {
+    // Once a match is played its date is a fact, recorded on the card, and
+    // not the calendar's to correct. A rearranged match is played on a
+    // night the calendar never scheduled; resetting it to the scheduled
+    // one would put a true result on a false date.
+    if (fixture.status === "played") {
+      alreadyPlayed += 1;
+      continue;
+    }
+
     const home = fixture.home_team?.name as string | undefined;
     const away = fixture.away_team?.name as string | undefined;
     const week = fixture.week_commencing as string | null;
@@ -174,7 +185,7 @@ async function main(): Promise<void> {
 
   console.log(
     `  = ${corrected} fixture dates corrected, ${alreadyRight} already right, ` +
-      `of ${fixtures.length}`,
+      `${alreadyPlayed} played (their card's date stands), of ${fixtures.length}`,
   );
 
   if (notOnTheCalendar.length > 0) {

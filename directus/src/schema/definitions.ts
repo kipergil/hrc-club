@@ -526,6 +526,11 @@ export const rubbersCollection: CollectionDefinition = {
       note: "As written on the card. Used when the name matches no member here — a guest, or a spelling nobody has reconciled yet.",
     }),
     textField("away_player_name", { nullable: true }),
+    // The doubles partner's name, on the same terms. Without these an
+    // unmatched partner had nowhere to go and simply vanished from the
+    // card, which is the one outcome worse than an unlinked name.
+    textField("home_player_2_name", { nullable: true }),
+    textField("away_player_2_name", { nullable: true }),
     integerField("home_sets", { defaultValue: 0, note: "Games won. Derived from `games` on save." }),
     integerField("away_sets", { defaultValue: 0 }),
     jsonField("games", {

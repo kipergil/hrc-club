@@ -14,6 +14,7 @@
     "import:fixtures": "tsx src/content/import-fixtures.ts",
     "import:calendar": "tsx src/content/import-calendar.ts",
     "compare:results": "tsx src/content/compare-results.ts",
+    "import:scorecards": "tsx src/content/import-scorecards.ts",
     "import:archive": "tsx src/content/import-archive.ts",
     "geocode:venues": "tsx src/content/geocode-venues.ts",
     "sample:results": "tsx src/content/sample-results.ts",

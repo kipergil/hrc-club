@@ -36,6 +36,12 @@ export interface MatchRow {
   /** Rubbers won, or null where the card has not come in. */
   homeScore: number | null;
   awayScore: number | null;
+  /**
+   * The league's own page for this match's card — `ScoreCard.asp?LMID=…` —
+   * where one has been posted. The magnifying glass on the row. Null until
+   * a captain or the match secretary enters the card.
+   */
+  scorecardPath: string | null;
 }
 
 const MONTHS: Record<string, number> = {
@@ -68,12 +74,13 @@ export function toIsoDate(text: string): string | null {
 export function parseMatchHistory(source: string): MatchRow[] {
   let body = source.replace(/<(script|style)[^>]*>.*?<\/\1>/gis, " ");
   body = body.replace(/\r?\n/g, " ");
-  body = body.replace(/<\/t[dh]>/gi, CELL);
-  body = body.replace(/<\/tr>/gi, "\n");
-  const text = decodeEntities(body.replace(/<[^>]+>/g, ""));
 
   const rows: MatchRow[] = [];
-  for (const line of text.split("\n")) {
+  // Row by row, with the markup still on, because the one thing on a row
+  // that is not text — the link to its card — goes when the tags do.
+  for (const raw of body.split(/<\/tr>/i)) {
+    const link = raw.match(/href\s*=\s*"(ScoreCard\.asp\?[^"]+)"/i);
+    const line = decodeEntities(raw.replace(/<\/t[dh]>/gi, CELL).replace(/<[^>]+>/g, ""));
     const cells = line.split(CELL).map((cell) => cell.replace(/\s+/g, " ").trim());
     if (cells.length < 6) continue;
 
@@ -93,6 +100,7 @@ export function parseMatchHistory(source: string): MatchRow[] {
       awayTeam,
       homeScore: /^\d+$/.test(homeScore) ? Number(homeScore) : null,
       awayScore: /^\d+$/.test(awayScore) ? Number(awayScore) : null,
+      scorecardPath: link ? decodeEntities(link[1]!) : null,
     });
   }
 

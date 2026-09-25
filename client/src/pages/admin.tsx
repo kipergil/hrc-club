@@ -412,6 +412,10 @@ function ScorecardForm({
             awayPlayer2Id: doubles.awayPlayer2Id,
             homePlayerName: doubles.homePlayerName,
             awayPlayerName: doubles.awayPlayerName,
+            // The partners' names too — without them an unmatched partner
+            // was dropped from the saved card altogether.
+            homePlayer2Name: doubles.homePlayer2Name,
+            awayPlayer2Name: doubles.awayPlayer2Name,
             games,
           };
         }

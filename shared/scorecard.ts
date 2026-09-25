@@ -192,6 +192,58 @@ export function matchScoreOf(rubbers: Array<{ games: Game[] }>): MatchScore {
   return { home, away };
 }
 
+/** One match of a card, with its players resolved as far as they could be. */
+export interface ResolvedRubber {
+  rubberNumber: number;
+  kind: "singles" | "doubles";
+  homePlayerId: string | null;
+  homePlayer2Id: string | null;
+  awayPlayerId: string | null;
+  awayPlayer2Id: string | null;
+  homePlayerName: string | null;
+  homePlayer2Name?: string | null;
+  awayPlayerName: string | null;
+  awayPlayer2Name?: string | null;
+  games: Game[];
+}
+
+/**
+ * How a card becomes `hrc_rubbers` rows. One definition, used by a card a
+ * captain saves on this site and by a card imported from the league's.
+ *
+ * Two rules live here so that neither path can drift from the other:
+ *
+ * - **The sets are derived, never taken.** A card's games are the fact;
+ *   the 3-1 is arithmetic on them. Storing a sets count that came from
+ *   somewhere else is how a card ends up disagreeing with itself.
+ * - **A name is kept only where no member matched.** A name beside a
+ *   member link is two sources for one fact, and the day they disagree
+ *   nobody can say which is right. Where nobody matched, the name is all
+ *   the card has, and dropping it would lose the player entirely.
+ */
+export function rubberRowsFor(fixtureId: string, rubbers: ResolvedRubber[]): Array<Record<string, unknown>> {
+  return rubbers.map((rubber) => {
+    const { homeSets, awaySets } = outcomeOf(rubber.games);
+    const doubles = rubber.kind === "doubles";
+    return {
+      fixture: fixtureId,
+      rubber_number: rubber.rubberNumber,
+      kind: doubles ? "doubles" : "singles",
+      home_player: rubber.homePlayerId,
+      home_player_2: doubles ? rubber.homePlayer2Id : null,
+      away_player: rubber.awayPlayerId,
+      away_player_2: doubles ? rubber.awayPlayer2Id : null,
+      home_player_name: rubber.homePlayerId ? null : rubber.homePlayerName,
+      home_player_2_name: !doubles || rubber.homePlayer2Id ? null : (rubber.homePlayer2Name ?? null),
+      away_player_name: rubber.awayPlayerId ? null : rubber.awayPlayerName,
+      away_player_2_name: !doubles || rubber.awayPlayer2Id ? null : (rubber.awayPlayer2Name ?? null),
+      home_sets: homeSets,
+      away_sets: awaySets,
+      games: rubber.games,
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Checking a card
 // ---------------------------------------------------------------------------
