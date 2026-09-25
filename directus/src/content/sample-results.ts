@@ -263,7 +263,16 @@ async function main(): Promise<void> {
   console.log("\n  Remove it all with: npm run directus:sample:results -- --clear");
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+/*
+ * The explicit exit is not optional: the authenticated client keeps a
+ * token-refresh timer alive, so the process finishes its work and then
+ * sits there until something kills it. Every other script in this
+ * directory ends this way; this one did not, and the symptom is a `--clear`
+ * that has already done its job while appearing to hang.
+ */
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(() => process.exit(process.exitCode ?? 0));
