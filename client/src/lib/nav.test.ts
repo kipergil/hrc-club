@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isKnownRoute } from "@shared/routes.js";
-import { ALL_LINKS, NAV, findGroup, findLink, findSection } from "./nav";
+import { ALL_LINKS, NAV, findGroup, findLink, findSection, sectionTabsFor } from "./nav";
 
 describe("navigation", () => {
   /**
@@ -116,5 +116,26 @@ describe("navigation", () => {
     expect(findGroup("/news/some-article")?.label).toBe("More");
     expect(findGroup("/clubs/water-lane")?.label).toBe("Clubs");
     expect(findLink("/tables")?.title).toBe("League tables");
+  });
+});
+
+describe("section tabs", () => {
+  const hrefs = (pathname: string) => sectionTabsFor(pathname).map((tab) => tab.href);
+
+  it("puts Averages beside League tables, where a desktop reader can reach it", () => {
+    // The desktop header has no submenus; before these tabs, Averages was
+    // only in the phone menu and the footer.
+    expect(hrefs("/tables")).toEqual(["/tables", "/averages", "/handicaps"]);
+    expect(hrefs("/averages")).toEqual(["/tables", "/averages", "/handicaps"]);
+  });
+
+  it("leaves them off a page filed under a section rather than in it", () => {
+    expect(hrefs("/teams/hrc-a")).toEqual([]);
+    expect(hrefs("/players/derek-balding")).toEqual([]);
+  });
+
+  it("leaves them off a group too big to be a row of tabs, and off one with a single page", () => {
+    expect(hrefs("/committee")).toEqual([]);
+    expect(hrefs("/")).toEqual([]);
   });
 });

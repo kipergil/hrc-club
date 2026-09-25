@@ -366,6 +366,18 @@ export interface PlayerStat {
   winPercentage: number | null;
   handicap: number | null;
   meetsParticipationThreshold: boolean;
+  /*
+   * The rest of a player's record, as their own page shows it. Worked out
+   * from the cards, so null for an archived season whose averages were
+   * imported as the league printed them — Played, Won, Lost and % only.
+   */
+  /** Distinct matches they turned out in, which the 50% rule counts. */
+  matchesPlayed: number | null;
+  doublesPlayed: number | null;
+  doublesWon: number | null;
+  /** Games won and lost across their singles. */
+  setsFor: number | null;
+  setsAgainst: number | null;
 }
 
 export interface NewsItem {

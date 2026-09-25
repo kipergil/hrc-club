@@ -13,6 +13,7 @@ import {
   outcomeOf,
   parseGames,
   reviewScorecard,
+  rubberRowsFor,
   slotsForRubber,
 } from "./scorecard.js";
 
@@ -374,5 +375,48 @@ describe("parseGames", () => {
   it("round-trips through formatGames", () => {
     const games: Array<[number, number]> = [[11, 8], [9, 11], [12, 10]];
     expect(parseGames(formatGames(games)).games).toEqual(games);
+  });
+});
+
+describe("rubberRowsFor", () => {
+  /**
+   * One definition of how a card becomes rows, shared by a captain's card
+   * and one imported from the league. These pin the two rules that must
+   * not drift between them.
+   */
+  const base = {
+    rubberNumber: 10,
+    kind: "doubles" as const,
+    homePlayerId: "m1",
+    homePlayer2Id: null,
+    awayPlayerId: null,
+    awayPlayer2Id: "m4",
+    homePlayerName: "Chris Wade",
+    homePlayer2Name: "Kai Drake",
+    awayPlayerName: "Simon Conway",
+    awayPlayer2Name: "Albert Francis",
+    games: [[14, 12], [15, 13], [6, 11], [6, 11], [7, 11]] as Array<[number, number]>,
+  };
+
+  it("derives the sets from the games rather than taking them", () => {
+    const [row] = rubberRowsFor("f1", [base]);
+    expect(row).toMatchObject({ home_sets: 2, away_sets: 3 });
+  });
+
+  it("keeps a name only where no member matched — partners included", () => {
+    const [row] = rubberRowsFor("f1", [base]);
+    // Matched: the link, no name beside it.
+    expect(row).toMatchObject({ home_player: "m1", home_player_name: null });
+    expect(row).toMatchObject({ away_player_2: "m4", away_player_2_name: null });
+    // Unmatched: the name is all the card has. The partner used to vanish.
+    expect(row).toMatchObject({ home_player_2: null, home_player_2_name: "Kai Drake" });
+    expect(row).toMatchObject({ away_player: null, away_player_name: "Simon Conway" });
+  });
+
+  it("never gives a singles match a partner", () => {
+    const [row] = rubberRowsFor("f1", [
+      { ...base, rubberNumber: 1, kind: "singles", homePlayer2Id: "m9", homePlayer2Name: "Stray" },
+    ]);
+    expect(row).toMatchObject({ home_player_2: null, home_player_2_name: null });
   });
 });

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import type { Fixture, Standing, TeamFixture } from "@shared/types.js";
-import { FixtureList, StandingsTable, TeamFixtureList, VisitorNote } from "./data";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import type { Fixture, PlayerStat, Standing, TeamFixture } from "@shared/types.js";
+import { AveragesTable, FixtureList, StandingsTable, TeamFixtureList, VisitorNote } from "./data";
+import { withPlaces } from "@/lib/averages-view";
 
 function fixture(overrides: Partial<Fixture> = {}): Fixture {
   return {
@@ -331,5 +332,60 @@ describe("a club's note to visiting teams", () => {
   it("is announced rather than left as decoration", () => {
     const { container } = render(<VisitorNote note={waterLane} clubName="Water Lane" />);
     expect(container.querySelector('[role="status"]')).toBeTruthy();
+  });
+});
+
+describe("the averages table", () => {
+  function stat(overrides: Partial<PlayerStat> = {}): PlayerStat {
+    return {
+      id: "p1",
+      memberName: "Derek Balding",
+      memberSlug: "derek-balding",
+      seasonLabel: "2026-27",
+      teamName: "HRC A",
+      teamSlug: "hrc-a",
+      division: "premier",
+      played: 3,
+      won: 3,
+      lost: 0,
+      winPercentage: 100,
+      handicap: null,
+      meetsParticipationThreshold: true,
+      matchesPlayed: 1,
+      doublesPlayed: 1,
+      doublesWon: 0,
+      setsFor: 9,
+      setsAgainst: 1,
+      ...overrides,
+    };
+  }
+
+  it("says which column it is sorted by, and asks for a sort when a head is pressed", () => {
+    const onSort = vi.fn();
+    render(
+      <AveragesTable rows={withPlaces([stat()])} sort={{ key: "won", dir: "desc" }} onSort={onSort} />,
+    );
+    const table = screen.getByRole("table");
+    const won = within(table).getByRole("columnheader", { name: /^Won/ });
+    expect(won.getAttribute("aria-sort")).toBe("descending");
+    expect(within(table).getByRole("columnheader", { name: /^Lost/ }).getAttribute("aria-sort")).toBe("none");
+
+    fireEvent.click(within(table).getByRole("button", { name: /^Sets/ }));
+    expect(onSort).toHaveBeenCalledWith("sets");
+  });
+
+  it("shows the doubles and sets the player's own page shows", () => {
+    render(<AveragesTable rows={withPlaces([stat()])} sort={{ key: "place", dir: "asc" }} onSort={() => {}} />);
+    const row = within(screen.getByRole("table")).getAllByRole("row")[1]!;
+    expect(row.textContent).toContain("0 of 1");
+    expect(row.textContent).toContain("9–1");
+  });
+
+  it("leaves out the columns an archived season never had", () => {
+    const archived = stat({ matchesPlayed: null, doublesPlayed: null, doublesWon: null, setsFor: null, setsAgainst: null });
+    render(<AveragesTable rows={withPlaces([archived])} sort={{ key: "place", dir: "asc" }} onSort={() => {}} />);
+    const heads = within(screen.getByRole("table")).getAllByRole("columnheader").map((head) => head.textContent);
+    expect(heads.some((text) => text?.startsWith("Sets"))).toBe(false);
+    expect(heads.some((text) => text?.startsWith("Doubles"))).toBe(false);
   });
 });

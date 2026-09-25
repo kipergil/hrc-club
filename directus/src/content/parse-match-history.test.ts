@@ -29,6 +29,7 @@ describe("parseMatchHistory", () => {
       awayTeam: "Water Lane C",
       homeScore: null,
       awayScore: null,
+      scorecardPath: null,
     });
   });
 
@@ -95,5 +96,36 @@ describe("parseSeasonLabel", () => {
   it("shortens the page's season to the form the site uses", () => {
     // The page says "2026-2027 Season"; seasons here are labelled "2026-27".
     expect(parseSeasonLabel(source)).toBe("2026-27");
+  });
+});
+
+describe("the link to each posted card", () => {
+  /**
+   * `MatchHistory.asp?Team=HRC A`, captured on 25 September 2026 with one
+   * result in: HRC A 5-5 Ellenborough A. That row carries the magnifying
+   * glass — `ScoreCard.asp?LMID=487…` — and the thirteen matches still to
+   * play carry nothing.
+   *
+   * The link is the only way to reach a card: its id is not derivable
+   * from the teams or the week. It is also the one thing on the row that
+   * is not text, so it is exactly what a parser that strips tags first
+   * throws away.
+   */
+  const hrcA = parseMatchHistory(
+    new TextDecoder("windows-1252").decode(
+      readFileSync(path.join(import.meta.dirname, "__fixtures__/match-history-hrc-a.html")),
+    ),
+  );
+
+  it("keeps the card link on the row that has one", () => {
+    const played = hrcA.find((row) => row.awayTeam === "Ellenborough A" && row.homeScore !== null);
+    expect(played).toMatchObject({ homeTeam: "HRC A", homeScore: 5, awayScore: 5 });
+    expect(played!.scorecardPath).toMatch(/^ScoreCard\.asp\?LMID=487&/);
+  });
+
+  it("leaves it empty on every match still to play", () => {
+    const unplayed = hrcA.filter((row) => row.homeScore === null);
+    expect(unplayed.length).toBe(13);
+    expect(unplayed.every((row) => row.scorecardPath === null)).toBe(true);
   });
 });

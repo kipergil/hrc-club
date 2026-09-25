@@ -33,3 +33,29 @@ export function useUrlParam(
 
   return [value, setValue];
 }
+
+/**
+ * Several query-string filters changed in one step.
+ *
+ * Two `useUrlParam` setters called in the same click each start from the
+ * URL as it was, so the second quietly undoes the first. Choosing a
+ * division has to clear a team from another division at the same time,
+ * and a column's sort is a key and a direction — both need this.
+ */
+export function useUrlParams(): (patch: Record<string, string | undefined>) => void {
+  const search = useSearch();
+  const [pathname, navigate] = useLocation();
+
+  return useCallback(
+    (patch: Record<string, string | undefined>) => {
+      const params = new URLSearchParams(search);
+      for (const [name, next] of Object.entries(patch)) {
+        if (next) params.set(name, next);
+        else params.delete(name);
+      }
+      const query = params.toString();
+      navigate(query ? `${pathname}?${query}` : pathname, { replace: true });
+    },
+    [navigate, pathname, search],
+  );
+}

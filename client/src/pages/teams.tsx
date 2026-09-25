@@ -25,6 +25,7 @@ import {
 } from "@/components/ui";
 import { usePlayer, usePlayers, useSeasons, useTeam, useTeams } from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
+import { recordOf } from "@shared/averages.js";
 import { divisionLabel, fileUrl, formatDateShort, formatDayName, formatTime } from "@/lib/utils";
 
 export function TeamsPage() {
@@ -408,23 +409,15 @@ export function PlayerPage({ slug }: { slug: string }) {
    * That table only holds imported seasons, so a player with twenty-four
    * rubbers entered this year had an empty "Playing record" — the profile
    * showed which team they were in and nothing about how they had done.
-   * Singles only, which is the league's own rule for averages: the doubles
-   * is a pair's result, not a player's.
+   *
+   * `recordOf` is the same function the averages page is built from, so
+   * the numbers here and on that page cannot disagree.
    *
    * Every hook runs before the guards below, which is not decoration —
    * `scripts/hook-order.test.ts` exists because a conditional hook here
    * blanks the whole route rather than degrading.
    */
-  const record = useMemo(() => {
-    const singles = (player?.rubbers ?? []).filter((rubber) => rubber.kind === "singles");
-    const won = singles.filter((rubber) => rubber.won).length;
-    return {
-      played: singles.length,
-      won,
-      lost: singles.length - won,
-      percentage: singles.length === 0 ? null : Math.round((won / singles.length) * 100),
-    };
-  }, [player]);
+  const record = useMemo(() => recordOf(player?.rubbers ?? []), [player]);
 
   if (isLoading) return <Loading what="this player" variant="page" />;
   if (isError || !player) return <ErrorNote what="player profile" />;
@@ -537,7 +530,7 @@ export function PlayerPage({ slug }: { slug: string }) {
           <h2 id="season-record-heading" className="mb-3 text-2xl">
             {shownSeason} record
           </h2>
-          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <Card>
               <dd className="text-2xl font-semibold tabular">{record.played}</dd>
               <dt className="text-ink-muted">singles played</dt>
@@ -552,19 +545,34 @@ export function PlayerPage({ slug }: { slug: string }) {
             </Card>
             <Card>
               <dd className="text-2xl font-semibold tabular">
-                {record.percentage === null ? "—" : `${record.percentage}%`}
+                {record.winPercentage === null ? "—" : `${record.winPercentage}%`}
               </dd>
               <dt className="text-ink-muted">win rate</dt>
             </Card>
+            <Card>
+              <dd className="text-2xl font-semibold tabular">
+                {record.doublesPlayed === 0 ? "—" : `${record.doublesWon} of ${record.doublesPlayed}`}
+              </dd>
+              <dt className="text-ink-muted">doubles won</dt>
+            </Card>
+            <Card>
+              <dd className="text-2xl font-semibold tabular">
+                {record.played === 0 ? "—" : `${record.setsFor}–${record.setsAgainst}`}
+              </dd>
+              <dt className="text-ink-muted">sets in singles</dt>
+            </Card>
           </dl>
           {/*
-            The doubles is excluded from the figures above but kept in the
-            table below, because it is a rubber they played — the league
-            simply does not count it in an average.
+            The doubles has its own card rather than a place in the four
+            beside it, because it is a pair's result — the league does not
+            count it in an average, and neither does the win rate here.
           */}
           <p className="mt-2 text-ink-muted">
-            Worked out from the match cards. The doubles is listed below but not counted, which is
-            how the league keeps its averages.
+            Worked out from the match cards. The win rate counts singles only, which is how the
+            league keeps its averages.{" "}
+            <Link href={`/averages${season ? `?season=${season}` : ""}`} className="link font-semibold">
+              See how that compares in the averages
+            </Link>
           </p>
         </section>
       ) : null}

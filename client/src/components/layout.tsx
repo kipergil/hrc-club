@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowUp, ChevronRight, Home, Megaphone, Menu, Moon, Printer, Sun, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { NAV, findGroup, findSection } from "@/lib/nav";
+import { NAV, findGroup, findSection, sectionTabsFor } from "@/lib/nav";
 import { useSettings } from "@/lib/queries";
 import { lockPageScroll, useRouteTransition } from "@/lib/scroll";
 import { isPrintable } from "@/lib/print";
@@ -687,6 +687,46 @@ function Breadcrumbs({ pathname, title }: { pathname: string; title: string }) {
 }
 
 /**
+ * The other pages in this page's group, as a row of tabs.
+ *
+ * What makes Averages findable on a desktop, where the header names the
+ * five groups and nothing beneath them. A row that scrolls sideways on a
+ * narrow screen rather than wrapping: wrapped tabs read as two rows of
+ * separate things.
+ */
+function SectionTabs({ pathname }: { pathname: string }) {
+  const tabs = sectionTabsFor(pathname);
+  const group = findGroup(pathname);
+  if (tabs.length === 0) return null;
+
+  return (
+    <nav aria-label={`${group?.label ?? "Section"} pages`} className="mb-5 no-print">
+      <ul className="-mx-4 flex gap-1 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0">
+        {tabs.map((tab) => {
+          const current = tab.href === pathname;
+          return (
+            <li key={tab.href} className="shrink-0">
+              <Link
+                href={tab.href}
+                aria-current={current ? "page" : undefined}
+                className={cn(
+                  "-mb-px flex min-h-touch items-center whitespace-nowrap border-b-2 px-3 font-semibold no-underline transition-colors",
+                  current
+                    ? "border-brand text-brand"
+                    : "border-transparent text-ink-muted hover:border-line-strong hover:text-brand",
+                )}
+              >
+                {tab.title}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+/**
  * Every page title carries its plain-English subtitle beneath it. The
  * subtitle is a required prop for the same reason `TableNote` is: the rule
  * only holds if it is impossible to skip.
@@ -710,6 +750,7 @@ export function PageHeader({
   return (
     <div className="mb-8">
       <Breadcrumbs pathname={pathname} title={title} />
+      <SectionTabs pathname={pathname} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl">{title}</h1>

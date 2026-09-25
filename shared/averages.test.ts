@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAverages, type AverageSource } from "./averages.js";
+import { recordOf, buildAverages, type AverageSource } from "./averages.js";
 
 let fixtureSeq = 0;
 
@@ -152,5 +152,86 @@ describe("buildAverages", () => {
     // The opposition are names on a card rather than members, so most
     // rubbers carry a member on one side only.
     expect(buildAverages([singles("", true)])).toEqual([]);
+  });
+});
+
+describe("recordOf — one definition for both pages", () => {
+  /*
+   * The averages page and a player's own page used to count separately.
+   * These pin the one definition both now share, so "played" means the
+   * same thing wherever a reader sees it.
+   */
+  it("counts singles played, won, lost and the percentage", () => {
+    const record = recordOf([
+      { kind: "singles", won: true, setsFor: 3, setsAgainst: 1 },
+      { kind: "singles", won: true, setsFor: 3, setsAgainst: 0 },
+      { kind: "singles", won: false, setsFor: 2, setsAgainst: 3 },
+    ]);
+    expect(record).toMatchObject({ played: 3, won: 2, lost: 1, winPercentage: 67 });
+  });
+
+  it("counts the doubles on its own, where it cannot move the average", () => {
+    const record = recordOf([
+      { kind: "singles", won: true, setsFor: 3, setsAgainst: 0 },
+      { kind: "doubles", won: false, setsFor: 2, setsAgainst: 3 },
+      { kind: "doubles", won: true, setsFor: 3, setsAgainst: 1 },
+    ]);
+    expect(record).toMatchObject({ played: 1, won: 1, winPercentage: 100 });
+    expect(record).toMatchObject({ doublesPlayed: 2, doublesWon: 1 });
+  });
+
+  it("adds up the sets across singles only", () => {
+    // A 3-1 and a 2-3 singles: 5 won, 4 lost. The doubles' 3-0 is a pair's.
+    const record = recordOf([
+      { kind: "singles", won: true, setsFor: 3, setsAgainst: 1 },
+      { kind: "singles", won: false, setsFor: 2, setsAgainst: 3 },
+      { kind: "doubles", won: true, setsFor: 3, setsAgainst: 0 },
+    ]);
+    expect(record).toMatchObject({ setsFor: 5, setsAgainst: 4 });
+  });
+
+  it("has no percentage until a singles has been played", () => {
+    expect(recordOf([]).winPercentage).toBeNull();
+    expect(recordOf([{ kind: "doubles", won: true }]).winPercentage).toBeNull();
+  });
+});
+
+describe("buildAverages carries the whole record", () => {
+  it("brings the doubles and sets onto the player's row", () => {
+    const rows = buildAverages([
+      singles("a", true, { fixtureId: "f1", setsFor: 3, setsAgainst: 1 }),
+      singles("a", false, { fixtureId: "f1", setsFor: 1, setsAgainst: 3 }),
+      singles("a", true, { kind: "doubles", fixtureId: "f1", setsFor: 3, setsAgainst: 2 }),
+    ]);
+    expect(rows[0]).toMatchObject({
+      played: 2,
+      won: 1,
+      doublesPlayed: 1,
+      doublesWon: 1,
+      setsFor: 4,
+      setsAgainst: 4,
+    });
+  });
+
+  it("counts a doubles read before the player's first singles", () => {
+    // The order rubbers arrive in is the database's, not the card's.
+    const rows = buildAverages([
+      singles("a", true, { kind: "doubles", fixtureId: "f1" }),
+      singles("a", true, { fixtureId: "f1" }),
+    ]);
+    expect(rows[0]).toMatchObject({ played: 1, doublesPlayed: 1 });
+  });
+
+  it("does not place a player who has only played doubles", () => {
+    // The league lists singles averages; there is no percentage to place.
+    expect(buildAverages([singles("a", true, { kind: "doubles", fixtureId: "f1" })])).toEqual([]);
+  });
+
+  it("does not let the doubles decide which match a player turned out in", () => {
+    const rows = buildAverages(
+      [...match("a", 3, "f1"), singles("a", true, { kind: "doubles", fixtureId: "f2" })],
+      { "hrc-a": 4 },
+    );
+    expect(rows[0]!.matchesPlayed).toBe(1);
   });
 });

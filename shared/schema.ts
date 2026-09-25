@@ -82,6 +82,8 @@ export const saveScorecardSchema = z.object({
         awayPlayer2Id: z.string().nullable(),
         homePlayerName: z.string().trim().max(120).nullable(),
         awayPlayerName: z.string().trim().max(120).nullable(),
+        homePlayer2Name: z.string().trim().max(120).nullable().optional().default(null),
+        awayPlayer2Name: z.string().trim().max(120).nullable().optional().default(null),
         games: z.array(z.tuple([z.number().int().min(0).max(99), z.number().int().min(0).max(99)])).max(5),
       }),
     )
