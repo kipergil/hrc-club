@@ -327,6 +327,12 @@ function toPlayerStat(row: Row): PlayerStat {
     winPercentage: num(row.win_percentage),
     handicap: num(row.handicap),
     meetsParticipationThreshold: Boolean(row.meets_participation_threshold),
+    // The league's own table printed none of these.
+    matchesPlayed: null,
+    doublesPlayed: null,
+    doublesWon: null,
+    setsFor: null,
+    setsAgainst: null,
   };
 }
 
@@ -1185,7 +1191,8 @@ async function getStoredPlayerStats(seasonSlug?: string): Promise<PlayerStat[]> 
         "*",
         { member: ["full_name", "slug"] },
         { season: ["label"] },
-        { team: ["name"] },
+        // The slug too, so an archived season's team filter and links work.
+        { team: ["name", "slug"] },
       ],
       filter: seasonId ? { season: { _eq: seasonId } } : {},
       sort: ["-win_percentage", "-won"],
@@ -1196,7 +1203,7 @@ async function getStoredPlayerStats(seasonSlug?: string): Promise<PlayerStat[]> 
 }
 
 /**
- * Every singles rubber of a season, turned into averages.
+ * Every rubber of a season, turned into averages.
  *
  * One query for the rubbers and one for the fixtures behind the 50% rule,
  * rather than a query per player: a season is two hundred matches and two
@@ -1216,6 +1223,8 @@ async function computeAverages(seasonSlug?: string): Promise<PlayerStat[]> {
         "away_sets",
         { home_player: ["id", "full_name", "slug"] },
         { away_player: ["id", "full_name", "slug"] },
+        { home_player_2: ["id", "full_name", "slug"] },
+        { away_player_2: ["id", "full_name", "slug"] },
         {
           fixture: [
             "id",
@@ -1232,9 +1241,7 @@ async function computeAverages(seasonSlug?: string): Promise<PlayerStat[]> {
        * every season to build one season's averages — fine at sixty
        * rows, and two thousand a season once cards are being entered.
        */
-      filter: seasonId
-        ? { _and: [{ kind: { _eq: "singles" } }, { fixture: { season: { _eq: seasonId } } }] }
-        : { kind: { _eq: "singles" } },
+      filter: seasonId ? { fixture: { season: { _eq: seasonId } } } : {},
       limit: -1,
     }),
   )) as Row[];
@@ -1249,9 +1256,21 @@ async function computeAverages(seasonSlug?: string): Promise<PlayerStat[]> {
     const homeTeam = rel(fixture.home_team);
     const awayTeam = rel(fixture.away_team);
 
+    const kind = row.kind === "doubles" ? "doubles" : "singles";
+    const homeSets = int(row.home_sets);
+    const awaySets = int(row.away_sets);
+
     for (const [slot, team, isHome] of [
       [rel(row.home_player), homeTeam, true],
       [rel(row.away_player), awayTeam, false],
+      // The doubles partners. Each is credited with the pair's result on
+      // their own doubles line — never in their average.
+      ...(kind === "doubles"
+        ? ([
+            [rel(row.home_player_2), homeTeam, true],
+            [rel(row.away_player_2), awayTeam, false],
+          ] as const)
+        : []),
     ] as const) {
       // Most rubbers name a member on one side only: the opposition are
       // names on a card, because this site holds squads, not every club's
@@ -1261,8 +1280,10 @@ async function computeAverages(seasonSlug?: string): Promise<PlayerStat[]> {
         memberId: slot.id,
         memberName: slot.full_name ?? "",
         memberSlug: slot.slug ?? "",
-        kind: "singles",
-        won: isHome ? int(row.home_sets) > int(row.away_sets) : int(row.away_sets) > int(row.home_sets),
+        kind,
+        won: isHome ? homeSets > awaySets : awaySets > homeSets,
+        setsFor: isHome ? homeSets : awaySets,
+        setsAgainst: isHome ? awaySets : homeSets,
         fixtureId: fixture.id,
         teamName: team?.name ?? null,
         teamSlug: team?.slug ?? null,
@@ -1302,6 +1323,11 @@ async function computeAverages(seasonSlug?: string): Promise<PlayerStat[]> {
     // Handicaps are set by the match secretary, not computed from play.
     handicap: null,
     meetsParticipationThreshold: row.meetsParticipationThreshold,
+    matchesPlayed: row.matchesPlayed,
+    doublesPlayed: row.doublesPlayed,
+    doublesWon: row.doublesWon,
+    setsFor: row.setsFor,
+    setsAgainst: row.setsAgainst,
   }));
 }
 
@@ -1494,7 +1520,7 @@ export async function getMember(
   const [statRows, squadRows, honourRows] = await Promise.all([
     client.request(
       readItems("hrc_player_stats", {
-        fields: ["*", { member: ["full_name", "slug"] }, { season: ["label"] }, { team: ["name"] }],
+        fields: ["*", { member: ["full_name", "slug"] }, { season: ["label"] }, { team: ["name", "slug"] }],
         filter: { member: { _eq: memberId } },
         sort: ["-season.label"],
         limit: -1,

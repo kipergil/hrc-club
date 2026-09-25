@@ -1,4 +1,6 @@
+import { useId, useMemo } from "react";
 import { Link } from "wouter";
+import { ArrowDown as ArrowDownIcon, ArrowUp as ArrowUpIcon, ArrowUpDown } from "lucide-react";
 import type { Fixture, PlayerStat, Standing, TeamFixture, TeamRef } from "@shared/types.js";
 import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
 import {
@@ -25,6 +27,13 @@ import {
 } from "@/lib/utils";
 import { teamFixturesHref, teamHref, teamModuleHref } from "@/lib/links";
 import { nightOf } from "@/lib/calendar";
+import {
+  firstDirection,
+  sortStats,
+  type PlacedStat,
+  type SortDir,
+  type SortKey,
+} from "@/lib/averages-view";
 import type {
   CalendarCell,
   CalendarColumn,
@@ -520,9 +529,10 @@ export function StandingsByDivision({
  * a glance and a column of bars is not — and it costs nothing to anyone
  * reading with a screen reader or on paper.
  */
-function WinRate({ percentage }: { percentage: number | null }) {
+function WinRate({ percentage, bar = true }: { percentage: number | null; bar?: boolean }) {
   if (percentage === null) return <span className="text-ink-muted">—</span>;
   const rounded = Math.round(percentage);
+  if (!bar) return <span className="tabular font-semibold">{rounded}%</span>;
   return (
     <span className="flex items-center justify-end gap-2">
       <span className="tabular font-semibold">{rounded}%</span>
@@ -534,117 +544,309 @@ function WinRate({ percentage }: { percentage: number | null }) {
 }
 
 /**
- * The averages, division by division, as the league prints them.
+ * The averages' columns, in the order the league prints the ones it has.
  *
- * Placings are awarded within a division, so one long table sorted by
- * percentage puts a Division Two player above a Premier one and quietly
- * implies a comparison the league never makes.
+ * `short` is what fits a column head; `long` is what a screen reader hears
+ * and what the header's tooltip says, because "Sets" alone does not say
+ * whose sets or which matches.
  */
-export function AveragesByDivision({ stats }: { stats: PlayerStat[] }) {
-  const divisions = DIVISION.filter((division) => stats.some((stat) => stat.division === division));
-  const unplaced = stats.filter((stat) => !stat.division);
+const AVERAGE_COLUMNS: ReadonlyArray<{
+  key: SortKey;
+  short: string;
+  long: string;
+  numeric: boolean;
+  /** Left out when no row in the season has the figure — an archived season. */
+  optional?: (stat: PlayerStat) => number | null;
+}> = [
+  { key: "place", short: "Pos", long: "Placing in the division", numeric: true },
+  { key: "name", short: "Player", long: "Player", numeric: false },
+  { key: "team", short: "Team", long: "Team", numeric: false },
+  {
+    key: "matches",
+    short: "Matches",
+    long: "Matches turned out in",
+    numeric: true,
+    optional: (stat) => stat.matchesPlayed,
+  },
+  { key: "played", short: "Played", long: "Singles played", numeric: true },
+  { key: "won", short: "Won", long: "Singles won", numeric: true },
+  { key: "lost", short: "Lost", long: "Singles lost", numeric: true },
+  { key: "percent", short: "Win %", long: "Singles win percentage", numeric: true },
+  {
+    key: "doubles",
+    short: "Doubles",
+    long: "Doubles won, of played",
+    numeric: true,
+    optional: (stat) => stat.doublesPlayed,
+  },
+  {
+    key: "sets",
+    short: "Sets",
+    long: "Games won and lost across their singles",
+    numeric: true,
+    optional: (stat) => stat.setsFor,
+  },
+];
 
-  if (stats.length === 0) {
+export interface AveragesSort {
+  key: SortKey;
+  dir: SortDir;
+}
+
+/** The columns this season can fill. */
+function averageColumns(rows: PlayerStat[]) {
+  return AVERAGE_COLUMNS.filter(
+    (column) => !column.optional || rows.some((row) => column.optional!(row) !== null),
+  );
+}
+
+function PlayerName({ row }: { row: PlacedStat }) {
+  return row.memberSlug ? (
+    <Link href={`/players/${row.memberSlug}`} className="link">
+      {row.memberName}
+    </Link>
+  ) : (
+    <>{row.memberName}</>
+  );
+}
+
+function StatTeamName({ row, fallback }: { row: PlacedStat; fallback: string }) {
+  return row.teamSlug && row.teamName ? (
+    <Link href={teamHref(row.teamSlug, row.seasonLabel)} className="link">
+      {row.teamName}
+    </Link>
+  ) : (
+    <>{row.teamName ?? fallback}</>
+  );
+}
+
+/** "=3" for a shared placing, as a league table prints it. */
+function Placing({ row }: { row: PlacedStat }) {
+  if (row.place === null) {
     return (
-      <Empty>
-        No averages yet this season. They appear as soon as the first cards are entered — these are
-        worked out from the match cards themselves, not typed in.
-      </Empty>
+      <span className="text-ink-muted">
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">Not yet placed</span>
+      </span>
     );
   }
-
-  // One division and nothing else is not a grouping, it is a heading over
-  // the only table on the page.
-  if (divisions.length <= 1 && unplaced.length === 0) {
-    return <AveragesTable stats={stats} />;
-  }
-
   return (
-    <div className="space-y-12">
-      {divisions.map((division) => (
-        <section key={division}>
-          <h2 className="mb-3 text-2xl">{divisionLabel(division)}</h2>
-          <AveragesTable stats={stats.filter((stat) => stat.division === division)} />
-        </section>
-      ))}
-      {unplaced.length > 0 ? (
-        <section>
-          <h2 className="mb-3 text-2xl">No division recorded</h2>
-          <AveragesTable stats={unplaced} />
-        </section>
-      ) : null}
+    <span className="tabular font-semibold">
+      {row.tied ? "=" : null}
+      {row.place}
+    </span>
+  );
+}
+
+function doublesText(row: PlacedStat): string {
+  if (row.doublesPlayed === null || row.doublesWon === null) return "—";
+  return row.doublesPlayed === 0 ? "—" : `${row.doublesWon} of ${row.doublesPlayed}`;
+}
+
+function setsText(row: PlacedStat): string {
+  return row.setsFor === null || row.setsAgainst === null ? "—" : `${row.setsFor}–${row.setsAgainst}`;
+}
+
+function AverageCell({ row, column }: { row: PlacedStat; column: SortKey }) {
+  switch (column) {
+    case "place":
+      return <Placing row={row} />;
+    case "name":
+      return (
+        <>
+          <span className="font-semibold">
+            <PlayerName row={row} />
+          </span>
+          {row.meetsParticipationThreshold ? null : (
+            <span className="block text-ink-muted">Not yet eligible</span>
+          )}
+        </>
+      );
+    case "team":
+      return (
+        <span className="text-ink-muted">
+          <StatTeamName row={row} fallback="—" />
+        </span>
+      );
+    case "matches":
+      return <span className="tabular">{row.matchesPlayed ?? "—"}</span>;
+    case "played":
+      return <span className="tabular">{row.played}</span>;
+    case "won":
+      return <span className="tabular">{row.won}</span>;
+    case "lost":
+      return <span className="tabular">{row.lost}</span>;
+    case "percent":
+      // No bar: ten columns leave no room for one at 1280px, and the
+      // column can be sorted, which is what the bar was standing in for.
+      return <WinRate percentage={row.winPercentage} bar={false} />;
+    case "doubles":
+      return <span className="tabular whitespace-nowrap">{doublesText(row)}</span>;
+    case "sets":
+      return <span className="tabular whitespace-nowrap">{setsText(row)}</span>;
+  }
+}
+
+/**
+ * A column head that sorts.
+ *
+ * A real button inside the `<th>`, with `aria-sort` on the cell, which is
+ * what a screen reader announces as "sorted descending". The arrow shows
+ * the same thing to everyone else; a column that is not sorted shows a
+ * faint double arrow so it is visibly clickable at all.
+ */
+function SortHeader({
+  column,
+  sort,
+  onSort,
+}: {
+  column: (typeof AVERAGE_COLUMNS)[number];
+  sort: AveragesSort;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = sort.key === column.key;
+  const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUpIcon : ArrowDownIcon;
+  return (
+    <th
+      scope="col"
+      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+      className={cn(
+        // `relative` holds the screen-reader text below inside the table's
+        // scroller; without it the absolutely placed span escapes the
+        // overflow box and scrolls the whole page sideways.
+        "relative border-b border-line bg-surface-sunken px-1 font-semibold text-ink first:rounded-tl-card last:rounded-tr-card",
+        column.numeric && column.key !== "place" ? "text-right" : null,
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column.key)}
+        title={column.long}
+        className={cn(
+          "inline-flex min-h-touch items-center gap-0.5 whitespace-nowrap rounded-card px-2 font-semibold transition-colors hover:text-brand",
+          active ? "text-brand" : "text-ink",
+        )}
+      >
+        {column.short}
+        {column.short !== column.long ? <span className="sr-only">: {column.long}</span> : null}
+        <Icon aria-hidden="true" className={cn("size-4 shrink-0", active ? null : "opacity-40")} />
+      </button>
+    </th>
+  );
+}
+
+/**
+ * The phone's way to sort, where there are no column heads to press.
+ *
+ * A `<select>`, which this site otherwise avoids for filters — but this is
+ * a choice between nine things, not three, and a row of nine chips is two
+ * screens of buttons ahead of the table.
+ */
+export function AveragesSortSelect({
+  sort,
+  onChange,
+  className,
+}: {
+  sort: AveragesSort;
+  onChange: (sort: AveragesSort) => void;
+  className?: string;
+}) {
+  const id = useId();
+  return (
+    <div className={cn("no-print", className)}>
+      <label htmlFor={id} className="block font-semibold text-ink">
+        Sort by
+      </label>
+      <select
+        id={id}
+        value={`${sort.key}:${sort.dir}`}
+        onChange={(event) => {
+          const [key, dir] = event.target.value.split(":") as [SortKey, SortDir];
+          onChange({ key, dir });
+        }}
+        className="mt-2 min-h-touch w-full max-w-prose rounded-card border border-line-strong bg-surface px-3 text-ink"
+      >
+        {AVERAGE_COLUMNS.flatMap((column) => {
+          const first = firstDirection(column.key);
+          const other: SortDir = first === "asc" ? "desc" : "asc";
+          const words = (dir: SortDir) =>
+            column.numeric && column.key !== "place"
+              ? dir === "desc"
+                ? "highest first"
+                : "lowest first"
+              : column.key === "place"
+                ? dir === "asc"
+                  ? "top first"
+                  : "bottom first"
+                : dir === "asc"
+                  ? "A to Z"
+                  : "Z to A";
+          return [first, other].map((dir) => (
+            <option key={`${column.key}:${dir}`} value={`${column.key}:${dir}`}>
+              {column.long} — {words(dir)}
+            </option>
+          ));
+        })}
+      </select>
     </div>
   );
 }
 
-export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
-  const paged = usePagination(stats, 25);
-  const shown = paged.items as PlayerStat[];
+/**
+ * One table of averages — a division's, or whatever the filters leave.
+ *
+ * The rows arrive already placed and filtered; this only sorts and shows
+ * them, so a placing is always the division's and never the filter's.
+ */
+export function AveragesTable({
+  rows,
+  sort,
+  onSort,
+}: {
+  rows: PlacedStat[];
+  sort: AveragesSort;
+  onSort: (key: SortKey) => void;
+}) {
+  const sorted = useMemo(() => sortStats(rows, sort.key, sort.dir), [rows, sort.key, sort.dir]);
+  const paged = usePagination(sorted, 25, `${sort.key}:${sort.dir}`);
+  const shown = paged.items as PlacedStat[];
+  const columns = averageColumns(rows);
 
-  if (stats.length === 0) {
-    return (
-      <Empty>
-        No averages have been published yet this season. They appear once matches have been played
-        and the results confirmed.
-      </Empty>
-    );
+  if (rows.length === 0) {
+    return <Empty>Nobody matches those filters this season.</Empty>;
   }
+
+  const hasDoubles = columns.some((column) => column.key === "doubles");
 
   return (
     <>
-      <TableNote>
-        How many matches each player has played and how many they won. “Eligible” means the player
-        has played at least half their team’s matches — the league only counts a player for the
-        averages placings once they have.
-      </TableNote>
-
       <div className="hidden sm:block">
         <TableScroller>
           <thead>
             <tr>
-              <Th>Player</Th>
-              <Th>Team</Th>
-              <Th className="text-right">Played</Th>
-              <Th className="text-right">Won</Th>
-              <Th className="text-right">Lost</Th>
-              <Th className="text-right">Win %</Th>
-              <Th>Placings</Th>
+              {columns.map((column) => (
+                <SortHeader key={column.key} column={column} sort={sort} onSort={onSort} />
+              ))}
             </tr>
           </thead>
           <tbody>
             {shown.map((row) => (
               <Tr key={row.id}>
-                <Td className="font-semibold">
-                  {row.memberSlug ? (
-                    <Link href={`/players/${row.memberSlug}`} className="link">
-                      {row.memberName}
-                    </Link>
-                  ) : (
-                    row.memberName
-                  )}
-                </Td>
-                <Td className="text-ink-muted">
-                  {row.teamSlug && row.teamName ? (
-                    <Link href={teamHref(row.teamSlug, row.seasonLabel)} className="link">
-                      {row.teamName}
-                    </Link>
-                  ) : (
-                    (row.teamName ?? "—")
-                  )}
-                </Td>
-                <Td className="tabular text-right">{row.played}</Td>
-                <Td className="tabular text-right">{row.won}</Td>
-                <Td className="tabular text-right">{row.lost}</Td>
-                <Td className="text-right">
-                  <WinRate percentage={row.winPercentage} />
-                </Td>
-                <Td>
-                  {row.meetsParticipationThreshold ? (
-                    <Badge tone="positive">Eligible</Badge>
-                  ) : (
-                    <Badge>Not yet eligible</Badge>
-                  )}
-                </Td>
+                {columns.map((column) => (
+                  <Td
+                    key={column.key}
+                    className={cn(
+                      // Ten columns: the site's usual 16px either side of
+                      // each is what pushed Sets off the edge at 1280px.
+                      "px-3",
+                      column.numeric && column.key !== "place" ? "text-right" : null,
+                      column.key === "place" ? "w-16 text-center" : null,
+                      column.key === "name" || column.key === "team" ? "whitespace-nowrap" : null,
+                    )}
+                  >
+                    <AverageCell row={row} column={column.key} />
+                  </Td>
+                ))}
               </Tr>
             ))}
           </tbody>
@@ -655,35 +857,32 @@ export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
         {shown.map((row) => (
           <li key={row.id}>
             <Card>
-              <p className="text-lg font-semibold">
-                {row.memberSlug ? (
-                  <Link href={`/players/${row.memberSlug}`} className="link">
-                    {row.memberName}
-                  </Link>
-                ) : (
-                  row.memberName
-                )}
+              <p className="flex items-baseline gap-3 text-lg font-semibold">
+                {row.place !== null ? (
+                  <span className="tabular text-ink-muted">
+                    {row.tied ? "=" : null}
+                    {row.place}
+                  </span>
+                ) : null}
+                <PlayerName row={row} />
               </p>
               <p className="text-ink-muted">
-                {row.teamSlug && row.teamName ? (
-                  <Link href={teamHref(row.teamSlug, row.seasonLabel)} className="link">
-                    {row.teamName}
-                  </Link>
-                ) : (
-                  (row.teamName ?? "No team recorded")
-                )}
+                <StatTeamName row={row} fallback="No team recorded" />
               </p>
               <p className="mt-1 tabular">
                 Played {row.played} · Won {row.won} · Lost {row.lost}
                 {row.winPercentage === null ? null : ` · ${Math.round(row.winPercentage)}%`}
               </p>
-              <p className="mt-2">
-                {row.meetsParticipationThreshold ? (
-                  <Badge tone="positive">Eligible</Badge>
-                ) : (
+              {hasDoubles ? (
+                <p className="tabular text-ink-muted">
+                  Doubles {doublesText(row)} · Sets {setsText(row)}
+                </p>
+              ) : null}
+              {row.meetsParticipationThreshold ? null : (
+                <p className="mt-2">
                   <Badge>Not yet eligible</Badge>
-                )}
-              </p>
+                </p>
+              )}
             </Card>
           </li>
         ))}
@@ -691,6 +890,58 @@ export function AveragesTable({ stats }: { stats: PlayerStat[] }) {
 
       <Pagination state={paged} noun="players" />
     </>
+  );
+}
+
+/**
+ * The averages, division by division, as the league prints them.
+ *
+ * Placings are awarded within a division, so one long table sorted by
+ * percentage puts a Division Two player above a Premier one and quietly
+ * implies a comparison the league never makes. Sorting by a column sorts
+ * inside each division for the same reason.
+ */
+export function AveragesByDivision({
+  rows,
+  sort,
+  onSort,
+}: {
+  rows: PlacedStat[];
+  sort: AveragesSort;
+  onSort: (key: SortKey) => void;
+}) {
+  const divisions = DIVISION.filter((division) => rows.some((row) => row.division === division));
+  const unplaced = rows.filter((row) => !row.division);
+
+  // One division and nothing else is not a grouping, it is a heading over
+  // the only table on the page.
+  if (divisions.length <= 1 && unplaced.length === 0) {
+    return <AveragesTable rows={rows} sort={sort} onSort={onSort} />;
+  }
+
+  return (
+    <div className="space-y-12">
+      {divisions.map((division) => (
+        <section key={division} aria-labelledby={`averages-${division}`}>
+          <h2 id={`averages-${division}`} className="mb-3 text-2xl">
+            {divisionLabel(division)}
+          </h2>
+          <AveragesTable
+            rows={rows.filter((row) => row.division === division)}
+            sort={sort}
+            onSort={onSort}
+          />
+        </section>
+      ))}
+      {unplaced.length > 0 ? (
+        <section aria-labelledby="averages-none">
+          <h2 id="averages-none" className="mb-3 text-2xl">
+            No division recorded
+          </h2>
+          <AveragesTable rows={unplaced} sort={sort} onSort={onSort} />
+        </section>
+      ) : null}
+    </div>
   );
 }
 

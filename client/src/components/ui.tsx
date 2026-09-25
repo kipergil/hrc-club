@@ -351,7 +351,10 @@ export function Tr({
   return (
     <tr
       className={cn(
-        "transition-colors last:[&>td]:border-b-0",
+        // Every cell of the last row. `last:[&>td]` read as the last cell of
+        // every row, which took the line out from under each table's
+        // right-hand column.
+        "transition-colors [&:last-child>td]:border-b-0",
         highlight ? "bg-brand-soft" : "hover:bg-surface-sunken",
         className,
       )}

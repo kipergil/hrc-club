@@ -3,6 +3,7 @@ import { ClipboardPen } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import {
   AveragesByDivision,
+  AveragesSortSelect,
   FixtureList,
   HandicapTable,
   SeasonGrid,
@@ -35,7 +36,16 @@ import {
   useStandings,
 } from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
-import { useUrlParam } from "@/lib/params";
+import { useUrlParam, useUrlParams } from "@/lib/params";
+import {
+  filterStats,
+  firstDirection,
+  isSortKey,
+  teamOptions,
+  withPlaces,
+  type SortDir,
+  type SortKey,
+} from "@/lib/averages-view";
 import { enterResultHref, teamModuleHref } from "@/lib/links";
 import { cn, divisionLabel, formatDateLong, formatTime, resultLabel } from "@/lib/utils";
 import { buildCalendar, buildWeekBlocks } from "@/lib/calendar";
@@ -43,7 +53,7 @@ import { Scorecard } from "@/components/scorecard";
 import { COMPETITION_LABELS, DIVISION } from "@shared/enums.js";
 import type { Division } from "@shared/enums.js";
 import type { Fixture, TeamRef } from "@shared/types.js";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 /**
  * The note under every page that carries competitive data, saying where
@@ -592,35 +602,186 @@ export function TablesPage() {
 // ---------------------------------------------------------------------------
 
 export function AveragesPage() {
-  const { data: stats, isLoading, isError } = useAverages();
+  const { data: seasons } = useSeasons();
+  const [season, setSeason] = useSeasonParam();
+  const { data: stats, isLoading, isError } = useAverages(season);
+  const [divisionParam] = useUrlParam("division");
+  const [teamParam] = useUrlParam("team");
+  const [sortParam] = useUrlParam("sort");
+  const [dirParam] = useUrlParam("dir");
+  const setParams = useUrlParams();
+
+  const chosen = season ?? seasons?.find((entry) => entry.isCurrent)?.slug ?? seasons?.[0]?.slug;
+
+  /*
+   * Placed before anything is filtered: a placing is where a player stands
+   * in their division, and narrowing the page to one team must not turn
+   * that team's best player into "1st".
+   */
+  const placed = useMemo(() => withPlaces(stats ?? []), [stats]);
+
+  const divisions = useMemo(
+    () => DIVISION.filter((value) => placed.some((row) => row.division === value)),
+    [placed],
+  );
+  // A link from last season can name a division or team this one lacks;
+  // it falls back to everything rather than to an empty page.
+  const division: Division | "all" = divisions.includes(divisionParam as Division)
+    ? (divisionParam as Division)
+    : "all";
+  const teams = useMemo(() => teamOptions(placed, division), [placed, division]);
+  const team = teams.some((option) => option.value === teamParam) ? teamParam : undefined;
+
+  const sortKey: SortKey = isSortKey(sortParam) ? sortParam : "place";
+  const sort = {
+    key: sortKey,
+    dir: dirParam === "asc" || dirParam === "desc" ? dirParam : firstDirection(sortKey),
+  } as const;
+
+  const rows = useMemo(() => filterStats(placed, { division, team }), [placed, division, team]);
+  const teamSelectId = useId();
 
   if (isLoading) return <Loading what="the averages" variant="table" />;
   if (isError) return <ErrorNote what="averages" />;
+
+  // The default is left out of the URL, so the plain page keeps its plain link.
+  const setSort = (next: { key: SortKey; dir: SortDir }) =>
+    setParams({
+      sort: next.key === "place" && next.dir === "asc" ? undefined : next.key,
+      dir: next.dir === firstDirection(next.key) ? undefined : next.dir,
+    });
+  const onSort = (key: SortKey) =>
+    setSort({
+      key,
+      // A second press on the same column turns it round.
+      dir: key === sort.key ? (sort.dir === "asc" ? "desc" : "asc") : firstDirection(key),
+    });
+
+  const filtered = division !== "all" || Boolean(team);
+  const chosenSeason = seasons?.find((entry) => entry.slug === chosen);
+  // "Not yet" is a promise only the current season can keep.
+  const isPastSeason = Boolean(chosenSeason && !chosenSeason.isCurrent);
+  const chosenTeam = teams.find((option) => option.value === team);
 
   return (
     <div>
       <PageHeader
         title="Averages"
-        subtitle="Who has won what, this season"
-      />
+        subtitle="Every player's singles record, placed division by division"
+      >
+        <SeasonPicker seasons={seasons} value={chosen} onChange={setSeason} />
+      </PageHeader>
 
-      <AveragesByDivision stats={stats ?? []} />
+      {placed.length === 0 ? (
+        isPastSeason ? (
+          <Empty>
+            No averages are held for {chosenSeason?.label ?? "this season"}. An earlier season
+            appears here once the league’s published averages for it have been brought across.
+          </Empty>
+        ) : (
+          <Empty>
+            No averages yet this season. They appear as soon as the first cards are entered — these
+            are worked out from the match cards themselves, not typed in.
+          </Empty>
+        )
+      ) : (
+        <>
+          <div className="mb-8 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+            {divisions.length > 1 ? (
+              <FilterChips
+                label="Division"
+                value={division}
+                onChange={(value) =>
+                  // A team from the division just left would leave nothing on screen.
+                  setParams({
+                    division: value === "all" ? undefined : value,
+                    team:
+                      value === "all" || chosenTeam?.division === value ? team : undefined,
+                  })
+                }
+                options={[
+                  { value: "all" as const, label: "All divisions", count: placed.length },
+                  ...divisions.map((value) => ({
+                    value,
+                    label: divisionLabel(value),
+                    count: placed.filter((row) => row.division === value).length,
+                  })),
+                ]}
+              />
+            ) : null}
 
-      <div className="mt-10 max-w-readable">
+            <div className="no-print">
+              <label htmlFor={teamSelectId} className="block font-semibold text-ink">
+                Team
+              </label>
+              <select
+                id={teamSelectId}
+                value={team ?? ""}
+                onChange={(event) => setParams({ team: event.target.value || undefined })}
+                className="mt-2 min-h-touch w-full rounded-card border border-line-strong bg-surface px-3 text-ink lg:w-72"
+              >
+                <option value="">
+                  {division === "all" ? "Every team" : `Every ${divisionLabel(division)} team`}
+                </option>
+                {teams.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <AveragesSortSelect sort={sort} onChange={setSort} className="sm:hidden" />
+          </div>
+
+          <p className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-ink-muted" aria-live="polite">
+            <span>
+              {rows.length === 1 ? "1 player" : `${rows.length} players`}
+              {chosenTeam ? ` for ${chosenTeam.label}` : null}
+              {division !== "all" && !chosenTeam ? ` in ${divisionLabel(division)}` : null}
+            </span>
+            {filtered ? (
+              <button
+                type="button"
+                onClick={() => setParams({ division: undefined, team: undefined })}
+                className="link min-h-touch font-semibold no-print"
+              >
+                Show everyone
+              </button>
+            ) : null}
+          </p>
+
+          <AveragesByDivision rows={rows} sort={sort} onSort={onSort} />
+        </>
+      )}
+
+      <div className="mt-10 max-w-readable space-y-3">
+        <Disclosure summary="What do the columns mean?">
+          <p>
+            <strong>Played, Won, Lost and Win %</strong> count singles only, as the league always
+            has. <strong>Doubles</strong> is the doubles won out of those played — shown, but never
+            part of the average, because it is a pair’s result rather than one player’s.{" "}
+            <strong>Sets</strong> is the games won and lost across their singles: a 3–1 win and a
+            1–3 loss make 4–4. <strong>Matches</strong> is how many team matches they turned out
+            in, which is what the eligibility rule counts. These are the same figures as on each
+            player’s own page.
+          </p>
+        </Disclosure>
         <Disclosure summary="Why are some players marked “not yet eligible”?">
           <p>
             The league only counts a player in the averages placings once they have played at least
             half of their team’s matches. It stops someone who played twice, and won both, from
             finishing above a player who turned out every week. Everyone’s record is still shown —
-            the marker only affects the placings.
+            the marker only affects the placings. Players level on percentage and number played
+            share a placing, printed as “=2”.
           </p>
         </Disclosure>
         <Disclosure summary="Where do these numbers come from?">
           <p>
-            They are worked out from the match cards themselves, rubber by rubber, rather than
+            They are worked out from the match cards themselves, match by match, rather than
             typed in separately — so a player’s average changes the moment a card is entered and
-            can never disagree with the results it is built from. Singles only: the doubles is a
-            pair’s result rather than a player’s, and the league has never counted it here.
+            can never disagree with the results it is built from. Earlier seasons show the figures
+            the league published at the time, which is why they have no doubles or sets columns.
           </p>
         </Disclosure>
       </div>

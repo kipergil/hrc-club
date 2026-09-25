@@ -130,3 +130,25 @@ export function findGroup(pathname: string): NavGroup | undefined {
   if (pathname === "/") return NAV[0];
   return NAV.find((group) => group.links.some((link) => isUnder(pathname, link.href)));
 }
+
+/**
+ * The pages to offer as tabs across the top of `pathname` — its siblings.
+ *
+ * The desktop header shows the five group names and nothing under them,
+ * so a page that is not the first in its group — Averages, Handicaps, the
+ * season calendar — was reachable from the phone menu and the footer and
+ * nowhere a desktop reader would look. The tabs put the group's pages on
+ * the group's pages.
+ *
+ * Only on the pages themselves, not on a team or a match filed under one:
+ * a row of tabs above a player's profile would suggest the profile is one
+ * of them. And only for a group small enough to be a row of tabs — "More"
+ * is ten pages, which is a menu, and has the footer.
+ */
+export const MAX_SECTION_TABS = 5;
+
+export function sectionTabsFor(pathname: string): NavLink[] {
+  const group = NAV.find((entry) => entry.links.some((link) => link.href === pathname));
+  if (!group || group.links.length < 2 || group.links.length > MAX_SECTION_TABS) return [];
+  return group.links;
+}
