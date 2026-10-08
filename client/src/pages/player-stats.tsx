@@ -3,7 +3,7 @@ import { useMemo, type ReactNode } from "react";
 import { Link } from "wouter";
 import type { PlayerRubber, PlayerStatistics } from "@shared/types.js";
 import { PageHeader } from "@/components/layout";
-import { Disclosure, Empty, ErrorNote, Loading } from "@/components/ui";
+import { Empty, ErrorNote, Loading } from "@/components/ui";
 import {
   COLOR,
   ChartFigure,
@@ -15,22 +15,16 @@ import {
   type ChartTable,
   type Dot,
 } from "@/components/charts";
-import { StatPicker } from "@/components/stat-picker";
 import { usePlayerStatistics } from "@/lib/queries";
 import { useUrlParam, useUrlParams } from "@/lib/params";
-import {
-  CHART_GROUPS,
-  STAT_CHARTS,
-  chartById,
-  defaultChartIds,
-  evidenceFromStatistics,
-  parseChartIds,
-} from "@/lib/stat-charts";
+import { CHART_GROUPS, STAT_CHARTS, chartById, evidenceFromStatistics } from "@/lib/stat-charts";
 import {
   byOpponentStrength,
   cardSeasons,
   careerTotals,
+  divisionShort,
   divisionSpread,
+  divisionStory,
   doublesByPartner,
   formByNight,
   gamesOf,
@@ -52,18 +46,15 @@ import {
 import { cn, divisionLabel, formatDateShort } from "@/lib/utils";
 
 /**
- * A player's statistics, as charts — only the ones asked for.
+ * A player's statistics, as charts — every one they have the data for.
  *
- * Its own page, reached from the player's profile, for three reasons that
- * are all about cost. The code for it is a separate download, fetched
- * only when somebody opens it (see `App.tsx`). Its data is a separate
- * request, so the profile never carries a career of games. And it draws
- * only the charts in `?charts=`, so a reader after one answer is not made
- * to wait for eighteen.
+ * Its own page, reached from the player's profile, for two reasons that
+ * are both about cost. The code for it is a separate download, fetched
+ * only when somebody opens it (see `App.tsx`). And its data is a separate
+ * request, so the profile never carries a career of games.
  */
 export default function PlayerStatsPage({ slug }: { slug: string }) {
   const { data, isLoading, isError } = usePlayerStatistics(slug);
-  const [chartsParam] = useUrlParam("charts");
   const [seasonParam] = useUrlParam("season");
   const setParams = useUrlParams();
 
@@ -79,10 +70,10 @@ export default function PlayerStatsPage({ slug }: { slug: string }) {
   if (isError || !data || !evidence) return <ErrorNote what="player statistics" />;
 
   const name = playerName(data);
-  const requested = parseChartIds(chartsParam);
-  const chosen = requested.length > 0 ? requested : defaultChartIds(evidence);
-  const drawable = chosen.filter((id) => chartById(id)!.needs(evidence) === null);
-  const waiting = chosen.filter((id) => chartById(id)!.needs(evidence) !== null);
+  const drawable = STAT_CHARTS.filter((chart) => chart.needs(evidence) === null).map((chart) => chart.id);
+  const waiting = STAT_CHARTS.filter((chart) => chart.needs(evidence) !== null).map((chart) => chart.id);
+  // The division the match-by-match charts were played in.
+  const cardDivision = data.seasons.find((season) => season.seasonLabel === cardSeason)?.division ?? null;
 
   const context: ChartContext = {
     data,
@@ -97,7 +88,7 @@ export default function PlayerStatsPage({ slug }: { slug: string }) {
     <div>
       <PageHeader
         title={`${name}: statistics`}
-        subtitle="Charts from the match cards and the league's averages. Pick the ones you want to see."
+        subtitle="Charts from the match cards and the league's averages. Tap the i beside a chart for what it shows."
         actions={
           <Link
             href={`/players/${slug}`}
@@ -110,17 +101,6 @@ export default function PlayerStatsPage({ slug }: { slug: string }) {
       />
 
       <div className="mb-8 space-y-4">
-        <Disclosure summary="Choose charts" meta={`${drawable.length} shown`}>
-          <StatPicker
-            // Remounted with the URL, so the ticks always match what is drawn.
-            key={chosen.join(",")}
-            slug={slug}
-            evidence={evidence}
-            initial={chosen}
-            onApply={(ids) => setParams({ charts: ids.join(",") })}
-          />
-        </Disclosure>
-
         {seasonsWithCards.length > 1 ? (
           <div className="no-print">
             <label htmlFor="card-season" className="block font-semibold">
@@ -143,7 +123,7 @@ export default function PlayerStatsPage({ slug }: { slug: string }) {
 
         {waiting.length > 0 ? (
           <p className="text-ink-muted">
-            Not shown, because there is not enough on record for {name} yet:{" "}
+            Not shown yet, because there is not enough on record for {name}:{" "}
             {waiting
               .map((id) => `${chartById(id)!.title.toLowerCase()} (${chartById(id)!.needs(evidence)})`)
               .join("; ")}
@@ -167,7 +147,11 @@ export default function PlayerStatsPage({ slug }: { slug: string }) {
                   {group.title}
                 </h2>
                 <p className="mb-4 mt-1 text-ink-muted">
-                  {group.id === "matches" && cardSeason ? `From the ${cardSeason} match cards.` : group.blurb}
+                  {group.id === "matches" && cardSeason
+                    ? `From the ${cardSeason} match cards${cardDivision ? `, ${divisionLabel(cardDivision)}` : ""}.`
+                    : group.id === "seasons"
+                      ? divisionStory(data.seasons, divisionLabel)
+                      : group.blurb}
                 </p>
                 <div className="grid gap-5 lg:grid-cols-2">
                   {ids.map((id) => (
@@ -210,30 +194,35 @@ export function StatChart({ id, context }: { id: string; context: ChartContext }
   const spec = STAT_CHARTS.find((chart) => chart.id === id)!;
   const { data, name, nights, singles, rubbers } = context;
   const seasons = data.seasons;
+  // Under each season on the axis, and in each tooltip and table: placings
+  // and win rates only compare like with like inside one division.
+  const divisions = seasons.map((s) => divisionShort(s.division));
+  const inDivision = (i: number) => (seasons[i]!.division ? divisionLabel(seasons[i]!.division!) : "No division recorded");
   const figure = (props: { reading?: ReactNode; table?: ChartTable; wide?: boolean; children: ReactNode }) => (
-    <ChartFigure title={spec.title} question={spec.question} {...props} />
+    <ChartFigure title={spec.title} question={spec.question} about={spec.about} {...props} />
   );
 
   switch (id) {
     case "season-rate": {
       const best = seasons.reduce((top, season) => ((season.winPercentage ?? -1) > (top.winPercentage ?? -1) ? season : top));
       return figure({
-        reading: `Best season: ${best.winPercentage}% in ${best.seasonLabel}. The dashed line is the middle of the division's eligible players.`,
+        reading: `Best season: ${best.winPercentage}% in ${best.seasonLabel}, in ${best.division ? divisionLabel(best.division) : "no recorded division"}. The dashed line is the middle of that season's division.`,
         table: {
-          head: ["Season", `${name}`, "Division median"],
-          rows: seasons.map((s) => [s.seasonLabel, s.winPercentage === null ? "—" : `${s.winPercentage}%`, s.divisionMedian === null ? "—" : `${s.divisionMedian}%`]),
+          head: ["Season", "Division", `${name}`, "Division median"],
+          rows: seasons.map((s) => [s.seasonLabel, s.division ? divisionLabel(s.division) : "—", s.winPercentage === null ? "—" : `${s.winPercentage}%`, s.divisionMedian === null ? "—" : `${s.divisionMedian}%`]),
         },
         children: (
           <LineChart
             label={`${name}'s singles win rate each season, against the division median`}
             categories={seasons.map((s) => s.seasonLabel)}
+            subCategories={divisions}
             series={[
               { label: name, values: seasons.map((s) => s.winPercentage), color: COLOR.player, main: true },
               { label: "Division median", values: seasons.map((s) => s.divisionMedian), color: COLOR.others, dashed: true },
             ]}
             domain={[0, 100]}
             format={percent}
-            tip={(i) => [seasons[i]!.seasonLabel, `${name}: ${seasons[i]!.winPercentage ?? "—"}%`, `Division median: ${seasons[i]!.divisionMedian ?? "—"}%`]}
+            tip={(i) => [`${seasons[i]!.seasonLabel}, ${inDivision(i)}`, `${name}: ${seasons[i]!.winPercentage ?? "—"}%`, `Division median: ${seasons[i]!.divisionMedian ?? "—"}%`]}
           />
         ),
       });
@@ -244,15 +233,19 @@ export function StatChart({ id, context }: { id: string; context: ChartContext }
       const wins = seasons.reduce((sum, s) => sum + s.won, 0);
       return figure({
         reading: `${wins} won from ${total} singles across ${seasons.length} seasons.`,
-        table: { head: ["Season", "Played", "Won", "Lost"], rows: seasons.map((s) => [s.seasonLabel, s.played, s.won, s.lost]) },
+        table: {
+          head: ["Season", "Division", "Played", "Won", "Lost"],
+          rows: seasons.map((s) => [s.seasonLabel, s.division ? divisionLabel(s.division) : "—", s.played, s.won, s.lost]),
+        },
         children: (
           <ColumnChart
             label={`Singles won and lost by ${name} each season`}
             categories={seasons.map((s) => s.seasonLabel)}
+            subCategories={divisions}
             up={{ label: "Won", values: seasons.map((s) => s.won), color: COLOR.won }}
             down={{ label: "Lost", values: seasons.map((s) => s.lost), color: COLOR.lost }}
             yLabel="singles"
-            tip={(i) => [seasons[i]!.seasonLabel, `Won ${seasons[i]!.won}`, `Lost ${seasons[i]!.lost}`]}
+            tip={(i) => [`${seasons[i]!.seasonLabel}, ${inDivision(i)}`, `Won ${seasons[i]!.won}`, `Lost ${seasons[i]!.lost}`]}
           />
         ),
       });
@@ -266,13 +259,14 @@ export function StatChart({ id, context }: { id: string; context: ChartContext }
           ? `Not placed in ${unplaced.join(", ")}: below the league's 50%-of-matches rule.`
           : `Placed every season on record.`,
         table: {
-          head: ["Season", "Placing", "Eligible players"],
-          rows: seasons.map((s) => [s.seasonLabel, s.place === null ? "Not placed" : ordinal(s.place, s.tied), s.placedOf]),
+          head: ["Season", "Division", "Placing", "Eligible players"],
+          rows: seasons.map((s) => [s.seasonLabel, s.division ? divisionLabel(s.division) : "—", s.place === null ? "Not placed" : ordinal(s.place, s.tied), s.placedOf]),
         },
         children: (
           <LineChart
             label={`${name}'s placing in the division averages each season, first at the top`}
             categories={seasons.map((s) => s.seasonLabel)}
+            subCategories={divisions}
             series={[
               {
                 label: "Placing",
@@ -285,7 +279,7 @@ export function StatChart({ id, context }: { id: string; context: ChartContext }
             domain={[1, worst + 1]}
             reverse
             integerTicks
-            tip={(i) => [seasons[i]!.seasonLabel, seasons[i]!.place === null ? "Not placed" : `${ordinal(seasons[i]!.place!, seasons[i]!.tied)} of ${seasons[i]!.placedOf}`]}
+            tip={(i) => [`${seasons[i]!.seasonLabel}, ${inDivision(i)}`, seasons[i]!.place === null ? "Not placed" : `${ordinal(seasons[i]!.place!, seasons[i]!.tied)} of ${seasons[i]!.placedOf}`]}
           />
         ),
       });
@@ -296,8 +290,8 @@ export function StatChart({ id, context }: { id: string; context: ChartContext }
       return figure({
         reading: "The mark on each bar is half the team's matches: the league places a player only once they reach it.",
         table: {
-          head: ["Season", "Played", "Team's matches"],
-          rows: rows.map((s) => [s.seasonLabel, s.matchesPlayed!, s.teamMatchesPlayed!]),
+          head: ["Season", "Division", "Played", "Team's matches"],
+          rows: rows.map((s) => [s.seasonLabel, s.division ? divisionLabel(s.division) : "—", s.matchesPlayed!, s.teamMatchesPlayed!]),
         },
         children: (
           <>
@@ -306,8 +300,11 @@ export function StatChart({ id, context }: { id: string; context: ChartContext }
               {rows.map((s) => {
                 const share = (s.matchesPlayed! / s.teamMatchesPlayed!) * 100;
                 return (
-                  <li key={s.seasonLabel} className="grid gap-1 sm:grid-cols-[8rem_1fr] sm:items-center sm:gap-3">
-                    <span className="font-semibold">{s.seasonLabel}</span>
+                  <li key={s.seasonLabel} className="grid gap-1 sm:grid-cols-[10rem_1fr] sm:items-center sm:gap-3">
+                    <span>
+                      <span className="font-semibold">{s.seasonLabel}</span>
+                      <span className="text-ink-muted"> · {divisionShort(s.division)}</span>
+                    </span>
                     <span className="flex items-center gap-3">
                       <span className="relative flex h-5 flex-1 overflow-hidden rounded" style={{ background: COLOR.grid }} aria-hidden="true">
                         <span className="h-full" style={{ width: `${share}%`, background: COLOR.player }} />
@@ -331,18 +328,22 @@ export function StatChart({ id, context }: { id: string; context: ChartContext }
       const last = totals[totals.length - 1]!;
       return figure({
         reading: `${last.won} won and ${last.lost} lost since ${seasons[0]!.seasonLabel}.`,
-        table: { head: ["After", "Won", "Lost"], rows: totals.map((t) => [t.season, t.won, t.lost]) },
+        table: {
+          head: ["After", "Division", "Won", "Lost"],
+          rows: totals.map((t, i) => [t.season, seasons[i]!.division ? divisionLabel(seasons[i]!.division!) : "—", t.won, t.lost]),
+        },
         children: (
           <LineChart
             label={`Running total of ${name}'s singles won and lost`}
             categories={totals.map((t) => t.season)}
+            subCategories={divisions}
             series={[
               { label: "Won", values: totals.map((t) => t.won), color: COLOR.won, main: true },
               { label: "Lost", values: totals.map((t) => t.lost), color: COLOR.lost, main: true },
             ]}
             domain={[0, Math.max(4, last.won)]}
             integerTicks
-            tip={(i) => [`After ${totals[i]!.season}`, `Won ${totals[i]!.won}`, `Lost ${totals[i]!.lost}`]}
+            tip={(i) => [`After ${totals[i]!.season} (${inDivision(i)})`, `Won ${totals[i]!.won}`, `Lost ${totals[i]!.lost}`]}
           />
         ),
       });

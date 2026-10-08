@@ -319,3 +319,55 @@ export function teamMates(peers: PeerStat[], teamSlug: string | null): PeerStat[
 export function playerName(data: Pick<PlayerStatistics, "displayName" | "fullName">): string {
   return data.displayName ?? data.fullName;
 }
+
+// ---------------------------------------------------------------------------
+// Divisions, season by season
+// ---------------------------------------------------------------------------
+
+const DIVISION_SHORT: Record<string, string> = {
+  premier: "Premier",
+  division_1: "Div 1",
+  division_2: "Div 2",
+};
+
+/** "Premier", "Div 1" — short enough to sit under a season on an axis. */
+export function divisionShort(division: string | null): string {
+  return division ? (DIVISION_SHORT[division] ?? division) : "—";
+}
+
+/**
+ * The divisions a player has played in, as runs of seasons, oldest first:
+ * "Division 1 in 2021-22 to 2022-23, then Premier Division from 2023-24".
+ *
+ * Win rates and placings only compare like with like inside a division, so
+ * a season-by-season chart says where each season was played.
+ */
+export function divisionRuns(
+  seasons: Array<Pick<PlayerSeasonStat, "seasonLabel" | "division">>,
+): Array<{ division: PlayerSeasonStat["division"]; from: string; to: string; seasons: number }> {
+  const runs: Array<{ division: PlayerSeasonStat["division"]; from: string; to: string; seasons: number }> = [];
+  for (const season of seasons) {
+    const last = runs[runs.length - 1];
+    if (last && last.division === season.division) {
+      last.to = season.seasonLabel;
+      last.seasons += 1;
+    } else {
+      runs.push({ division: season.division, from: season.seasonLabel, to: season.seasonLabel, seasons: 1 });
+    }
+  }
+  return runs;
+}
+
+export function divisionStory(
+  seasons: Array<Pick<PlayerSeasonStat, "seasonLabel" | "division">>,
+  label: (division: NonNullable<PlayerSeasonStat["division"]>) => string,
+): string {
+  const runs = divisionRuns(seasons);
+  const name = (run: (typeof runs)[number]) => (run.division ? label(run.division) : "no division recorded");
+  if (runs.length === 0) return "";
+  if (runs.length === 1) return `${name(runs[0]!)} every season on record.`;
+  const parts = runs.map((run) =>
+    run.seasons === 1 ? `${name(run)} in ${run.from}` : `${name(run)} from ${run.from} to ${run.to}`,
+  );
+  return `${parts.slice(0, -1).join(", ")}, then ${parts[parts.length - 1]}.`;
+}

@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   byOpponentStrength,
   careerTotals,
+  divisionRuns,
+  divisionShort,
   divisionSpread,
+  divisionStory,
   doublesByPartner,
   formByNight,
   gamesOf,
@@ -158,6 +161,37 @@ describe("seasons and the division", () => {
       "11th",
       "22nd",
       "=3rd",
+    ]);
+  });
+});
+
+describe("divisions over the years", () => {
+  const label = (division: string) => ({ premier: "Premier Division", division_1: "Division 1", division_2: "Division 2" })[division]!;
+  const at = (seasonLabel: string, division: "premier" | "division_1" | "division_2" | null) => ({ seasonLabel, division });
+
+  it("groups consecutive seasons in one division", () => {
+    const runs = divisionRuns([at("2021-22", "division_1"), at("2022-23", "division_1"), at("2023-24", "premier")]);
+    expect(runs).toEqual([
+      { division: "division_1", from: "2021-22", to: "2022-23", seasons: 2 },
+      { division: "premier", from: "2023-24", to: "2023-24", seasons: 1 },
+    ]);
+  });
+
+  it("tells the story in a sentence", () => {
+    expect(divisionStory([at("2021-22", "premier"), at("2022-23", "premier")], label)).toBe(
+      "Premier Division every season on record.",
+    );
+    expect(
+      divisionStory([at("2021-22", "division_1"), at("2022-23", "division_1"), at("2023-24", "premier"), at("2024-25", "division_1")], label),
+    ).toBe("Division 1 from 2021-22 to 2022-23, Premier Division in 2023-24, then Division 1 in 2024-25.");
+  });
+
+  it("keeps the axis label short", () => {
+    expect([divisionShort("premier"), divisionShort("division_1"), divisionShort("division_2"), divisionShort(null)]).toEqual([
+      "Premier",
+      "Div 1",
+      "Div 2",
+      "—",
     ]);
   });
 });
