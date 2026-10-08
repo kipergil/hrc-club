@@ -4,8 +4,8 @@ import type { MemberProfile, PlayerStatistics } from "@shared/types.js";
  * The charts a player's statistics page can draw, and when each can.
  *
  * Metadata only — no data crunching and no drawing — because the player
- * page imports this to offer the picker, and the player page must stay
- * light. The charts themselves live in a chunk that is only downloaded
+ * page imports this to decide whether to offer the statistics button, and
+ * the player page must stay light. The charts themselves live in a chunk that is only downloaded
  * when somebody opens the statistics page.
  *
  * What is here was chosen from what the site actually holds:
@@ -68,8 +68,12 @@ export interface ChartSpec {
   question: string;
   /** Null when this player has what the chart needs, else what is missing. */
   needs: (evidence: Evidence) => string | null;
-  /** On by default in the picker — a short first look, not everything. */
-  recommended?: boolean;
+  /**
+   * What the chart is and how to read it, for the info button beside its
+   * title. Two or three plain sentences; the question above says why it
+   * matters, this says what is drawn.
+   */
+  about: string;
 }
 
 const twoSeasons = (e: Evidence) =>
@@ -85,14 +89,17 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "seasons",
     title: "Win rate each season",
     question: "Are they getting better, and how do they compare with the division?",
+    about:
+      "One point per season: the share of singles won. The dashed line is the middle win rate among the division's eligible players that year, so the gap between the lines shows how far above or below the typical player they were. The division is named under each season.",
     needs: twoSeasons,
-    recommended: true,
   },
   {
     id: "season-record",
     group: "seasons",
     title: "Singles won and lost each season",
     question: "How much do they play, and how many do they drop?",
+    about:
+      "Each column is a season. Singles won rise above the line, singles lost hang below it, so a tall column is a busy season and anything below the line is a defeat. The doubles is not counted, as in the league's averages.",
     needs: twoSeasons,
   },
   {
@@ -100,6 +107,8 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "seasons",
     title: "Placing in the averages",
     question: "Where did they finish in their division each year?",
+    about:
+      "Where the player finished in their division's averages each year, first at the top. Only players who played at least half their team's matches are placed, so a season below that has no point. Placings are within a division: 1st in Division Two is not the same as 1st in the Premier.",
     needs: (e) =>
       e.seasons < 2 ? "needs two seasons on record" : e.placedSeasons === 0 ? "needs a season with a placing" : null,
   },
@@ -108,6 +117,8 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "seasons",
     title: "Matches played of the team's",
     question: "How often do they turn out, against the 50% the league needs?",
+    about:
+      "How many of the team's matches the player turned out for each season. The dark mark at the middle of each bar is half the team's matches: the league places a player in the averages only once they reach it.",
     needs: (e) => (e.seasonsWithAvailability > 0 ? null : "needs a season with match cards"),
   },
   {
@@ -115,6 +126,8 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "seasons",
     title: "Career singles, added up",
     question: "The running total of every singles won and lost.",
+    about:
+      "Two running totals, season by season: singles won and singles lost since the first season on record. The steeper the won line, the more a season added.",
     needs: twoSeasons,
   },
 
@@ -124,14 +137,17 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "division",
     title: "Where they sit in the division",
     question: "Every eligible player's win rate, with this one picked out.",
+    about:
+      "Each dot is one eligible player in the division this season, placed by their singles win rate; this player is the red dot. Dots further right won more of their singles.",
     needs: (e) => (e.hasPeers ? null : "needs a season with averages"),
-    recommended: true,
   },
   {
     id: "team-mates",
     group: "division",
     title: "Against their team-mates",
     question: "Played most, and won most of it? Up and to the right is best.",
+    about:
+      "Each dot is a player in the same team this season. Further right means more singles played, higher means a better win rate, so the top right is the team's most used and most successful player.",
     needs: (e) => (e.teamMates >= 1 ? null : "needs team-mates with averages"),
   },
 
@@ -141,22 +157,26 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "matches",
     title: "Singles won and lost, each match",
     question: "How each match night went.",
+    about:
+      "One column per match night. Singles won stand above the line and singles lost hang below it, so a night with nothing below the line was a clean sweep. Hover a column for the opponents and scores.",
     needs: someSingles(1),
-    recommended: true,
   },
   {
     id: "running-rate",
     group: "matches",
     title: "Win rate through the season",
     question: "The averages figure, after every match.",
+    about:
+      "The player's season win rate after each match: the same figure the averages page shows, as it moved through the season. Early on a single result moves it a lot; later it settles.",
     needs: (e) => (e.matches >= 2 ? null : "needs two matches on the cards"),
-    recommended: true,
   },
   {
     id: "recent-form",
     group: "matches",
     title: "Recent form: last six singles",
     question: "On a run, or in a dip?",
+    about:
+      "After each singles, the share of the last six that were won. It reacts quickly to a good or bad spell that the season figure smooths over.",
     needs: someSingles(6),
   },
   {
@@ -164,6 +184,8 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "matches",
     title: "Games won and lost, singles by singles",
     question: "Comfortable wins, or scraped through?",
+    about:
+      "One column per singles. Games won stand above the line and games lost hang below it: a 3–0 win is three up and nothing down, a 3–2 win is three up and two down.",
     needs: someSingles(1),
   },
   {
@@ -171,6 +193,8 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "matches",
     title: "How close the games are",
     question: "Every game by its points margin.",
+    about:
+      "Every singles game, counted by how many points it was won or lost by. Bars to the right are games won, to the left games lost. Tall bars at +2 and −2 mean many close games, deuce included.",
     needs: someSingles(1),
   },
   {
@@ -178,6 +202,8 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "matches",
     title: "Under pressure",
     question: "Deuce games, deciding fifth games, and coming back from a game down.",
+    about:
+      "Three kinds of tight moment: games that went to deuce (beyond 11–10), deciding fifth games, and singles where the player lost the first game. Each bar shows how many were won and lost.",
     needs: someSingles(3),
   },
   {
@@ -185,6 +211,8 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "matches",
     title: "Results by opponent strength",
     question: "Who do they beat, and how do they do against the best?",
+    about:
+      "Singles grouped by how strong the opponent was, measured by the opponent's own win rate that season. It shows whether results hold up against the league's better players.",
     needs: (e) => (e.ratedOpponents >= 1 ? null : "needs opponents with averages"),
   },
   {
@@ -192,6 +220,8 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "matches",
     title: "Home and away",
     question: "Does the venue make a difference?",
+    about:
+      "Singles won and lost at home, and away. Halls differ in light, space and tables, and some players notice it.",
     needs: (e) =>
       e.homeSingles > 0 && e.awaySingles > 0 ? null : "needs singles both home and away",
   },
@@ -200,6 +230,8 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "matches",
     title: "Doubles, by partner",
     question: "Which pairing works?",
+    about:
+      "The doubles, grouped by partner. It is not part of the averages, because it is a pair's result, but it is a point for the team.",
     needs: (e) => (e.doubles > 0 ? null : "needs a doubles on a card"),
   },
   {
@@ -207,6 +239,8 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "matches",
     title: "Share of points won, each match",
     question: "Beyond wins and losses: how dominant was each night?",
+    about:
+      "Of every point played in the player's singles on a match night, the share they won. Above the dashed 50% line they won more points than they lost; close to it, the night was a fight even if the matches were won.",
     needs: someSingles(1),
   },
   {
@@ -214,8 +248,9 @@ export const STAT_CHARTS: readonly ChartSpec[] = [
     group: "matches",
     title: "Head to head",
     question: "Who they meet most, and how it went.",
+    about:
+      "Every opponent met in singles this season, most-met first, with each result and the games won and lost in total. The win rate beside each name is the opponent's own singles average that season.",
     needs: someSingles(1),
-    recommended: true,
   },
 ];
 
@@ -225,26 +260,13 @@ export function chartById(id: string): ChartSpec | undefined {
   return BY_ID.get(id);
 }
 
-/** The charts named in a `?charts=` value, in catalogue order, unknown names dropped. */
-export function parseChartIds(value: string | undefined): string[] {
-  if (!value) return [];
-  const wanted = new Set(value.split(",").map((id) => id.trim()));
-  return STAT_CHARTS.filter((chart) => wanted.has(chart.id)).map((chart) => chart.id);
-}
-
 export function availableIds(evidence: Evidence): string[] {
   return STAT_CHARTS.filter((chart) => chart.needs(evidence) === null).map((chart) => chart.id);
 }
 
-/** The first look: the recommended charts this player can show. */
-export function defaultChartIds(evidence: Evidence): string[] {
-  const available = new Set(availableIds(evidence));
-  const picked = STAT_CHARTS.filter((chart) => chart.recommended && available.has(chart.id));
-  return picked.map((chart) => chart.id);
-}
-
-export function statsHref(slug: string, ids: string[]): string {
-  return ids.length === 0 ? `/players/${slug}/stats` : `/players/${slug}/stats?charts=${ids.join(",")}`;
+/** A player's statistics page. Every chart they have the data for is on it. */
+export function statsHref(slug: string): string {
+  return `/players/${slug}/stats`;
 }
 
 // ---------------------------------------------------------------------------

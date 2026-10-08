@@ -92,7 +92,7 @@ export const STATISTICS: PlayerStatistics = {
   slug: "derek-balding",
   rubbers: RUBBERS,
   seasons: [
-    season({ seasonLabel: "2025-26", played: 24, won: 22, lost: 2, winPercentage: 92, doublesPlayed: null, doublesWon: null, setsFor: null, setsAgainst: null, matchesPlayed: null, teamMatchesPlayed: null, place: 1, placedOf: 22, divisionMedian: 49 }),
+    season({ seasonLabel: "2025-26", division: "division_1", played: 24, won: 22, lost: 2, winPercentage: 92, doublesPlayed: null, doublesWon: null, setsFor: null, setsAgainst: null, matchesPlayed: null, teamMatchesPlayed: null, place: 1, placedOf: 22, divisionMedian: 49 }),
     season({}),
   ],
   peers: {

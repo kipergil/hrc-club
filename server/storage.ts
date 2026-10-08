@@ -1629,7 +1629,11 @@ export async function getPlayerStatistics(slug: string): Promise<PlayerStatistic
         opponentRates[`${label}|${row.memberSlug}`] = row.winPercentage;
       }
     }
-    const me = all.find((row) => row.memberSlug === slug);
+    // A player who played up appears in two divisions' averages that
+    // season; the one they played most in is the season's division.
+    const me = all
+      .filter((row) => row.memberSlug === slug)
+      .sort((a, b) => b.played - a.played)[0];
     if (!me) continue;
 
     const division = all.filter((row) => row.division === me.division);

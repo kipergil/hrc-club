@@ -3,10 +3,8 @@ import type { MemberProfile } from "@shared/types.js";
 import {
   STAT_CHARTS,
   availableIds,
-  defaultChartIds,
   evidenceFromProfile,
   evidenceFromStatistics,
-  parseChartIds,
   statsHref,
   type Evidence,
 } from "./stat-charts";
@@ -50,26 +48,17 @@ describe("the chart catalogue", () => {
     expect(availableIds(evidenceFromStatistics(STATISTICS))).toEqual(STAT_CHARTS.map((chart) => chart.id));
   });
 
-  it("starts with the recommended charts the player can have", () => {
-    const ids = defaultChartIds(evidenceFromStatistics(STATISTICS));
-    expect(ids).toEqual(STAT_CHARTS.filter((chart) => chart.recommended).map((chart) => chart.id));
+  it("explains every chart, for the info button beside it", () => {
+    for (const chart of STAT_CHARTS) {
+      expect(chart.about.length, chart.id).toBeGreaterThan(40);
+      expect(chart.about.length, chart.id).toBeLessThan(420);
+    }
   });
 });
 
 describe("the address", () => {
-  it("round-trips a choice through ?charts=, in catalogue order", () => {
-    const href = statsHref("derek-balding", ["head-to-head", "form"]);
-    expect(href).toBe("/players/derek-balding/stats?charts=head-to-head,form");
-    expect(parseChartIds("head-to-head,form")).toEqual(["form", "head-to-head"]);
-  });
-
-  it("drops names it does not know, from an old or hand-edited link", () => {
-    expect(parseChartIds("form,not-a-chart,,")).toEqual(["form"]);
-    expect(parseChartIds(undefined)).toEqual([]);
-  });
-
-  it("leaves the choice off the address when there is none", () => {
-    expect(statsHref("derek-balding", [])).toBe("/players/derek-balding/stats");
+  it("is the player's own statistics page, with no choice to carry", () => {
+    expect(statsHref("derek-balding")).toBe("/players/derek-balding/stats");
   });
 });
 

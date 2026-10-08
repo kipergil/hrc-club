@@ -1,3 +1,4 @@
+import { Info } from "lucide-react";
 import { useEffect, useId, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -163,23 +164,34 @@ function truncate(text: string, max = 16): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-/** Categories along the bottom: straight when they fit, angled when they do not. */
+function isAngled(labels: string[], band: number, font: number): boolean {
+  return Math.max(0, ...labels.map((label) => textWidth(truncate(label), font))) > band - 4;
+}
+
+/**
+ * Categories along the bottom: straight when they fit, angled when they do
+ * not. `sub` is a second line under each — the division under a season —
+ * which an angled label carries after a dot instead.
+ */
 function XLabels({
   labels,
+  sub,
   x,
   y,
   band,
   font,
 }: {
   labels: string[];
+  sub?: string[];
   x: (index: number) => number;
   y: number;
   band: number;
   font: number;
 }) {
-  const shown = labels.map((label) => truncate(label));
-  const widest = Math.max(...shown.map((label) => textWidth(label, font)));
-  const angled = widest > band - 4;
+  const angled = isAngled(labels, band, font);
+  const shown = labels.map((label, index) =>
+    angled && sub?.[index] ? `${truncate(label)} · ${sub[index]}` : truncate(label),
+  );
   // Thin them out when even angled they would sit on top of each other.
   const every = angled ? Math.max(1, Math.ceil((font * 1.7) / band)) : 1;
   return (
@@ -195,9 +207,16 @@ function XLabels({
             {label}
           </text>
         ) : (
-          <text key={index} x={x(index)} y={y + font + 4} textAnchor="middle">
-            {label}
-          </text>
+          <g key={index}>
+            <text x={x(index)} y={y + font + 4} textAnchor="middle">
+              {label}
+            </text>
+            {sub?.[index] ? (
+              <text x={x(index)} y={y + font * 2.3 + 4} textAnchor="middle" fill={COLOR.ink} fontWeight={600}>
+                {sub[index]}
+              </text>
+            ) : null}
+          </g>
         ),
       )}
     </g>
@@ -208,18 +227,21 @@ function XLabels({
  * How far the plot must start from the left so the first label, angled
  * down and to the left, is not cut off by the edge of the card.
  */
-function angledLeft(labels: string[], left: number, right: number, width: number, font: number): number {
+function angledLeft(labels: string[], left: number, right: number, width: number, font: number, sub?: string[]): number {
   const band = (width - left - right) / Math.max(labels.length, 1);
-  const widest = Math.max(0, ...labels.map((label) => textWidth(truncate(label), font)));
-  if (widest <= band - 4 || labels.length === 0) return left;
+  if (labels.length === 0 || !isAngled(labels, band, font)) return left;
   // cos 40° of the first label's length reaches back past its own column.
-  const reach = textWidth(truncate(labels[0]!), font) * 0.77 + 4;
+  const first = sub?.[0] ? `${truncate(labels[0]!)} · ${sub[0]}` : truncate(labels[0]!);
+  const reach = textWidth(first, font) * 0.77 + 4;
   return Math.max(left, reach - band / 2);
 }
 
-function xLabelSpace(labels: string[], band: number, font: number): number {
-  const widest = Math.max(0, ...labels.map((label) => textWidth(truncate(label), font)));
-  return widest > band - 4 ? widest * 0.68 + font + 10 : font * 1.8;
+function xLabelSpace(labels: string[], band: number, font: number, sub?: string[]): number {
+  if (isAngled(labels, band, font)) {
+    const shown = labels.map((label, index) => (sub?.[index] ? `${truncate(label)} · ${sub[index]}` : truncate(label)));
+    return Math.max(...shown.map((label) => textWidth(label, font))) * 0.68 + font + 10;
+  }
+  return sub ? font * 3.1 : font * 1.8;
 }
 
 export function Legend({ items }: { items: Array<{ label: string; color: string; line?: boolean; dashed?: boolean }> }) {
@@ -272,6 +294,7 @@ export interface ColumnSeries {
 
 export function ColumnChart({
   categories,
+  subCategories,
   up,
   down,
   label,
@@ -282,6 +305,8 @@ export function ColumnChart({
   legend = true,
 }: {
   categories: string[];
+  /** A second line under each category — the division under a season. */
+  subCategories?: string[];
   up: ColumnSeries;
   /** Drawn below the line, as a positive count. */
   down?: ColumnSeries;
@@ -298,10 +323,10 @@ export function ColumnChart({
 
   const top = Math.max(yMax ?? 0, ...up.values, 1);
   const bottom = down ? Math.max(...down.values, 0) : 0;
-  const left = angledLeft(categories, textWidth(String(Math.max(top, bottom)), font) + 14 + (yLabel ? font + 4 : 0), 8, width, font);
+  const left = angledLeft(categories, textWidth(String(Math.max(top, bottom)), font) + 14 + (yLabel ? font + 4 : 0), 8, width, font, subCategories);
   const plotWidth = width - left - 8;
   const band = plotWidth / Math.max(categories.length, 1);
-  const bottomSpace = xLabelSpace(categories, band, font);
+  const bottomSpace = xLabelSpace(categories, band, font, subCategories);
   const plotTop = 10;
   const plotBottom = height - bottomSpace;
   const y = linear(-bottom, top, plotBottom, plotTop);
@@ -355,7 +380,7 @@ export function ColumnChart({
             />
           </g>
         ))}
-        <XLabels labels={categories} x={x} y={plotBottom} band={band} font={font} />
+        <XLabels labels={categories} sub={subCategories} x={x} y={plotBottom} band={band} font={font} />
       </Frame>
     </>
   );
@@ -378,6 +403,7 @@ export interface LineSeries {
 
 export function LineChart({
   categories,
+  subCategories,
   series,
   label,
   tip,
@@ -389,6 +415,8 @@ export function LineChart({
   integerTicks = false,
 }: {
   categories: string[];
+  /** A second line under each category — the division under a season. */
+  subCategories?: string[];
   series: LineSeries[];
   label: string;
   tip: (index: number) => string[];
@@ -407,10 +435,10 @@ export function LineChart({
 
   const ticks = niceTicks(domain[0], domain[1], 4).filter((t) => !integerTicks || Number.isInteger(t));
   const right = 18;
-  const left = angledLeft(categories, Math.max(...ticks.map((t) => textWidth(format(t), font))) + 14, right, width, font);
+  const left = angledLeft(categories, Math.max(...ticks.map((t) => textWidth(format(t), font))) + 14, right, width, font, subCategories);
   const plotWidth = width - left - right;
   const band = plotWidth / Math.max(categories.length, 1);
-  const bottomSpace = xLabelSpace(categories, band, font);
+  const bottomSpace = xLabelSpace(categories, band, font, subCategories);
   const plotTop = 14;
   const plotBottom = height - bottomSpace;
   const y = reverse ? linear(domain[0], domain[1], plotTop, plotBottom) : linear(domain[0], domain[1], plotBottom, plotTop);
@@ -490,7 +518,7 @@ export function LineChart({
             }}
           />
         ))}
-        <XLabels labels={categories} x={x} y={plotBottom} band={band} font={font} />
+        <XLabels labels={categories} sub={subCategories} x={x} y={plotBottom} band={band} font={font} />
       </Frame>
     </>
   );
@@ -681,9 +709,71 @@ export interface ChartTable {
  * it shows for this player, and the numbers behind it on request.
 
  */
+/**
+ * The info button beside a chart's title: what the chart is, in a couple
+ * of sentences, for whoever is not sure how to read it.
+ *
+ * Opened by a tap or a click rather than by hovering — most readers here
+ * are on phones, where hover does not exist — and announced as a
+ * disclosure, so a screen reader says whether it is open. Escape or a tap
+ * anywhere else closes it.
+ */
+export function InfoPopover({ title, about }: { title: string; about: string }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const wrapper = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      button.current?.focus();
+    };
+    const onPointer = (event: globalThis.PointerEvent) => {
+      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapper} className="relative shrink-0 no-print">
+      <button
+        ref={button}
+        type="button"
+        aria-expanded={open}
+        aria-controls={id}
+        aria-label={`About this chart: ${title}`}
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "inline-flex min-h-touch min-w-touch items-center justify-center rounded-full transition-colors",
+          open ? "bg-brand-soft text-brand" : "text-ink-muted hover:bg-brand-soft hover:text-brand",
+        )}
+      >
+        <Info aria-hidden="true" className="size-6" />
+      </button>
+      <div
+        id={id}
+        hidden={!open}
+        className="absolute right-0 top-full z-20 mt-1 w-80 max-w-[calc(100vw-3rem)] rounded-card border border-line bg-surface p-4 text-left shadow-lifted"
+      >
+        <p className="font-semibold">About this chart</p>
+        <p className="mt-1">{about}</p>
+      </div>
+    </div>
+  );
+}
+
 export function ChartFigure({
   title,
   question,
+  about,
   reading,
   table,
   wide = false,
@@ -691,6 +781,8 @@ export function ChartFigure({
 }: {
   title: string;
   question: string;
+  /** What the chart is and how to read it, behind the info button. */
+  about?: string;
   reading?: ReactNode;
   table?: ChartTable;
   wide?: boolean;
@@ -706,9 +798,12 @@ export function ChartFigure({
         wide && "lg:col-span-2",
       )}
     >
-      <figcaption className="mb-4">
-        <h3 className="text-xl">{title}</h3>
-        <p className="mt-1 text-ink-muted">{question}</p>
+      <figcaption className="mb-4 flex items-start justify-between gap-3">
+        <span className="min-w-0">
+          <h3 className="text-xl">{title}</h3>
+          <span className="mt-1 block text-ink-muted">{question}</span>
+        </span>
+        {about ? <InfoPopover title={title} about={about} /> : null}
       </figcaption>
       {children}
       {reading ? <p className="mt-4 border-t border-line pt-3">{reading}</p> : null}

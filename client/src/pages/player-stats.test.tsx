@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Router } from "wouter";
-import { STAT_CHARTS, evidenceFromStatistics, type Evidence } from "@/lib/stat-charts";
+import { STAT_CHARTS } from "@/lib/stat-charts";
 import { matchNights, singlesOf } from "@/lib/player-stats";
 import { STATISTICS } from "@/lib/player-stats.fixture";
-import { StatPicker } from "@/components/stat-picker";
 import { StatChart } from "./player-stats";
 
 const context = {
@@ -49,48 +48,65 @@ describe("every chart in the catalogue", () => {
   });
 });
 
-describe("the chart picker", () => {
-  const partial: Evidence = {
-    ...evidenceFromStatistics(STATISTICS),
-    seasons: 1,
-    doubles: 0,
-  };
-
-  it("will not tick a chart the player has nothing for, and says why", () => {
+describe("the info button on every chart", () => {
+  const draw = (id: string) =>
     render(
       <Router>
-        <StatPicker slug="derek-balding" evidence={partial} initial={["season-rate", "form"]} />
+        <StatChart id={id} context={context} />
       </Router>,
     );
-    const seasons = screen.getByRole("checkbox", { name: /Win rate each season/ }) as HTMLInputElement;
-    expect(seasons.disabled).toBe(true);
-    expect(seasons.checked).toBe(false);
-    expect(screen.getAllByText(/Not yet: needs two seasons on record/).length).toBeGreaterThan(0);
-    expect((screen.getByRole("checkbox", { name: /Doubles, by partner/ }) as HTMLInputElement).disabled).toBe(true);
+
+  it("is there for every chart, closed until asked", () => {
+    for (const chart of STAT_CHARTS) {
+      const { unmount } = draw(chart.id);
+      const button = screen.getByRole("button", { name: `About this chart: ${chart.title}` });
+      expect(button.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.getByText(chart.about).closest("[hidden]")).not.toBeNull();
+      unmount();
+    }
   });
 
-  it("links to the statistics page with the ticked charts", () => {
-    render(
+  it("opens on a tap, and closes on Escape and on a tap elsewhere", () => {
+    const chart = STAT_CHARTS.find((one) => one.id === "season-placing")!;
+    draw(chart.id);
+    const button = screen.getByRole("button", { name: `About this chart: ${chart.title}` });
+
+    fireEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText(chart.about).closest("[hidden]")).toBeNull();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByText(chart.about).closest("[hidden]")).not.toBeNull();
+
+    fireEvent.click(button);
+    fireEvent.pointerDown(document.body);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+  });
+});
+
+describe("the division, season by season", () => {
+  it("names each season's division under it on the axis", () => {
+    const { container } = render(
       <Router>
-        <StatPicker slug="derek-balding" evidence={partial} initial={["form"]} />
+        <StatChart id="season-rate" context={context} />
       </Router>,
     );
-    fireEvent.click(screen.getByRole("checkbox", { name: /Head to head/ }));
-    const link = screen.getByRole("link", { name: "Show 2 charts" });
-    expect(link.getAttribute("href")).toBe("/players/derek-balding/stats?charts=form,head-to-head");
+    const axis = [...container.querySelectorAll("svg text")].map((node) => node.textContent);
+    expect(axis).toContain("Div 1");
+    expect(axis).toContain("Premier");
   });
 
-  it("applies in place on the statistics page", () => {
-    const onApply = vi.fn();
+  it("carries it into the numbers table", () => {
     render(
       <Router>
-        <StatPicker slug="derek-balding" evidence={partial} initial={["form"]} onApply={onApply} />
+        <StatChart id="season-placing" context={context} />
       </Router>,
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Tick all/ }));
-    fireEvent.click(screen.getByRole("button", { name: /^Show \d+ charts$/ }));
-    const ids = onApply.mock.calls[0]![0] as string[];
-    expect(ids).toContain("head-to-head");
-    expect(ids).not.toContain("season-rate");
+    fireEvent.click(screen.getByRole("button", { name: "Show the numbers" }));
+    const rows = within(screen.getByRole("table")).getAllByRole("row").map((row) => row.textContent);
+    expect(rows[0]).toContain("Division");
+    expect(rows[1]).toContain("Division 1");
+    expect(rows[2]).toContain("Premier Division");
   });
 });

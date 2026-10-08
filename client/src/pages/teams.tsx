@@ -8,7 +8,6 @@ import { TeamFixtureList, VisitorNote } from "@/components/data";
 import {
   Badge,
   Card,
-  Disclosure,
   Empty,
   ErrorNote,
   FilterChips,
@@ -28,8 +27,7 @@ import { usePlayer, usePlayers, useSeasons, useTeam, useTeams } from "@/lib/quer
 import { SeasonPicker, useSeasonParam } from "@/components/season";
 import { recordOf } from "@shared/averages.js";
 import type { MemberProfile } from "@shared/types.js";
-import { StatPicker } from "@/components/stat-picker";
-import { availableIds, defaultChartIds, evidenceFromProfile, statsHref } from "@/lib/stat-charts";
+import { availableIds, evidenceFromProfile, statsHref } from "@/lib/stat-charts";
 import { divisionLabel, fileUrl, formatDateShort, formatDayName, formatTime } from "@/lib/utils";
 
 export function TeamsPage() {
@@ -502,7 +500,17 @@ export function PlayerPage({ slug }: { slug: string }) {
               <li key={stat.id}>
                 <Card className="h-full">
                   <p className="font-semibold">{stat.seasonLabel}</p>
-                  <p className="text-ink-muted">{stat.teamName ?? "No team recorded"}</p>
+                  <p className="text-ink-muted">
+                    {/*
+                      The division, always: it changes from year to year and
+                      a win rate only means something inside one. The team
+                      where the site knows it — the league's past averages
+                      name the club, not the team.
+                    */}
+                    {[stat.teamName, stat.division ? divisionLabel(stat.division) : null]
+                      .filter(Boolean)
+                      .join(" · ") || "No division recorded"}
+                  </p>
                   <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
                     <div>
                       <dd className="text-xl font-semibold tabular">{stat.played}</dd>
@@ -697,18 +705,15 @@ export function PlayerPage({ slug }: { slug: string }) {
 /**
  * The way to a player's statistics page.
  *
- * A link and a picker, not the charts themselves: the profile stays as
- * light as it was, and the charts — their code and a whole career of
- * cards — are only fetched by somebody who asks for them. The picker
- * works from what this page already holds, so it can say which charts
- * this player has enough on record for without fetching anything.
+ * A button, not the charts themselves: the profile stays as light as it
+ * was, and the charts — their code and a whole career of cards — are only
+ * fetched by somebody who presses it. Offered only when this page already
+ * holds enough for at least one chart, so it never leads to an empty page.
  */
 function PlayerStatsLink({ player }: { player: MemberProfile }) {
-  const evidence = evidenceFromProfile(player);
-  const available = availableIds(evidence);
+  const available = availableIds(evidenceFromProfile(player));
   if (available.length === 0) return null;
   const name = player.displayName ?? player.fullName;
-  const starters = defaultChartIds(evidence);
 
   return (
     <section aria-labelledby="statistics-heading" className="space-y-3">
@@ -716,21 +721,19 @@ function PlayerStatsLink({ player }: { player: MemberProfile }) {
         Statistics and charts
       </h2>
       <p className="max-w-readable text-ink-muted">
-        Form, results by opponent, close games and how the seasons compare, drawn from the match cards.
-        They open on a page of their own, so they only load when you want them.
+        Form, results by opponent, close games and how the seasons compare, drawn from the match cards
+        and the league&rsquo;s averages. They open on a page of their own, so they only load when you
+        want them.
       </p>
       <p>
         <Link
-          href={statsHref(player.slug, starters)}
+          href={statsHref(player.slug)}
           className="inline-flex min-h-touch items-center gap-2 rounded-card bg-brand px-4 font-semibold text-brand-ink no-underline hover:bg-brand-strong"
         >
           <BarChart3 aria-hidden="true" className="size-5" />
           See {name}&rsquo;s statistics
         </Link>
       </p>
-      <Disclosure summary="Choose which charts to see" meta={`${available.length} available`}>
-        <StatPicker slug={player.slug} evidence={evidence} initial={starters} />
-      </Disclosure>
     </section>
   );
 }
