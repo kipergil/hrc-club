@@ -2,8 +2,9 @@ import { ArrowLeft } from "lucide-react";
 import { useMemo, type ReactNode } from "react";
 import { Link } from "wouter";
 import type { PlayerRubber, PlayerStatistics } from "@shared/types.js";
+import type { Division } from "@shared/enums.js";
 import { PageHeader } from "@/components/layout";
-import { Empty, ErrorNote, Loading } from "@/components/ui";
+import { Card, Empty, ErrorNote, FilterChips, Loading } from "@/components/ui";
 import {
   COLOR,
   ChartFigure,
@@ -39,6 +40,10 @@ import {
   pressure,
   rollingForm,
   runningRate,
+  scopeStatistics,
+  seasonsOnRecord,
+  seasonsSince,
+  selectionTotals,
   singlesOf,
   teamMates,
   type MatchNight,
@@ -55,33 +60,57 @@ import { cn, divisionLabel, formatDateShort } from "@/lib/utils";
  */
 export default function PlayerStatsPage({ slug }: { slug: string }) {
   const { data, isLoading, isError } = usePlayerStatistics(slug);
-  const [seasonParam] = useUrlParam("season");
+  const [sinceParam] = useUrlParam("since");
   const setParams = useUrlParams();
 
-  const evidence = useMemo(() => (data ? evidenceFromStatistics(data) : null), [data]);
-  const seasonsWithCards = useMemo(() => (data ? cardSeasons(data.rubbers) : []), [data]);
-  const cardSeason = seasonsWithCards.includes(seasonParam ?? "") ? seasonParam! : seasonsWithCards[0];
-  const scoped = useMemo(
-    () => (data ? data.rubbers.filter((rubber) => rubber.seasonLabel === cardSeason) : []),
-    [data, cardSeason],
-  );
+  // Every season on record, and the run of them on show: the latest by
+  // default, reaching back as earlier seasons are added.
+  const allSeasons = useMemo(() => (data ? seasonsOnRecord(data) : []), [data]);
+  const shown = useMemo(() => seasonsSince(allSeasons, sinceParam), [allSeasons, sinceParam]);
+  const scoped = useMemo(() => (data ? scopeStatistics(data, shown) : null), [data, shown]);
+  const evidence = useMemo(() => (scoped ? evidenceFromStatistics(scoped) : null), [scoped]);
+  const everything = useMemo(() => (data ? evidenceFromStatistics(data) : null), [data]);
 
   if (isLoading) return <Loading what="the statistics" variant="page" />;
-  if (isError || !data || !evidence) return <ErrorNote what="player statistics" />;
+  if (isError || !data || !scoped || !evidence || !everything) return <ErrorNote what="player statistics" />;
 
   const name = playerName(data);
   const drawable = STAT_CHARTS.filter((chart) => chart.needs(evidence) === null).map((chart) => chart.id);
-  const waiting = STAT_CHARTS.filter((chart) => chart.needs(evidence) !== null).map((chart) => chart.id);
-  // The division the match-by-match charts were played in.
-  const cardDivision = data.seasons.find((season) => season.seasonLabel === cardSeason)?.division ?? null;
+  // Charts held back only because the run is too short — they appear as
+  // soon as an earlier season is added — told apart from the ones this
+  // player has not got the record for at all.
+  const needEarlier = STAT_CHARTS.filter(
+    (chart) => chart.needs(evidence) !== null && chart.needs(everything) === null,
+  ).map((chart) => chart.id);
+  const waiting = STAT_CHARTS.filter((chart) => chart.needs(everything) !== null).map((chart) => chart.id);
+
+  const latest = allSeasons[allSeasons.length - 1];
+  // The default is left out of the address, so the plain page keeps its plain link.
+  const setSince = (value: string) => setParams({ since: value === latest ? undefined : value });
+  const seasonOptions = [...allSeasons].reverse().map((label, index, list) => ({
+    value: label,
+    label:
+      label === latest
+        ? `${label} only`
+        : index === list.length - 1
+          ? `All ${list.length}, since ${label}`
+          : `Since ${label}`,
+  }));
+  const from = shown[0];
+  const many = shown.length > 1;
+  const totals = selectionTotals(scoped.seasons);
+  const withCards = cardSeasons(scoped.rubbers).reverse();
+  // The division of a single season's cards, named in the section heading.
+  const cardDivision =
+    withCards.length === 1 ? (scoped.seasons.find((s) => s.seasonLabel === withCards[0])?.division ?? null) : null;
 
   const context: ChartContext = {
-    data,
+    data: scoped,
     name,
-    nights: matchNights(scoped),
-    singles: singlesOf(scoped),
-    rubbers: scoped,
-    cardSeason: cardSeason ?? null,
+    nights: matchNights(scoped.rubbers),
+    singles: singlesOf(scoped.rubbers),
+    rubbers: scoped.rubbers,
+    cardSeason: withCards.length === 1 ? withCards[0]! : null,
   };
 
   return (
@@ -100,32 +129,85 @@ export default function PlayerStatsPage({ slug }: { slug: string }) {
         }
       />
 
-      <div className="mb-8 space-y-4">
-        {seasonsWithCards.length > 1 ? (
-          <div className="no-print">
-            <label htmlFor="card-season" className="block font-semibold">
-              Match-by-match charts for
-            </label>
-            <select
-              id="card-season"
-              value={cardSeason}
-              onChange={(event) => setParams({ season: event.target.value })}
-              className="mt-2 min-h-touch rounded-card border border-line-strong bg-surface px-3 text-ink"
-            >
-              {seasonsWithCards.map((season) => (
-                <option key={season} value={season}>
-                  {season}
-                </option>
-              ))}
-            </select>
+      <div className="mb-10 space-y-5">
+        {allSeasons.length > 1 ? (
+          <div>
+            {/*
+              Buttons where there is room for them; a drop-down on a phone,
+              where six of them — one more every year — stack into a column
+              taller than the screen.
+            */}
+            <div className="hidden sm:block">
+              <FilterChips label="Seasons" value={from ?? ""} onChange={setSince} options={seasonOptions} />
+            </div>
+            <div className="sm:hidden no-print">
+              <label htmlFor="seasons-since" className="block font-semibold text-ink">
+                Seasons
+              </label>
+              <select
+                id="seasons-since"
+                value={from ?? ""}
+                onChange={(event) => setSince(event.target.value)}
+                className="mt-2 min-h-touch w-full rounded-card border border-line-strong bg-surface px-3 text-ink"
+              >
+                {seasonOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="mt-2 max-w-readable text-ink-muted">
+              Opens on the latest season. Reach back to add earlier seasons: the season charts gain a
+              year each, and the match-by-match charts pool every card in the run.
+            </p>
           </div>
+        ) : null}
+
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" aria-label={`Totals for ${shownLabel(shown)}`}>
+          <Card>
+            <dd className="text-2xl font-semibold">{totals.seasons}</dd>
+            <dt className="text-ink-muted">{totals.seasons === 1 ? "season" : "seasons"}</dt>
+          </Card>
+          <Card>
+            <dd className="text-2xl font-semibold">{totals.played}</dd>
+            <dt className="text-ink-muted">singles played</dt>
+          </Card>
+          <Card>
+            <dd className="text-2xl font-semibold">
+              {totals.won}
+              <span className="text-lg font-normal text-ink-muted"> won</span>
+            </dd>
+            <dt className="text-ink-muted">{totals.lost} lost</dt>
+          </Card>
+          <Card>
+            <dd className="text-2xl font-semibold">{totals.winPercentage === null ? "—" : `${totals.winPercentage}%`}</dd>
+            <dt className="text-ink-muted">win rate{many ? ", all together" : ""}</dt>
+          </Card>
+          <Card className="col-span-2 sm:col-span-1">
+            <dd className="text-2xl font-semibold">
+              {totals.best ? `${ordinal(totals.best.place, totals.best.tied)} of ${totals.best.of}` : "—"}
+            </dd>
+            <dt className="text-ink-muted">
+              {totals.best
+                ? `best placing${many ? `, ${totals.best.seasonLabel}` : ""} · ${divisionShort(totals.best.division)}`
+                : "not placed"}
+            </dt>
+          </Card>
+        </dl>
+
+        {needEarlier.length > 0 ? (
+          <p className="text-ink-muted">
+            To compare years, reach back to an earlier season above: that adds{" "}
+            {needEarlier.map((id) => chartById(id)!.title.toLowerCase()).join(", ")}.
+          </p>
         ) : null}
 
         {waiting.length > 0 ? (
           <p className="text-ink-muted">
             Not shown yet, because there is not enough on record for {name}:{" "}
             {waiting
-              .map((id) => `${chartById(id)!.title.toLowerCase()} (${chartById(id)!.needs(evidence)})`)
+              .map((id) => `${chartById(id)!.title.toLowerCase()} (${chartById(id)!.needs(everything)})`)
               .join("; ")}
             .
           </p>
@@ -147,11 +229,13 @@ export default function PlayerStatsPage({ slug }: { slug: string }) {
                   {group.title}
                 </h2>
                 <p className="mb-4 mt-1 text-ink-muted">
-                  {group.id === "matches" && cardSeason
-                    ? `From the ${cardSeason} match cards${cardDivision ? `, ${divisionLabel(cardDivision)}` : ""}.`
+                  {group.id === "matches"
+                    ? matchesBlurb(withCards, shown, cardDivision)
                     : group.id === "seasons"
-                      ? divisionStory(data.seasons, divisionLabel)
-                      : group.blurb}
+                      ? divisionStory(scoped.seasons, divisionLabel)
+                      : data.peers
+                        ? `${data.peers.seasonLabel}, the latest season. A division is a snapshot of one season, so this section does not add up across years.`
+                        : group.blurb}
                 </p>
                 <div className="grid gap-5 lg:grid-cols-2">
                   {ids.map((id) => (
@@ -171,6 +255,28 @@ export default function PlayerStatsPage({ slug }: { slug: string }) {
       </p>
     </div>
   );
+}
+
+/** "2026-27", or "2023-24 to 2026-27". */
+function shownLabel(seasons: string[]): string {
+  if (seasons.length === 0) return "no seasons";
+  return seasons.length === 1 ? seasons[0]! : `${seasons[0]} to ${seasons[seasons.length - 1]}`;
+}
+
+/**
+ * Where the match-by-match charts come from. Said plainly when the run
+ * reaches back past the cards: the league clears them each year, so an
+ * earlier season adds its averages to the season charts and nothing here.
+ */
+function matchesBlurb(withCards: string[], shown: string[], division: Division | null): string {
+  const cards =
+    withCards.length === 1
+      ? `From the ${withCards[0]} match cards${division ? `, ${divisionLabel(division)}` : ""}.`
+      : `Every match card from ${shownLabel(withCards)}, added together.`;
+  const without = shown.filter((season) => !withCards.includes(season));
+  return without.length === 0
+    ? cards
+    : `${cards} ${shownLabel(without)} ${without.length === 1 ? "has" : "have"} no cards on this site — the league clears them each year — so ${without.length === 1 ? "it adds" : "they add"} to the season charts only.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -435,7 +541,7 @@ export function StatChart({ id, context }: { id: string; context: ChartContext }
             up={{ label: "Won", values: rows.map((r) => r.won), color: COLOR.won }}
             down={{ label: "Lost", values: rows.map((r) => r.lost), color: COLOR.lost }}
             yMax={3}
-            tip={(i) => [`${rows[i]!.label}, ${formatDateShort(dated[i]!.playedOn)}`, ...dated[i]!.singles.map((s) => `${s.won ? "Beat" : "Lost to"} ${opponentName(s)} ${s.setsFor}–${s.setsAgainst}`)]}
+            tip={(i) => [`${rows[i]!.label}, ${formatDateShort(dated[i]!.playedOn)}${context.cardSeason ? "" : ` ${dated[i]!.seasonLabel ?? ""}`}`, ...dated[i]!.singles.map((s) => `${s.won ? "Beat" : "Lost to"} ${opponentName(s)} ${s.setsFor}–${s.setsAgainst}`)]}
           />
         ),
       });

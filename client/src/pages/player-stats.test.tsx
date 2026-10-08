@@ -5,7 +5,9 @@ import { Router } from "wouter";
 import { STAT_CHARTS } from "@/lib/stat-charts";
 import { matchNights, singlesOf } from "@/lib/player-stats";
 import { STATISTICS } from "@/lib/player-stats.fixture";
-import { StatChart } from "./player-stats";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { keys } from "@/lib/queries";
+import PlayerStatsPage, { StatChart } from "./player-stats";
 
 const context = {
   data: STATISTICS,
@@ -108,5 +110,50 @@ describe("the division, season by season", () => {
     expect(rows[0]).toContain("Division");
     expect(rows[1]).toContain("Division 1");
     expect(rows[2]).toContain("Premier Division");
+  });
+});
+
+describe("the seasons filter", () => {
+  /** The "singles played" figure in the totals row above the charts. */
+  const played = () => {
+    const row = document.querySelector('dl[aria-label^="Totals"]') as HTMLElement;
+    return within(row).getByText("singles played").previousElementSibling?.textContent;
+  };
+  function renderPage() {
+    window.history.replaceState({}, "", "/players/derek-balding/stats");
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    client.setQueryData(keys.playerStatistics("derek-balding"), STATISTICS);
+    return render(
+      <QueryClientProvider client={client}>
+        <Router>
+          <PlayerStatsPage slug="derek-balding" />
+        </Router>
+      </QueryClientProvider>,
+    );
+  }
+
+  it("opens on the latest season, with the season charts waiting for an earlier one", () => {
+    renderPage();
+    const latest = screen.getByRole("button", { name: "2026-27 only" });
+    expect(latest.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("heading", { name: "Win rate each season" })).toBeNull();
+    expect(screen.getByText(/reach back to an earlier season above: that adds win rate each season/)).toBeTruthy();
+    // Totals for 2026-27 alone: 7 of 9.
+    expect(played()).toBe("9");
+  });
+
+  it("adds the earlier season to the charts and to the totals", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "All 2, since 2025-26" }));
+    expect(window.location.search).toBe("?since=2025-26");
+    expect(screen.getByRole("heading", { name: "Win rate each season" })).toBeTruthy();
+    expect(played()).toBe("33");
+    expect(screen.getByText("Division 1 in 2025-26, then Premier Division in 2026-27.")).toBeTruthy();
+  });
+
+  it("keeps the division section on the latest season, and says so", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "All 2, since 2025-26" }));
+    expect(screen.getByText(/2026-27, the latest season\. A division is a snapshot/)).toBeTruthy();
   });
 });

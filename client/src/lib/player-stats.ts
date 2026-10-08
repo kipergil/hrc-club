@@ -365,9 +365,85 @@ export function divisionStory(
   const runs = divisionRuns(seasons);
   const name = (run: (typeof runs)[number]) => (run.division ? label(run.division) : "no division recorded");
   if (runs.length === 0) return "";
-  if (runs.length === 1) return `${name(runs[0]!)} every season on record.`;
+  if (runs.length === 1) {
+    const only = runs[0]!;
+    return only.seasons === 1 ? `${name(only)} in ${only.from}.` : `${name(only)} from ${only.from} to ${only.to}.`;
+  }
   const parts = runs.map((run) =>
     run.seasons === 1 ? `${name(run)} in ${run.from}` : `${name(run)} from ${run.from} to ${run.to}`,
   );
   return `${parts.slice(0, -1).join(", ")}, then ${parts[parts.length - 1]}.`;
 }
+
+// ---------------------------------------------------------------------------
+// Which seasons are on show
+// ---------------------------------------------------------------------------
+
+/** Every season the player has a record in — averages or cards — oldest first. */
+export function seasonsOnRecord(data: Pick<PlayerStatistics, "seasons" | "rubbers">): string[] {
+  const labels = new Set(data.seasons.map((season) => season.seasonLabel));
+  for (const rubber of data.rubbers) if (rubber.seasonLabel) labels.add(rubber.seasonLabel);
+  return [...labels].sort();
+}
+
+/**
+ * The seasons from `since` to the latest, oldest first.
+ *
+ * A run rather than a free pick: the page opens on the latest season and
+ * reaches back one season at a time, so the charts always read as one
+ * stretch of a career with no holes in it. Anything `since` cannot be —
+ * missing, or a season this player has no record in — means the latest.
+ */
+export function seasonsSince(all: string[], since?: string): string[] {
+  if (all.length === 0) return [];
+  const start = since && all.includes(since) ? since : all[all.length - 1]!;
+  return all.filter((label) => label >= start);
+}
+
+/** The statistics narrowed to the chosen seasons. The division snapshot is left as it is. */
+export function scopeStatistics(data: PlayerStatistics, seasons: string[]): PlayerStatistics {
+  const keep = new Set(seasons);
+  return {
+    ...data,
+    seasons: data.seasons.filter((season) => keep.has(season.seasonLabel)),
+    rubbers: data.rubbers.filter((rubber) => rubber.seasonLabel !== null && keep.has(rubber.seasonLabel)),
+  };
+}
+
+export interface SelectionTotals {
+  seasons: number;
+  played: number;
+  won: number;
+  lost: number;
+  winPercentage: number | null;
+  /** The best placing in the chosen seasons, and where it was earned. */
+  best: { place: number; tied: boolean; of: number; seasonLabel: string; division: PlayerSeasonStat["division"] } | null;
+}
+
+/** The chosen seasons added together: the cumulative view. */
+export function selectionTotals(seasons: PlayerSeasonStat[]): SelectionTotals {
+  const played = seasons.reduce((sum, season) => sum + season.played, 0);
+  const won = seasons.reduce((sum, season) => sum + season.won, 0);
+  const placed = seasons
+    .filter((season) => season.place !== null)
+    // Best placing first; a tie on placing goes to the stronger division, then the later season.
+    .sort(
+      (a, b) =>
+        a.place! - b.place! ||
+        DIVISION_RANK.indexOf(a.division ?? "") - DIVISION_RANK.indexOf(b.division ?? "") ||
+        b.seasonLabel.localeCompare(a.seasonLabel),
+    );
+  const best = placed[0];
+  return {
+    seasons: seasons.length,
+    played,
+    won,
+    lost: played - won,
+    winPercentage: played === 0 ? null : Math.round((won / played) * 100),
+    best: best
+      ? { place: best.place!, tied: best.tied, of: best.placedOf, seasonLabel: best.seasonLabel, division: best.division }
+      : null,
+  };
+}
+
+const DIVISION_RANK = ["premier", "division_1", "division_2"];
