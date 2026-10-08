@@ -65,6 +65,17 @@
      */
     --c-focus: 15 76 129;
 
+    /*
+     * The two chart colours for won and lost. Not `positive` and
+     * `negative`: that green and that red are told apart by hue alone,
+     * which a colour-blind reader cannot do — measured, the pair is 5.5
+     * apart in OKLab under deuteranopia, where 8 is the target. Blue and
+     * orange are 26 apart, and a won bar still never relies on colour
+     * alone: it sits above the line and a lost one below it.
+     */
+    --c-chart-won: 42 98 168;
+    --c-chart-lost: 202 117 34;
+
     --shadow-raised: 0 1px 2px rgb(25 28 26 / 0.05);
     --shadow-card: 0 1px 2px rgb(25 28 26 / 0.04), 0 2px 8px rgb(25 28 26 / 0.04);
     --shadow-lifted: 0 2px 4px rgb(25 28 26 / 0.06), 0 8px 24px rgb(25 28 26 / 0.08);
@@ -106,6 +117,8 @@
     --c-negative: 240 145 140;
     --c-negative-soft: 43 22 24;
     --c-focus: 143 196 240;
+    --c-chart-won: 91 141 219;
+    --c-chart-lost: 196 122 48;
 
     /* Shadows do almost nothing on a dark ground; the borders carry the
      * separation instead, so these stay faint rather than turning into
@@ -136,6 +149,8 @@
       --c-negative: 240 145 140;
       --c-negative-soft: 43 22 24;
       --c-focus: 143 196 240;
+      --c-chart-won: 91 141 219;
+      --c-chart-lost: 196 122 48;
 
       --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.3);
       --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.2);

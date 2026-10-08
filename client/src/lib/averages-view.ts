@@ -1,6 +1,6 @@
 import type { Division } from "@shared/enums.js";
 import type { PlayerStat } from "@shared/types.js";
-import { compareAverages } from "@shared/averages.js";
+import { compareAverages, placingsOf } from "@shared/averages.js";
 
 /**
  * What the averages page does to the rows it is given: place them, filter
@@ -63,26 +63,7 @@ export function teamKey(stat: Pick<PlayerStat, "teamSlug" | "teamName">): string
  * as a league table does.
  */
 export function withPlaces(stats: PlayerStat[]): PlacedStat[] {
-  const placed = new Map<string, { place: number; tied: boolean }>();
-  const divisions = new Map<Division | null, PlayerStat[]>();
-  for (const stat of stats) {
-    const list = divisions.get(stat.division) ?? [];
-    list.push(stat);
-    divisions.set(stat.division, list);
-  }
-
-  for (const list of divisions.values()) {
-    const eligible = list.filter((stat) => stat.meetsParticipationThreshold).sort(compareAverages);
-    const level = (a: PlayerStat | undefined, b: PlayerStat | undefined) =>
-      Boolean(a && b) && a!.winPercentage === b!.winPercentage && a!.played === b!.played;
-
-    eligible.forEach((stat, index) => {
-      const previous = eligible[index - 1];
-      const place = level(previous, stat) ? placed.get(previous!.id)!.place : index + 1;
-      placed.set(stat.id, { place, tied: level(previous, stat) || level(stat, eligible[index + 1]) });
-    });
-  }
-
+  const placed = placingsOf(stats);
   return stats.map((stat) => ({
     ...stat,
     place: placed.get(stat.id)?.place ?? null,

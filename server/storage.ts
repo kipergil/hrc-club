@@ -28,7 +28,9 @@ import type {
   NewsItem,
   Page,
   PlayerRubber,
+  PlayerSeasonStat,
   PlayerStat,
+  PlayerStatistics,
   Rubber,
   Season,
   SiteSettings,
@@ -42,7 +44,7 @@ import type {
 import type { EnquiryInput } from "../shared/schema.js";
 import { DIVISION, type Division } from "../shared/enums.js";
 import { matchScoreOf, rubberRowsFor } from "../shared/scorecard.js";
-import { buildAverages, type AverageSource } from "../shared/averages.js";
+import { buildAverages, placingsOf, type AverageSource } from "../shared/averages.js";
 import { directus } from "./lib/directus.js";
 
 /*
@@ -327,8 +329,9 @@ function toPlayerStat(row: Row): PlayerStat {
     winPercentage: num(row.win_percentage),
     handicap: num(row.handicap),
     meetsParticipationThreshold: Boolean(row.meets_participation_threshold),
-    // The league's own table printed none of these.
-    matchesPlayed: null,
+    // From the tooltips on the league's averages page; the rest it never printed.
+    matchesPlayed: num(row.matches_played),
+    teamMatchesPlayed: num(row.team_matches),
     doublesPlayed: null,
     doublesWon: null,
     setsFor: null,
@@ -1324,6 +1327,7 @@ async function computeAverages(seasonSlug?: string): Promise<PlayerStat[]> {
     handicap: null,
     meetsParticipationThreshold: row.meetsParticipationThreshold,
     matchesPlayed: row.matchesPlayed,
+    teamMatchesPlayed: row.teamMatchesPlayed,
     doublesPlayed: row.doublesPlayed,
     doublesWon: row.doublesWon,
     setsFor: row.setsFor,
@@ -1487,7 +1491,10 @@ export async function countResultEntrants(): Promise<number> {
 export async function getMembers(): Promise<MemberSummary[]> {
   const client = await directus();
   const homeClub = await getHomeClub();
-  const filter: Record<string, unknown>[] = [{ show_on_site: { _eq: true } }];
+  // Registered players. A lapsed member is somebody the league no longer
+  // lists, kept so their record and their cards still read; they keep a
+  // profile, but are not on this season's list of players.
+  const filter: Record<string, unknown>[] = [{ show_on_site: { _eq: true } }, { status: { _neq: "lapsed" } }];
   // Our players, not the league's 165.
   if (homeClub) filter.push({ club: { _eq: homeClub.id } });
 
@@ -1561,6 +1568,138 @@ export async function getMember(
       role: row.role ?? "player",
     })),
     honours: honourRows.map(toHonour),
+  };
+}
+
+/**
+ * Everything a player's statistics page draws.
+ *
+ * Built only when somebody opens that page — it reads every card the
+ * player is on and each of their seasons' averages, which is far more than
+ * a profile needs and is why it is not part of one.
+ *
+ * Each season's averages come from `getPlayerStats`, the same function the
+ * averages page uses, so a placing here is the placing there.
+ */
+export async function getPlayerStatistics(slug: string): Promise<PlayerStatistics | null> {
+  const client = await directus();
+  const rows = (await client.request(
+    readItems("hrc_members", {
+      fields: ["id", "full_name", "display_name", "slug"],
+      filter: { _and: [{ show_on_site: { _eq: true } }, { slug: { _eq: slug } }] },
+      limit: 1,
+    }),
+  )) as Row[];
+  const member = rows[0];
+  if (!member) return null;
+
+  const [statRows, rubbers, seasons] = await Promise.all([
+    client.request(
+      readItems("hrc_player_stats", {
+        fields: [{ season: ["label"] }],
+        filter: { member: { _eq: member.id } },
+        limit: -1,
+      }),
+    ) as Promise<Row[]>,
+    getMemberRubbers(member.id, undefined, { allSeasons: true }),
+    getSeasons(),
+  ]);
+
+  // Every season the player has a record in, from either source.
+  const labels = new Set<string>();
+  for (const row of statRows) if (rel(row.season)?.label) labels.add(rel(row.season)!.label);
+  for (const rubber of rubbers) if (rubber.seasonLabel) labels.add(rubber.seasonLabel);
+  const slugFor = new Map(seasons.map((season) => [season.label, season.slug]));
+  const ordered = [...labels].sort();
+
+  const averagesBySeason = await Promise.all(
+    ordered.map(async (label) => [label, await getPlayerStats(slugFor.get(label) ?? label)] as const),
+  );
+
+  const seasonStats: PlayerSeasonStat[] = [];
+  const opponentRates: Record<string, number> = {};
+  const opponentSlugs = new Set(
+    rubbers.flatMap((rubber) => rubber.opponents.map((opponent) => opponent.slug).filter(Boolean)),
+  );
+  let latest: { label: string; me: PlayerStat; all: PlayerStat[] } | null = null;
+
+  for (const [label, all] of averagesBySeason) {
+    for (const row of all) {
+      if (opponentSlugs.has(row.memberSlug) && row.winPercentage !== null) {
+        opponentRates[`${label}|${row.memberSlug}`] = row.winPercentage;
+      }
+    }
+    const me = all.find((row) => row.memberSlug === slug);
+    if (!me) continue;
+
+    const division = all.filter((row) => row.division === me.division);
+    const placing = placingsOf(division).get(me.id);
+    const eligible = division
+      .filter((row) => row.meetsParticipationThreshold && row.winPercentage !== null)
+      .map((row) => row.winPercentage!)
+      .sort((a, b) => a - b);
+    const middle = eligible.length / 2;
+    const median =
+      eligible.length === 0
+        ? null
+        : eligible.length % 2
+          ? eligible[Math.floor(middle)]!
+          : Math.round((eligible[middle - 1]! + eligible[middle]!) / 2);
+
+    seasonStats.push({
+      seasonLabel: label,
+      teamName: me.teamName,
+      teamSlug: me.teamSlug,
+      division: me.division,
+      played: me.played,
+      won: me.won,
+      lost: me.lost,
+      winPercentage: me.winPercentage,
+      doublesPlayed: me.doublesPlayed,
+      doublesWon: me.doublesWon,
+      setsFor: me.setsFor,
+      setsAgainst: me.setsAgainst,
+      matchesPlayed: me.matchesPlayed,
+      teamMatchesPlayed: me.teamMatchesPlayed,
+      meetsParticipationThreshold: me.meetsParticipationThreshold,
+      place: placing?.place ?? null,
+      tied: placing?.tied ?? false,
+      placedOf: placingsOf(division).size,
+      divisionMedian: median,
+      handicap: me.handicap,
+    });
+    latest = { label, me, all: division };
+  }
+
+  // Oldest first, so a career reads left to right.
+  rubbers.sort((a, b) => {
+    const byDate = (a.playedOn ?? "").localeCompare(b.playedOn ?? "");
+    return byDate !== 0 ? byDate : a.rubberNumber - b.rubberNumber;
+  });
+
+  return {
+    fullName: member.full_name ?? "",
+    displayName: str(member.display_name),
+    slug: member.slug,
+    rubbers,
+    seasons: seasonStats,
+    peers: latest
+      ? {
+          seasonLabel: latest.label,
+          division: latest.me.division,
+          teamSlug: latest.me.teamSlug,
+          players: latest.all.map((row) => ({
+            memberName: row.memberName,
+            memberSlug: row.memberSlug,
+            teamName: row.teamName,
+            teamSlug: row.teamSlug,
+            played: row.played,
+            winPercentage: row.winPercentage,
+            meetsParticipationThreshold: row.meetsParticipationThreshold,
+          })),
+        }
+      : null,
+    opponentRates,
   };
 }
 
@@ -2010,6 +2149,7 @@ export async function recordScorecardUpload(input: {
 export async function getMemberRubbers(
   memberId: string,
   seasonSlug?: string,
+  { allSeasons = false }: { allSeasons?: boolean } = {},
 ): Promise<PlayerRubber[]> {
   const client = await directus();
   /*
@@ -2018,7 +2158,8 @@ export async function getMemberRubbers(
    * to a whole career would put ten years of rubbers on one page and
    * disagree with the year filter sitting above them.
    */
-  const seasonId = await seasonIdFor(seasonSlug);
+  // The statistics page asks for a whole career, on purpose and on demand.
+  const seasonId = allSeasons ? null : await seasonIdFor(seasonSlug);
 
   const isThisPlayer = {
     _or: [

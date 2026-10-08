@@ -373,6 +373,8 @@ export interface PlayerStat {
    */
   /** Distinct matches they turned out in, which the 50% rule counts. */
   matchesPlayed: number | null;
+  /** The matches their team has played, which the 50% rule is measured against. */
+  teamMatchesPlayed: number | null;
   doublesPlayed: number | null;
   doublesWon: number | null;
   /** Games won and lost across their singles. */
@@ -604,4 +606,77 @@ export interface ScorecardDraft {
   /** Both squads, for the form's player pickers. */
   homeSquad: MemberSummary[];
   awaySquad: MemberSummary[];
+}
+
+/**
+ * Everything a player's statistics page draws, in one response.
+ *
+ * Separate from `MemberProfile` on purpose. The profile is on the
+ * critical path of a page most visitors only glance at; the charts are
+ * something a reader asks for. Keeping this out of the profile means
+ * nobody downloads ten seasons of games to see which team someone is in.
+ */
+export interface PlayerStatistics {
+  fullName: string;
+  displayName: string | null;
+  slug: string;
+  /** Every singles and doubles on the cards this site holds, oldest first. */
+  rubbers: PlayerRubber[];
+  /** One row per season the player has a record in, oldest first. */
+  seasons: PlayerSeasonStat[];
+  /**
+   * Everyone in the player's division in their latest season — what
+   * "where does he sit" is measured against. Null when they have no
+   * season with averages.
+   */
+  peers: {
+    seasonLabel: string;
+    division: Division | null;
+    /** The player's own team that season, so team-mates can be picked out. */
+    teamSlug: string | null;
+    players: PeerStat[];
+  } | null;
+  /**
+   * Each opponent's singles win rate in the season they were played,
+   * keyed `season|slug`. Only for opponents who are members — a name on
+   * a card has no average to look up.
+   */
+  opponentRates: Record<string, number>;
+}
+
+export interface PlayerSeasonStat {
+  seasonLabel: string;
+  teamName: string | null;
+  teamSlug: string | null;
+  division: Division | null;
+  played: number;
+  won: number;
+  lost: number;
+  winPercentage: number | null;
+  /** Null for a season whose averages were imported as the league printed them. */
+  doublesPlayed: number | null;
+  doublesWon: number | null;
+  setsFor: number | null;
+  setsAgainst: number | null;
+  matchesPlayed: number | null;
+  teamMatchesPlayed: number | null;
+  meetsParticipationThreshold: boolean;
+  /** Placing among the division's eligible players; null when not placed. */
+  place: number | null;
+  tied: boolean;
+  /** How many eligible players the division had. */
+  placedOf: number;
+  /** The middle win rate of the division's eligible players. */
+  divisionMedian: number | null;
+  handicap: number | null;
+}
+
+export interface PeerStat {
+  memberName: string;
+  memberSlug: string;
+  teamName: string | null;
+  teamSlug: string | null;
+  played: number;
+  winPercentage: number | null;
+  meetsParticipationThreshold: boolean;
 }

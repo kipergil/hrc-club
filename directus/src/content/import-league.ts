@@ -92,8 +92,13 @@ async function main(): Promise<void> {
 
   // Squads are rebuilt wholesale: a player who left a club has no row to
   // update, so reconciling in place would leave them in the squad for ever.
+  // This season's only — an earlier season's squads are its history.
   const existingSquads = (await client.request(
-    readItems("hrc_squads" as never, { fields: ["id"], limit: -1 } as never),
+    readItems("hrc_squads" as never, {
+      fields: ["id"],
+      filter: { season: { _eq: season.id } },
+      limit: -1,
+    } as never),
   )) as Row[];
   if (existingSquads.length > 0) {
     await client.request(deleteItems("hrc_squads" as never, existingSquads.map((r) => r.id) as never));
@@ -242,22 +247,18 @@ async function main(): Promise<void> {
   }
 
   // Anything the league no longer lists: a team that folded, a player who
-  // left, a club that dropped out. Removed rather than left to rot, because
-  // a stale squad list is a wrong squad list.
-  for (const [collection, keep, label] of [
-    ["hrc_teams", seenTeamIds, "team"],
-    ["hrc_members", seenMemberIds, "player"],
-    ["hrc_clubs", seenClubIds, "club"],
-  ] as const) {
-    const all = (await client.request(
-      readItems(collection as never, { fields: ["id"], limit: -1 } as never),
-    )) as Row[];
-    const stale = all.filter((row) => !keep.includes(row.id));
-    if (stale.length > 0) {
-      await client.request(deleteItems(collection as never, stale.map((r) => r.id) as never));
-      console.log(`  - removed ${stale.length} ${label}(s) the league no longer lists`);
-    }
-  }
+  // left, a club that dropped out.
+  //
+  // Removed only when nothing hangs off it. Deleting a team cascades to its
+  // fixtures and their cards, and deleting a player blanks their name out
+  // of every card they played on — so a team or player with a record is
+  // retired instead (`is_active: false`, `status: "lapsed"`), which keeps
+  // the results readable and takes them off this season's lists.
+  await retireOrRemove(client, {
+    teams: seenTeamIds,
+    members: seenMemberIds,
+    clubs: seenClubIds,
+  });
 
   const totals = clubs.reduce(
     (acc, { info }) => ({
@@ -271,6 +272,92 @@ async function main(): Promise<void> {
     `\nImported ${clubs.length} clubs, ${totals.teams} teams, ${totals.players} squad places, ${venueCount} new venue(s).`,
   );
   console.log("Fixtures, results, tables and averages still come from the league sync.");
+}
+
+/** Ids in `ids` that some row of `collection` points at through any of `fields`. */
+async function referenced(client: Client, collection: string, fields: string[], ids: string[]): Promise<Set<string>> {
+  const used = new Set<string>();
+  if (ids.length === 0) return used;
+  for (const field of fields) {
+    const rows = (await client.request(
+      readItems(collection as never, {
+        fields: [field],
+        filter: { [field]: { _in: ids } },
+        limit: -1,
+      } as never),
+    )) as Row[];
+    for (const row of rows) if (row[field]) used.add(String(row[field]));
+  }
+  return used;
+}
+
+async function retireOrRemove(
+  client: Client,
+  seen: { teams: string[]; members: string[]; clubs: string[] },
+): Promise<void> {
+  const staleOf = async (collection: string, keep: string[]) =>
+    (
+      (await client.request(readItems(collection as never, { fields: ["id"], limit: -1 } as never))) as Row[]
+    )
+      .map((row) => String(row.id))
+      .filter((id) => !keep.includes(id));
+
+  // -- Teams ------------------------------------------------------------------
+  const staleTeams = await staleOf("hrc_teams", seen.teams);
+  const teamsInUse = new Set([
+    ...(await referenced(client, "hrc_fixtures", ["home_team", "away_team"], staleTeams)),
+    ...(await referenced(client, "hrc_standings", ["team"], staleTeams)),
+    ...(await referenced(client, "hrc_player_stats", ["team"], staleTeams)),
+  ]);
+  const retiredTeams = staleTeams.filter((id) => teamsInUse.has(id));
+  const removedTeams = staleTeams.filter((id) => !teamsInUse.has(id));
+  for (const id of retiredTeams) {
+    await client.request(updateItem("hrc_teams" as never, id, { is_active: false } as never));
+  }
+  if (removedTeams.length > 0) await client.request(deleteItems("hrc_teams" as never, removedTeams as never));
+
+  // -- Players ----------------------------------------------------------------
+  const staleMembers = await staleOf("hrc_members", seen.members);
+  const membersInUse = new Set([
+    ...(await referenced(
+      client,
+      "hrc_rubbers",
+      ["home_player", "home_player_2", "away_player", "away_player_2"],
+      staleMembers,
+    )),
+    ...(await referenced(client, "hrc_player_stats", ["member"], staleMembers)),
+    ...(await referenced(client, "hrc_honours", ["member"], staleMembers)),
+    ...(await referenced(client, "hrc_squads", ["member"], staleMembers)),
+  ]);
+  const retiredMembers = staleMembers.filter((id) => membersInUse.has(id));
+  const removedMembers = staleMembers.filter((id) => !membersInUse.has(id));
+  for (const id of retiredMembers) {
+    await client.request(updateItem("hrc_members" as never, id, { status: "lapsed" } as never));
+  }
+  if (removedMembers.length > 0) {
+    await client.request(deleteItems("hrc_members" as never, removedMembers as never));
+  }
+
+  // -- Clubs ------------------------------------------------------------------
+  // Deleting a club cascades to its members, so one with anybody left —
+  // retired players included — stays.
+  const staleClubs = await staleOf("hrc_clubs", seen.clubs);
+  const clubsInUse = new Set([
+    ...(await referenced(client, "hrc_members", ["club"], staleClubs)),
+    ...(await referenced(client, "hrc_teams", ["club"], staleClubs)),
+  ]);
+  const removedClubs = staleClubs.filter((id) => !clubsInUse.has(id));
+  if (removedClubs.length > 0) await client.request(deleteItems("hrc_clubs" as never, removedClubs as never));
+
+  for (const [count, what] of [
+    [removedTeams.length, "team(s) the league no longer lists removed"],
+    [retiredTeams.length, "team(s) the league no longer lists kept inactive, for their results"],
+    [removedMembers.length, "player(s) the league no longer lists removed"],
+    [retiredMembers.length, "player(s) the league no longer lists marked lapsed, for their record"],
+    [removedClubs.length, "club(s) the league no longer lists removed"],
+  ] as const) {
+    if (count > 0) console.log(`  - ${count} ${what}`);
+  }
 }
 
 main()

@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Route, Switch } from "wouter";
 import { Analytics } from "@vercel/analytics/react";
 import { Layout } from "@/components/layout";
@@ -43,6 +44,15 @@ import {
   LinksPage,
 } from "@/pages/about";
 import { ContactPage } from "@/pages/contact";
+import { Loading } from "@/components/ui";
+
+/*
+ * A player's statistics page is its own download. It carries the charts
+ * and their arithmetic, which nobody reading a fixture list needs, so it
+ * is fetched the first time somebody opens one — not shipped to every
+ * visitor in the main bundle.
+ */
+const PlayerStatsPage = lazy(() => import("@/pages/player-stats"));
 
 /**
  * Route order matters in wouter's `Switch`: the first match wins. The
@@ -74,6 +84,13 @@ export default function App() {
         <Route path="/handicaps" component={HandicapsPage} />
         <Route path="/cups" component={CupsPage} />
         <Route path="/players" component={PlayersPage} />
+        <Route path="/players/:slug/stats">
+          {(params) => (
+            <Suspense fallback={<Loading what="the statistics" variant="page" />}>
+              <PlayerStatsPage slug={params.slug} />
+            </Suspense>
+          )}
+        </Route>
         <Route path="/players/:slug">{(params) => <PlayerPage slug={params.slug} />}</Route>
 
         {/* News and media */}

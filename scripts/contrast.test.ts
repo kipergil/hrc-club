@@ -78,6 +78,8 @@ const PAIRS: Array<[fg: string, bg: string, min: number, what: string]> = [
   ["focus", "surface", 3, "the focus ring against a card"],
   ["line-strong", "surface", 3, "an input border against a card"],
   ["line-strong", "canvas", 3, "an input border against the page"],
+  ["chart-won", "surface", 3, "a won mark on a chart"],
+  ["chart-lost", "surface", 3, "a lost mark on a chart"],
 ];
 
 for (const [theme, selector] of [

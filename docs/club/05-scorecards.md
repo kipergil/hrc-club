@@ -241,8 +241,10 @@ which runs, in this order:
 1. `import:fixtures` — new results from each team's match history. **Updates in place**, keyed on
    `league_fixture_ref`. It used to clear the season and recreate it, which deleted every card
    with it (rubbers cascade), including cards captains typed in here, and gave every fixture a new
-   id. A fixture with a card keeps the card's score and date; if the league's summary disagrees,
-   it says so rather than overwriting. A fixture the league drops is removed if nothing is behind
+   id. A fixture with a card **entered on this site** keeps the card's score and date; if the
+   league's summary disagrees, it says so rather than overwriting. A card imported from the league
+   does not hold its score against the league: a correction on the league's site comes through
+   here, and step 3 then brings the card into line. A fixture the league drops is removed if nothing is behind
    it, and marked `void` if a card is.
 2. `import:calendar` — scheduled nights for unplayed fixtures. A played match's date is left
    alone: the card records the night it was actually played, which for a rearranged match is not
@@ -264,6 +266,32 @@ match; all three had registered since the August squad import, and re-running
 
 A card entered on this site is never overwritten by the league's copy. A card this script
 imported before is replaced, so a correction posted on the league's site comes through.
+
+**A full refresh from the league**, in this order:
+
+```bash
+npm run directus:import:league     # clubs, teams, squads, players
+npm run directus:sync:results      # results and cards (above)
+npm run directus:import:averages   # past seasons' final averages and handicaps
+```
+
+`import:league` updates what has changed and rebuilds this season's squads. Something the league
+no longer lists is deleted only if nothing hangs off it: a team with fixtures is kept with
+`is_active` off, and a player on a card, in the averages or on the roll of honour is kept as
+`lapsed`. Deleting either used to cascade — a withdrawn team took its fixtures and their cards
+with it, and a departed player's name was blanked out of every card they played on.
+
+`import:averages` reads `Averages{year}.htm` (2021-22 onwards — the league has nothing older)
+and `Handicaps{year}.htm` (2024-25 and 2025-26 only) into `hrc_player_stats`, replacing each
+season's rows on every run. The current season is not imported: its averages are worked out from
+the cards (§6). Names match exactly, in the player's club first; a player who has since left the
+league is added as a lapsed member so the record has a profile. Lapsed members keep their page
+but are left off the players list. Names one or two letters from an existing member are reported
+at the end of the run, not merged — on the first run, "Sunil Trukru" (2021-22) beside "Sunil
+Trakru", among five.
+
+`import:scorecards` exits with an error when it refuses a card, which stops the `sync:results`
+chain before the comparison; run `npm run directus:compare:results` on its own after reading why.
 
 Both the captain's save and the import build rows through `rubberRowsFor` in
 `shared/scorecard.ts`, so the two cannot disagree about how a card is stored.

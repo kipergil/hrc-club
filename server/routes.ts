@@ -205,6 +205,16 @@ export function registerRoutes(app: Express): void {
     }),
   );
 
+  // Asked for by the statistics page only: a whole career of cards.
+  app.get(
+    "/api/players/:slug/statistics",
+    handler(async (req, res) => {
+      const statistics = await storage.getPlayerStatistics(req.params.slug);
+      if (!statistics) return notFound(res, "player");
+      ok(res, statistics, CACHE.slow);
+    }),
+  );
+
   app.get(
     "/api/players/:slug",
     handler(async (req, res) => {
