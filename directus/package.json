@@ -16,6 +16,7 @@
     "compare:results": "tsx src/content/compare-results.ts",
     "import:scorecards": "tsx src/content/import-scorecards.ts",
     "import:archive": "tsx src/content/import-archive.ts",
+    "import:averages": "tsx src/content/import-averages.ts",
     "geocode:venues": "tsx src/content/geocode-venues.ts",
     "sample:results": "tsx src/content/sample-results.ts",
     "write:features": "tsx src/content/write-feature-posts.ts",

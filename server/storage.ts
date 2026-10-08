@@ -329,9 +329,9 @@ function toPlayerStat(row: Row): PlayerStat {
     winPercentage: num(row.win_percentage),
     handicap: num(row.handicap),
     meetsParticipationThreshold: Boolean(row.meets_participation_threshold),
-    // The league's own table printed none of these.
-    matchesPlayed: null,
-    teamMatchesPlayed: null,
+    // From the tooltips on the league's averages page; the rest it never printed.
+    matchesPlayed: num(row.matches_played),
+    teamMatchesPlayed: num(row.team_matches),
     doublesPlayed: null,
     doublesWon: null,
     setsFor: null,
@@ -1491,7 +1491,10 @@ export async function countResultEntrants(): Promise<number> {
 export async function getMembers(): Promise<MemberSummary[]> {
   const client = await directus();
   const homeClub = await getHomeClub();
-  const filter: Record<string, unknown>[] = [{ show_on_site: { _eq: true } }];
+  // Registered players. A lapsed member is somebody the league no longer
+  // lists, kept so their record and their cards still read; they keep a
+  // profile, but are not on this season's list of players.
+  const filter: Record<string, unknown>[] = [{ show_on_site: { _eq: true } }, { status: { _neq: "lapsed" } }];
   // Our players, not the league's 165.
   if (homeClub) filter.push({ club: { _eq: homeClub.id } });
 

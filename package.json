@@ -27,6 +27,7 @@
     "directus:import:scorecards": "npm --prefix directus run import:scorecards --",
     "directus:sync:results": "npm run directus:import:fixtures && npm run directus:import:calendar && npm run directus:import:scorecards && npm run directus:compare:results",
     "directus:import:archive": "npm --prefix directus run import:archive",
+    "directus:import:averages": "npm --prefix directus run import:averages --",
     "directus:geocode:venues": "npm --prefix directus run geocode:venues",
     "directus:sample:results": "npm --prefix directus run sample:results --",
     "directus:write:features": "npm --prefix directus run write:features",

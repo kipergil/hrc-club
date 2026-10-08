@@ -689,6 +689,14 @@ export const playerStatsCollection: CollectionDefinition = {
     integerField("played", { defaultValue: 0 }),
     integerField("won", { defaultValue: 0 }),
     integerField("lost", { defaultValue: 0 }),
+    integerField("matches_played", {
+      nullable: true,
+      note: "Team matches the player turned out in, as the league's averages page records it.",
+    }),
+    integerField("team_matches", {
+      nullable: true,
+      note: "Matches the player's team played — what the 50% rule is measured against.",
+    }),
     decimalField("win_percentage", {
       precision: 5,
       scale: 2,

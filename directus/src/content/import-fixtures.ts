@@ -35,6 +35,11 @@ async function fetchPage(url: string): Promise<string> {
  * pairing twice in one week, and the reverse fixture is a different row
  * because the home team differs.
  */
+/** Was this card imported from the league's own site, rather than entered here? */
+function isLeagueCard(url: unknown): boolean {
+  return typeof url === "string" && url.startsWith(BASE);
+}
+
 function matchKey(row: Pick<MatchRow, "homeTeam" | "awayTeam" | "weekCommencing">): string {
   return `${row.weekCommencing}|${row.homeTeam}|${row.awayTeam}`;
 }
@@ -184,6 +189,7 @@ async function main(): Promise<void> {
         "away_score",
         "week_commencing",
         "played_on",
+        "scorecard_url",
         { home_team: ["id"] },
         { away_team: ["id"] },
       ],
@@ -192,9 +198,8 @@ async function main(): Promise<void> {
     } as never),
   )) as Row[];
 
-  // Which fixtures have a card behind them. Their score and date are the
-  // card's — from this site or from the league's own card — and the match
-  // list's summary never overrides them.
+  // Which fixtures have a card behind them. A dropped fixture with a card
+  // is voided rather than deleted, whoever entered the card.
   const carded = new Set(
     existing.length === 0
       ? []
@@ -222,7 +227,11 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const hasCard = carded.has(String(held.id));
+    // Only a card entered on this site outranks the league's list. A card
+    // imported from the league is the league's own word, and is refreshed
+    // from it — so when the league corrects a result, the corrected score
+    // comes through here and the card import then brings its card into line.
+    const hasCard = carded.has(String(held.id)) && !isLeagueCard(held.scorecard_url);
     const patch: Row = {};
     if (held.home_team?.id !== row.home_team) patch.home_team = row.home_team;
     if (held.away_team?.id !== row.away_team) patch.away_team = row.away_team;
