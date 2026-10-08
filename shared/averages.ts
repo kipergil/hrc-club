@@ -112,6 +112,8 @@ export interface AverageRow extends PlayerRecord {
   teamSlug: string | null;
   division: Division | null;
   matchesPlayed: number;
+  /** How many matches their (main) team has played — what the 50% rule is measured against. */
+  teamMatchesPlayed: number | null;
   /** The league's 50%-of-matches rule: below it, listed but not placed. */
   meetsParticipationThreshold: boolean;
 }
@@ -213,6 +215,7 @@ export function buildAverages(
       teamSlug,
       division,
       matchesPlayed,
+      teamMatchesPlayed: teamPlayed === 0 ? null : teamPlayed,
       ...record,
       meetsParticipationThreshold: meets,
     });
@@ -237,4 +240,57 @@ export function compareAverages(a: AverageOrder, b: AverageOrder): number {
   if (byPercent !== 0) return byPercent;
   if (b.played !== a.played) return b.played - a.played;
   return a.memberName.localeCompare(b.memberName);
+}
+
+
+/** What a placing is worked out from. */
+export interface PlaceInput extends AverageOrder {
+  id: string;
+  division: Division | null;
+  meetsParticipationThreshold: boolean;
+}
+
+export interface Placing {
+  place: number;
+  /** Level with the player above or below — printed as "=3". */
+  tied: boolean;
+  /** How many eligible players the division has, so a place reads as "3rd of 22". */
+  of: number;
+}
+
+/**
+ * The league's placings, division by division, keyed by row id.
+ *
+ * Only eligible players are placed. Level players — the same percentage
+ * from the same number played — share a placing, and the next one skips,
+ * as a league table does.
+ *
+ * Shared, so the averages page and a player's statistics page cannot
+ * disagree about where somebody finished.
+ */
+export function placingsOf(rows: PlaceInput[]): Map<string, Placing> {
+  const placed = new Map<string, Placing>();
+  const divisions = new Map<Division | null, PlaceInput[]>();
+  for (const row of rows) {
+    const list = divisions.get(row.division) ?? [];
+    list.push(row);
+    divisions.set(row.division, list);
+  }
+
+  for (const list of divisions.values()) {
+    const eligible = list.filter((row) => row.meetsParticipationThreshold).sort(compareAverages);
+    const level = (a: PlaceInput | undefined, b: PlaceInput | undefined) =>
+      Boolean(a && b) && a!.winPercentage === b!.winPercentage && a!.played === b!.played;
+
+    eligible.forEach((row, index) => {
+      const previous = eligible[index - 1];
+      const place = level(previous, row) ? placed.get(previous!.id)!.place : index + 1;
+      placed.set(row.id, {
+        place,
+        tied: level(previous, row) || level(row, eligible[index + 1]),
+        of: eligible.length,
+      });
+    });
+  }
+  return placed;
 }

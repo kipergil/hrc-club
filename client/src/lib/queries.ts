@@ -21,6 +21,7 @@ import type {
   NewsItem,
   Page,
   PlayerStat,
+  PlayerStatistics,
   Season,
   SiteSettings,
   Standing,
@@ -74,6 +75,7 @@ export const keys = {
   averages: (season?: string) => ["averages", season ?? "current"] as const,
   players: ["players"] as const,
   player: (slug: string, season?: string) => ["player", slug, season ?? "current"] as const,
+  playerStatistics: (slug: string) => ["player-statistics", slug] as const,
   news: (category?: string) => ["news", category ?? "all"] as const,
   newsItem: (slug: string) => ["news-item", slug] as const,
   events: ["events"] as const,
@@ -107,6 +109,7 @@ export const fetchers = {
   standings: (season?: string) => apiGet<Standing[]>(`/api/standings${season ? `?season=${season}` : ""}`),
   averages: (season?: string) => apiGet<PlayerStat[]>(`/api/averages${season ? `?season=${season}` : ""}`),
   players: () => apiGet<MemberSummary[]>("/api/players"),
+  playerStatistics: (slug: string) => apiGet<PlayerStatistics>(`/api/players/${slug}/statistics`),
   player: (slug: string, season?: string) =>
     apiGet<MemberProfile>(`/api/players/${slug}${season ? `?season=${encodeURIComponent(season)}` : ""}`),
   news: (category?: string) => apiGet<NewsItem[]>(`/api/news${category ? `?category=${category}` : ""}`),
@@ -160,6 +163,9 @@ export const usePlayers = (): UseQueryResult<MemberSummary[]> =>
   useQuery({ queryKey: keys.players, queryFn: fetchers.players });
 export const usePlayer = (slug: string, season?: string): UseQueryResult<MemberProfile> =>
   useQuery({ queryKey: keys.player(slug, season), queryFn: () => fetchers.player(slug, season) });
+/** Only the statistics page asks for this: a whole career of cards, fetched on demand. */
+export const usePlayerStatistics = (slug: string): UseQueryResult<PlayerStatistics> =>
+  useQuery({ queryKey: keys.playerStatistics(slug), queryFn: () => fetchers.playerStatistics(slug) });
 export const useNews = (category?: string): UseQueryResult<NewsItem[]> =>
   useQuery({ queryKey: keys.news(category), queryFn: () => fetchers.news(category) });
 export const useNewsItem = (slug: string): UseQueryResult<NewsItem> =>

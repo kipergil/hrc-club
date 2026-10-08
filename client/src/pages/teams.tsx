@@ -1,4 +1,4 @@
-import { CalendarDays, MapPin, Users } from "lucide-react";
+import { BarChart3, CalendarDays, MapPin, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { DIVISION } from "@shared/enums.js";
@@ -8,6 +8,7 @@ import { TeamFixtureList, VisitorNote } from "@/components/data";
 import {
   Badge,
   Card,
+  Disclosure,
   Empty,
   ErrorNote,
   FilterChips,
@@ -26,6 +27,9 @@ import {
 import { usePlayer, usePlayers, useSeasons, useTeam, useTeams } from "@/lib/queries";
 import { SeasonPicker, useSeasonParam } from "@/components/season";
 import { recordOf } from "@shared/averages.js";
+import type { MemberProfile } from "@shared/types.js";
+import { StatPicker } from "@/components/stat-picker";
+import { availableIds, defaultChartIds, evidenceFromProfile, statsHref } from "@/lib/stat-charts";
 import { divisionLabel, fileUrl, formatDateShort, formatDayName, formatTime } from "@/lib/utils";
 
 export function TeamsPage() {
@@ -577,6 +581,8 @@ export function PlayerPage({ slug }: { slug: string }) {
         </section>
       ) : null}
 
+      <PlayerStatsLink player={player} />
+
       {player.rubbers.length > 0 ? (
         <section aria-labelledby="rubbers-heading">
           <h2 id="rubbers-heading" className="mb-3 text-2xl">
@@ -685,5 +691,46 @@ export function PlayerPage({ slug }: { slug: string }) {
         </section>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The way to a player's statistics page.
+ *
+ * A link and a picker, not the charts themselves: the profile stays as
+ * light as it was, and the charts — their code and a whole career of
+ * cards — are only fetched by somebody who asks for them. The picker
+ * works from what this page already holds, so it can say which charts
+ * this player has enough on record for without fetching anything.
+ */
+function PlayerStatsLink({ player }: { player: MemberProfile }) {
+  const evidence = evidenceFromProfile(player);
+  const available = availableIds(evidence);
+  if (available.length === 0) return null;
+  const name = player.displayName ?? player.fullName;
+  const starters = defaultChartIds(evidence);
+
+  return (
+    <section aria-labelledby="statistics-heading" className="space-y-3">
+      <h2 id="statistics-heading" className="text-2xl">
+        Statistics and charts
+      </h2>
+      <p className="max-w-readable text-ink-muted">
+        Form, results by opponent, close games and how the seasons compare, drawn from the match cards.
+        They open on a page of their own, so they only load when you want them.
+      </p>
+      <p>
+        <Link
+          href={statsHref(player.slug, starters)}
+          className="inline-flex min-h-touch items-center gap-2 rounded-card bg-brand px-4 font-semibold text-brand-ink no-underline hover:bg-brand-strong"
+        >
+          <BarChart3 aria-hidden="true" className="size-5" />
+          See {name}&rsquo;s statistics
+        </Link>
+      </p>
+      <Disclosure summary="Choose which charts to see" meta={`${available.length} available`}>
+        <StatPicker slug={player.slug} evidence={evidence} initial={starters} />
+      </Disclosure>
+    </section>
   );
 }

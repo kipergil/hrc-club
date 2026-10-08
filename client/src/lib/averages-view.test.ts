@@ -27,6 +27,7 @@ function stat(overrides: Partial<PlayerStat> = {}): PlayerStat {
     handicap: null,
     meetsParticipationThreshold: true,
     matchesPlayed: 1,
+    teamMatchesPlayed: 1,
     doublesPlayed: 1,
     doublesWon: 0,
     setsFor: 7,
