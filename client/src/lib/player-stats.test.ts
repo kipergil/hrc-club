@@ -6,6 +6,10 @@ import {
   divisionShort,
   divisionSpread,
   divisionStory,
+  scopeStatistics,
+  seasonsOnRecord,
+  seasonsSince,
+  selectionTotals,
   doublesByPartner,
   formByNight,
   gamesOf,
@@ -179,8 +183,9 @@ describe("divisions over the years", () => {
 
   it("tells the story in a sentence", () => {
     expect(divisionStory([at("2021-22", "premier"), at("2022-23", "premier")], label)).toBe(
-      "Premier Division every season on record.",
+      "Premier Division from 2021-22 to 2022-23.",
     );
+    expect(divisionStory([at("2026-27", "division_1")], label)).toBe("Division 1 in 2026-27.");
     expect(
       divisionStory([at("2021-22", "division_1"), at("2022-23", "division_1"), at("2023-24", "premier"), at("2024-25", "division_1")], label),
     ).toBe("Division 1 from 2021-22 to 2022-23, Premier Division in 2023-24, then Division 1 in 2024-25.");
@@ -193,5 +198,51 @@ describe("divisions over the years", () => {
       "Div 2",
       "—",
     ]);
+  });
+});
+
+describe("the run of seasons on show", () => {
+  const all = seasonsOnRecord(STATISTICS);
+
+  it("knows every season with a record, oldest first", () => {
+    expect(all).toEqual(["2025-26", "2026-27"]);
+  });
+
+  it("opens on the latest season", () => {
+    expect(seasonsSince(all)).toEqual(["2026-27"]);
+    expect(seasonsSince(all, "not-a-season")).toEqual(["2026-27"]);
+  });
+
+  it("reaches back to include every season since the one chosen", () => {
+    expect(seasonsSince(["2021-22", "2022-23", "2023-24", "2024-25"], "2022-23")).toEqual(["2022-23", "2023-24", "2024-25"]);
+  });
+
+  it("narrows the seasons and the cards, and leaves the division snapshot alone", () => {
+    const earlier = scopeStatistics(STATISTICS, ["2025-26"]);
+    expect(earlier.seasons.map((s) => s.seasonLabel)).toEqual(["2025-26"]);
+    expect(earlier.rubbers).toEqual([]); // no cards before 2026-27
+    expect(earlier.peers).toBe(STATISTICS.peers);
+    expect(scopeStatistics(STATISTICS, all).rubbers).toHaveLength(STATISTICS.rubbers.length);
+  });
+
+  it("adds the chosen seasons together", () => {
+    const totals = selectionTotals(STATISTICS.seasons);
+    // 22 of 24, then 7 of 9.
+    expect(totals).toMatchObject({ seasons: 2, played: 33, won: 29, lost: 4, winPercentage: 88 });
+  });
+
+  it("picks the best placing, preferring the stronger division on a tie", () => {
+    const totals = selectionTotals(STATISTICS.seasons);
+    // 1st of 22 in Division 1 beats 2nd in the Premier.
+    expect(totals.best).toMatchObject({ place: 1, of: 22, seasonLabel: "2025-26", division: "division_1" });
+    const tie = selectionTotals([
+      { ...STATISTICS.seasons[0]!, place: 1, division: "division_1" },
+      { ...STATISTICS.seasons[1]!, place: 1, division: "premier" },
+    ]);
+    expect(tie.best?.division).toBe("premier");
+  });
+
+  it("has no win rate and no placing with nothing played", () => {
+    expect(selectionTotals([])).toMatchObject({ played: 0, winPercentage: null, best: null });
   });
 });
